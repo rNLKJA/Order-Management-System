@@ -1,0 +1,28 @@
+{
+  "name": "@meal/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed-accounts": "tsx src/seed-accounts.ts",
+    "reset-admin-password": "tsx src/reset-admin-password.ts",
+    "import-excel": "tsx src/import-excel.ts",
+    "restore": "tsx src/restore.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no lint configured'",
+    "test": "echo 'no tests yet'"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "@meal/api": "workspace:*",
+    "@meal/shared": "workspace:*",
+    "@node-rs/argon2": "^2.0.0",
+    "drizzle-orm": "^0.36.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

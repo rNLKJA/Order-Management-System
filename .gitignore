@@ -1,0 +1,62 @@
+# 依赖
+node_modules
+.pnpm-store
+.pnp
+.pnp.js
+
+# 构建产物
+dist
+build
+.next
+.turbo
+.vercel
+.expo
+.expo-shared
+web-build
+
+# 环境变量（严禁入库）
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/*
+!.vscode/settings.json.example
+!.vscode/extensions.json
+.idea
+*.swp
+.DS_Store
+
+# 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 本地数据 / 运行产物
+*.db
+*.sqlite
+*.sqlite-journal
+data
+backup
+
+# 测试覆盖
+coverage
+
+# 迁移脚本临时产物
+drizzle/.snapshots
+scripts/unresolved.csv
+scripts/needs_review.csv
+
+# 原生
+ios
+android
+*.ipa
+*.apk
+
+# EAS
+eas.json.local
+
+# OS
+Thumbs.db

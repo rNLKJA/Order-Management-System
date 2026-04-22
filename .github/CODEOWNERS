@@ -1,0 +1,32 @@
+# 关键目录的 review 必填
+# 语法：<path> <@用户名或@团队>
+# 实际使用时把 @rnlkja 替换成你的 GitHub 用户名
+
+# 全仓 fallback
+*                                  @rnlkja
+
+# 数据模型 / 迁移 — 改动影响所有人
+apps/api/src/db/                   @rnlkja
+apps/api/drizzle/                  @rnlkja
+
+# 共享包 — 前后端共用，改动需要谨慎
+packages/shared/                   @rnlkja
+
+# 认证 / 权限
+apps/api/src/routes/auth.ts        @rnlkja
+apps/api/src/middleware/           @rnlkja
+apps/api/src/services/auth.ts      @rnlkja
+
+# 导航骨架 / 主题
+apps/mobile/app/_layout.tsx        @rnlkja
+apps/mobile/app/\(app\)/_layout.tsx @rnlkja
+apps/mobile/theme/                 @rnlkja
+
+# 部署配置
+apps/api/vercel.json               @rnlkja
+turbo.json                         @rnlkja
+pnpm-workspace.yaml                @rnlkja
+
+# 文档
+doc/                               @rnlkja
+README.md                          @rnlkja

@@ -1,0 +1,5 @@
+{
+  "CFBundleDisplayName": "订餐会员管理",
+  "NSFaceIDUsageDescription": "用于 SecureStore 生物识别加密（占位，暂未启用）",
+  "NSLocationWhenInUseUsageDescription": "暂不需要位置权限"
+}

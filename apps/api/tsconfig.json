@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@meal/shared": ["../../packages/shared/src/index.ts"],
+      "@meal/shared/*": ["../../packages/shared/src/*"]
+    }
+  },
+  "include": ["src/**/*", "api/**/*", "drizzle.config.ts"]
+}

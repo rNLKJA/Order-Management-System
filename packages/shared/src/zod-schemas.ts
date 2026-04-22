@@ -1,0 +1,155 @@
+/**
+ * Zod schemas - 前后端共用的输入输出契约。
+ *
+ * 后端 Hono 路由用这些做 body 校验；前端表单也用它们在提交前校验，
+ * 保持前后端同步（改一处，两端都变）。
+ */
+
+import { z } from 'zod';
+
+// =========== 基础校验器 ===========
+
+/** 中国大陆 11 位手机号 */
+export const zPhone = z
+  .string()
+  .regex(/^1[3-9]\d{9}$/, '手机号应为 11 位，且以 1 开头');
+
+/** 微信号 6-20 位字母数字下划线或连字符（可为空） */
+export const zWechatId = z
+  .string()
+  .regex(/^[a-zA-Z0-9_-]{6,20}$/, '微信号 6-20 位字母/数字/下划线/连字符')
+  .or(z.literal(''));
+
+/** CNY 金额，非负，最多两位小数 */
+export const zAmount = z
+  .number()
+  .nonnegative()
+  .multipleOf(0.01, '金额最多保留 2 位小数');
+
+/** ISO 8601 带时区 */
+export const zIsoDateTime = z.string().datetime({ offset: true });
+
+/** YYYY-MM-DD 日期 */
+export const zDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式为 YYYY-MM-DD');
+
+// =========== 认证 ===========
+
+export const loginSchema = z.object({
+  username: z.string().min(1).max(64),
+  password: z.string().min(1).max(128),
+});
+export type LoginInput = z.infer<typeof loginSchema>;
+
+// =========== 会员 ===========
+
+export const memberCreateSchema = z.object({
+  name: z.string().min(1).max(64),
+  nickname: z.string().max(64).optional().default(''),
+  phone: zPhone,
+  wechat_id: zWechatId.optional().default(''),
+  address: z.string().max(256).optional().default(''),
+  dietary_notes: z.string().max(512).optional().default(''),
+  is_hospital: z.boolean().default(false),
+});
+export type MemberCreateInput = z.infer<typeof memberCreateSchema>;
+
+export const memberUpdateSchema = memberCreateSchema.partial();
+export type MemberUpdateInput = z.infer<typeof memberUpdateSchema>;
+
+// =========== 卡 ===========
+
+const zCardCode = z.enum([
+  'experience',
+  'small_week',
+  'week',
+  'month',
+  'season',
+  'year',
+]);
+
+export const cardPurchaseSchema = z.object({
+  member_id: z.number().int().positive(),
+  card_code: zCardCode,
+  is_hospital: z.boolean(),
+  collector_user_id: z.number().int().positive().optional(),
+  created_by_user_id: z.number().int().positive().optional(),
+  purchased_at: zIsoDateTime.optional(),
+  notes: z.string().max(512).optional().default(''),
+});
+export type CardPurchaseInput = z.infer<typeof cardPurchaseSchema>;
+
+export const cardUpgradeSchema = z.object({
+  card_code: zCardCode,
+  is_hospital: z.boolean(),
+  collector_user_id: z.number().int().positive().optional(),
+  created_by_user_id: z.number().int().positive().optional(),
+  notes: z.string().max(512).optional().default(''),
+});
+export type CardUpgradeInput = z.infer<typeof cardUpgradeSchema>;
+
+// =========== 订餐 ===========
+
+export const orderCreateSchema = z
+  .object({
+    member_id: z.number().int().positive(),
+    order_date: zDate,
+    lunch_qty: z.number().int().nonnegative().default(0),
+    dinner_qty: z.number().int().nonnegative().default(0),
+    notes: z.string().max(512).optional().default(''),
+    created_by_user_id: z.number().int().positive().optional(),
+  })
+  .refine((v) => v.lunch_qty + v.dinner_qty > 0, {
+    message: '午餐和晚餐份数至少有一项 > 0',
+    path: ['lunch_qty'],
+  });
+export type OrderCreateInput = z.infer<typeof orderCreateSchema>;
+
+export const orderUpdateSchema = z.object({
+  order_date: zDate.optional(),
+  meal_type: z.enum(['lunch', 'dinner']).optional(),
+  quantity: z.number().int().positive().optional(),
+  notes: z.string().max(512).optional(),
+  created_by_user_id: z.number().int().positive().optional(),
+});
+export type OrderUpdateInput = z.infer<typeof orderUpdateSchema>;
+
+export const orderCancelSchema = z.object({
+  reason: z.string().max(256).optional().default(''),
+});
+export type OrderCancelInput = z.infer<typeof orderCancelSchema>;
+
+// =========== 财务 ===========
+
+export const expenseCreateSchema = z.object({
+  entry_date: zDate,
+  amount: zAmount.positive(),
+  description: z.string().min(1).max(512),
+  created_by_user_id: z.number().int().positive().optional(),
+});
+export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
+
+export const financeUpdateSchema = z.object({
+  entry_date: zDate.optional(),
+  amount: zAmount.optional(),
+  description: z.string().max(512).optional(),
+  category: z.string().optional(),
+});
+export type FinanceUpdateInput = z.infer<typeof financeUpdateSchema>;
+
+// =========== 用户管理（admin） ===========
+
+export const userCreateSchema = z.object({
+  username: z
+    .string()
+    .regex(/^[a-zA-Z0-9_]{3,32}$/, 'username 3-32 位字母/数字/下划线'),
+  full_name: z.string().min(1).max(64),
+  role: z.enum(['admin', 'staff']).default('staff'),
+});
+export type UserCreateInput = z.infer<typeof userCreateSchema>;
+
+export const userUpdateSchema = z.object({
+  full_name: z.string().min(1).max(64).optional(),
+  role: z.enum(['admin', 'staff']).optional(),
+  is_active: z.boolean().optional(),
+});
+export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
