@@ -19,6 +19,12 @@ web-build
 .env.*
 !.env.example
 
+# 密码 / 敏感凭据（严禁入库）
+.secrets/
+*.pem
+*.key
+!.env.example.key
+
 # IDE
 .vscode/*
 !.vscode/settings.json.example
