@@ -8,6 +8,7 @@
     "reset-admin-password": "tsx src/reset-admin-password.ts",
     "import-excel": "tsx src/import-excel.ts",
     "restore": "tsx src/restore.ts",
+    "sync-linear": "tsx src/sync-linear.ts",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint configured'",
     "test": "echo 'no tests yet'"
