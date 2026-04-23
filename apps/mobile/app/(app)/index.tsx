@@ -6,10 +6,12 @@
 
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Card, Button, useTheme } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function HomeScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { user, signOut } = useAuth();
 
   return (
@@ -54,6 +56,15 @@ export default function HomeScreen() {
         </Card.Content>
       </Card>
 
+      <Button
+        mode="contained"
+        icon="account-group"
+        onPress={() => router.push('/(app)/members')}
+        style={styles.primaryAction}
+      >
+        会员管理
+      </Button>
+
       <Button mode="outlined" onPress={signOut} style={styles.signOut}>
         退出登录
       </Button>
@@ -71,6 +82,10 @@ const styles = StyleSheet.create({
   },
   listItem: {
     marginTop: 6,
+  },
+  primaryAction: {
+    marginTop: 8,
+    borderRadius: 10,
   },
   signOut: {
     marginTop: 8,
