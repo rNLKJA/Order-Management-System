@@ -20,7 +20,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.rnlkja.mealmembership",
       "infoPlist": {
-        "CFBundleLocalizations": ["zh-Hans"],
+        "CFBundleLocalizations": [
+          "zh-Hans"
+        ],
         "CFBundleDevelopmentRegion": "zh-Hans"
       }
     },
@@ -44,7 +46,14 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "https://meal-api-nu.vercel.app"
-    }
+      "apiBaseUrl": "https://meal-api-nu.vercel.app",
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "7a9ccfc7-b24c-413a-ae82-e163d24b6653"
+      }
+    },
+    "owner": "chuangyu_hscy"
   }
 }
