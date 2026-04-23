@@ -63,7 +63,12 @@ export interface CreateOrderResponse {
 
 export interface OrderListParams {
   member_id?: number;
+  /** 单日筛选。与 from/to 互斥；传了 date 就忽略 from/to */
   date?: string;
+  /** 起始日期（含），YYYY-MM-DD */
+  from?: string;
+  /** 截止日期（含），YYYY-MM-DD */
+  to?: string;
   status?: 'pending' | 'fulfilled' | 'delivered' | 'cancelled' | 'all';
   meal_type?: 'lunch' | 'dinner' | 'all';
   zone?: 'all' | 'hospital' | 'regular';
@@ -76,6 +81,8 @@ export const ordersApi = {
     const qs = new URLSearchParams();
     if (params.member_id != null) qs.set('member_id', String(params.member_id));
     if (params.date) qs.set('date', params.date);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
     if (params.status) qs.set('status', params.status);
     if (params.meal_type) qs.set('meal_type', params.meal_type);
     if (params.zone) qs.set('zone', params.zone);

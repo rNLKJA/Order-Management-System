@@ -1,7 +1,19 @@
 /**
  * API 客户端：封装 fetch + Authorization 注入 + 401 统一处理。
  *
- * 生产的 API baseUrl 从 app.json 里的 extra.apiBaseUrl 读（或 EXPO_PUBLIC_API_BASE_URL）。
+ * ─────────────────────────────────────────────────────────────
+ * baseUrl 解析优先级（从高到低）：
+ *   1. EXPO_PUBLIC_API_BASE_URL  —— 构建期注入（根目录 .env / CI / `EXPO_PUBLIC_API_BASE_URL=... pnpm mobile`）。
+ *      适合本地开发与不同环境切换（preview / staging），不需要改 app.json。
+ *   2. app.json 的 extra.apiBaseUrl —— 随 native 二进制一起发布。
+ *      适合生产/TestFlight 发版的兜底值，保证没有 .env 的裸装包也能连上生产 API。
+ *   3. DEFAULT_BASE_URL = http://localhost:3000 —— 最后兜底。
+ *
+ * 使用建议：
+ *   • 开发机：在项目根 .env 设 EXPO_PUBLIC_API_BASE_URL=http://<LAN-IP>:3000（真机调试时别用 localhost）。
+ *   • EAS / 应用商店构建：只依赖 app.json 的 extra.apiBaseUrl，不要在 build profile 里再塞 EXPO_PUBLIC_*，
+ *     否则两处不一致时排查很痛苦。
+ *   • 任何变更请同步更新根目录 .env.example 的说明段落。
  */
 
 import Constants from 'expo-constants';

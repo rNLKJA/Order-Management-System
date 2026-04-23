@@ -95,6 +95,15 @@ export default function HomeScreen() {
       route: '/(app)/orders',
     },
     {
+      key: 'orders-stats',
+      title: '订单统计',
+      subtitle: '按日期范围查看份数 / 状态 / Top 会员',
+      icon: 'bar-chart-outline',
+      color: COLORS.info,
+      bg: COLORS.infoSoft,
+      route: '/(app)/orders/stats',
+    },
+    {
       key: 'finance',
       title: '财务记账',
       subtitle: financeToday.isLoading

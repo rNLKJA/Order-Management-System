@@ -15,7 +15,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { zValidator } from '@hono/zod-validator';
-import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
@@ -85,6 +85,8 @@ const listQuerySchema = z.object({
     .transform((v) => parseInt(v, 10))
     .optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date 格式 YYYY-MM-DD').optional(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'from 格式 YYYY-MM-DD').optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'to 格式 YYYY-MM-DD').optional(),
   status: z
     .enum(['pending', 'fulfilled', 'delivered', 'cancelled', 'all'])
     .optional()
@@ -108,12 +110,17 @@ const listQuerySchema = z.object({
 });
 
 ordersRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
-  const { member_id, date, status, meal_type, zone, limit, offset } = c.req.valid('query');
+  const { member_id, date, from, to, status, meal_type, zone, limit, offset } = c.req.valid('query');
   const db = requestDb(c);
 
   const conds: SQL[] = [];
   if (member_id !== undefined) conds.push(eq(schema.daily_orders.member_id, member_id));
-  if (date) conds.push(eq(schema.daily_orders.order_date, date));
+  if (date) {
+    conds.push(eq(schema.daily_orders.order_date, date));
+  } else {
+    if (from) conds.push(gte(schema.daily_orders.order_date, from));
+    if (to) conds.push(lte(schema.daily_orders.order_date, to));
+  }
   if (status !== 'all') conds.push(eq(schema.daily_orders.status, status));
   if (meal_type !== 'all') conds.push(eq(schema.daily_orders.meal_type, meal_type));
 

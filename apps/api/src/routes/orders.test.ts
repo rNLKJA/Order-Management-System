@@ -457,6 +457,48 @@ describe('Orders API /api/orders', () => {
     expect(body.orders.every((o) => o.order_date === '2026-04-24')).toBe(true);
   });
 
+  it('GET /api/orders 按 from/to 日期范围过滤', async () => {
+    await db.insert(schema.daily_orders).values([
+      {
+        member_id: memberId,
+        order_date: '2026-04-20',
+        meal_type: 'lunch',
+        quantity: 1,
+        amount: 0,
+        status: 'pending',
+        created_by_user_id: staffId,
+      },
+      {
+        member_id: memberId,
+        order_date: '2026-04-22',
+        meal_type: 'dinner',
+        quantity: 2,
+        amount: 0,
+        status: 'pending',
+        created_by_user_id: staffId,
+      },
+      {
+        member_id: memberId,
+        order_date: '2026-04-26',
+        meal_type: 'lunch',
+        quantity: 1,
+        amount: 0,
+        status: 'pending',
+        created_by_user_id: staffId,
+      },
+    ]);
+
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders?from=2026-04-21&to=2026-04-25', {
+        headers: { Authorization: `Bearer ${staffToken}` },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { orders: schema.DailyOrder[] };
+    expect(body.orders.length).toBe(1);
+    expect(body.orders[0]?.order_date).toBe('2026-04-22');
+  });
+
   it('GET /api/orders 按 meal_type 过滤', async () => {
     await db.insert(schema.daily_orders).values([
       {
