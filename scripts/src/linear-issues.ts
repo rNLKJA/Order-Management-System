@@ -138,7 +138,7 @@ POST /api/auth/login + GET /api/auth/me；argon2id 密码哈希（memoryCost=64M
   // ==================== Phase 2 并行 slice ====================
   {
     title: 'feat(members): 会员 CRUD + 详情页 + 搜索 + 软删除',
-    state: 'Todo',
+    state: 'Done',
     priority: 2,
     labels: [PHASES.p2, 'members'],
     body: `## 目标
@@ -166,7 +166,7 @@ apps/api/src/routes/members.ts + apps/mobile/app/(app)/members/\*\*
   },
   {
     title: 'feat(cards): 购卡 + 升级 + 换卡 + 院内外价目表 Modal',
-    state: 'Todo',
+    state: 'Done',
     priority: 1,
     labels: [PHASES.p2, 'cards'],
     body: `## 目标
@@ -216,7 +216,7 @@ apps/api/src/routes/members.ts + apps/mobile/app/(app)/members/\*\*
   },
   {
     title: 'feat(finance): 收入自动入账 + 手动支出 + 记账页',
-    state: 'Todo',
+    state: 'Done',
     priority: 2,
     labels: [PHASES.p2, 'finance'],
     body: `## 目标
