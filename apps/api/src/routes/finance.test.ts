@@ -537,6 +537,35 @@ describe('财务接口 /api/finance', () => {
     expect(cancelAudit!.user_id).toBe(adminId);
   });
 
+  it('PATCH source=auto 的条目 → diff_json 含 _note', async () => {
+    const entry = await seedEntry(db, {
+      entry_date: '2026-04-10',
+      type: 'income',
+      amount: 280,
+      category: 'regular_sub',
+      created_by_user_id: adminId,
+      source: 'auto',
+    });
+
+    const res = await app.fetch(
+      new Request(`http://test.local/api/finance/${entry.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeader(adminToken) },
+        body: JSON.stringify({ description: '修正描述' }),
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const audits = await db
+      .select()
+      .from(schema.audit_logs)
+      .where(eq(schema.audit_logs.entity_id, entry.id));
+    const updateAudit = audits.find((a) => a.action === 'update');
+    expect(updateAudit).toBeDefined();
+    const diff = JSON.parse(updateAudit!.diff_json) as Record<string, unknown>;
+    expect(diff).toHaveProperty('_note', 'auto entry modified by staff');
+  });
+
   it('DELETE 已经 voided 的条目幂等返回 200', async () => {
     const entry = await seedEntry(db, {
       entry_date: '2026-04-10',

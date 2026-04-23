@@ -15,7 +15,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { zValidator } from '@hono/zod-validator';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   cardPurchaseSchema,
@@ -256,6 +256,118 @@ cardsRouter.post(
       },
       201,
     );
+  },
+);
+
+// ================== PATCH /api/cards/:id ==================
+
+/**
+ * 允许 staff/admin 修改：notes / collector_user_id / created_by_user_id / purchased_at。
+ * 禁止通过此接口修改：card_code / total_meals / used_meals / remaining_meals / paid_amount / status。
+ * 使用 .strict() 拒绝任何未列出的字段，Zod 校验失败 → 422。
+ */
+const cardPatchSchema = z
+  .object({
+    notes: z.string().max(512).optional(),
+    collector_user_id: z.number().int().positive().optional(),
+    created_by_user_id: z.number().int().positive().optional(),
+    purchased_at: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
+
+const zPatchHook = (
+  result: { success: boolean; error?: z.ZodError },
+): Response | void => {
+  if (!result.success) {
+    throw new HTTPException(422, {
+      message: result.error?.issues[0]?.message ?? '请求参数不合法（含不允许修改的字段）',
+    });
+  }
+};
+
+cardsRouter.patch(
+  '/:id',
+  zValidator('param', paramSchema),
+  zValidator('json', cardPatchSchema, zPatchHook),
+  async (c) => {
+    const { id: cardId } = c.req.valid('param');
+    const body = c.req.valid('json');
+    const authUser = c.get('authUser');
+    const db = requestDb(c);
+
+    const cardRows = await db
+      .select()
+      .from(schema.cards)
+      .where(eq(schema.cards.id, cardId))
+      .limit(1);
+    const card = cardRows[0];
+    if (!card) {
+      throw new HTTPException(404, { message: '卡不存在' });
+    }
+
+    const patch: Partial<typeof schema.cards.$inferInsert> = {};
+    if (body.notes !== undefined) patch.notes = body.notes;
+    if (body.collector_user_id !== undefined) patch.collector_user_id = body.collector_user_id;
+    if (body.created_by_user_id !== undefined) patch.created_by_user_id = body.created_by_user_id;
+
+    if (body.purchased_at !== undefined) {
+      const newDate = new Date(body.purchased_at);
+      // 将新 purchased_at 转换为 YYYY-MM-DD（UTC），与 order_date text 比较
+      const newDateStr = newDate.toISOString().slice(0, 10);
+
+      // 校验该卡下所有 daily_orders.order_date >= 新 purchased_at 日期
+      const conflictingOrders = await db
+        .select({ id: schema.daily_orders.id })
+        .from(schema.daily_orders)
+        .where(
+          and(
+            eq(schema.daily_orders.card_id, cardId),
+            lt(schema.daily_orders.order_date, newDateStr),
+          ),
+        )
+        .limit(1);
+
+      if (conflictingOrders.length > 0) {
+        return c.json(
+          { code: 'PURCHASED_AT_CONFLICT', message: '新购卡时间早于该卡下已有订单日期，冲突' },
+          422,
+        );
+      }
+
+      patch.purchased_at = newDate;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return c.json({ card });
+    }
+
+    patch.updated_at = new Date();
+
+    const diff: Record<string, [unknown, unknown]> = {};
+    for (const [k, v] of Object.entries(patch)) {
+      if (k === 'updated_at') continue;
+      const old = (card as Record<string, unknown>)[k];
+      if (old !== v) diff[k] = [old, v];
+    }
+
+    const updated = await db
+      .update(schema.cards)
+      .set(patch)
+      .where(eq(schema.cards.id, cardId))
+      .returning();
+    const updatedCard = updated[0]!;
+
+    if (Object.keys(diff).length > 0) {
+      await db.insert(schema.audit_logs).values({
+        user_id: authUser.id,
+        action: 'update',
+        entity: 'card',
+        entity_id: cardId,
+        diff_json: JSON.stringify(diff),
+      });
+    }
+
+    return c.json({ card: updatedCard });
   },
 );
 
