@@ -39,6 +39,37 @@ dbtestRouter.get('/', async (c) => {
   }
 });
 
+dbtestRouter.get('/intercept', async (c) => {
+  const t0 = Date.now();
+  const raw = env.TURSO_DATABASE_URL;
+  const httpUrl = raw.replace(/^libsql:\/\//, 'https://');
+  const token = env.TURSO_AUTH_TOKEN ?? '';
+  const logged: Array<{ url: string; method: string; status?: number; authSent?: boolean }> = [];
+  const loggingFetch: typeof fetch = async (input, init) => {
+    const req = input instanceof Request ? input : new Request(input, init);
+    const authSent = req.headers.has('authorization');
+    try {
+      const res = await fetch(req);
+      logged.push({ url: req.url, method: req.method, status: res.status, authSent });
+      return res;
+    } catch (e: any) {
+      logged.push({ url: req.url, method: req.method, status: -1, authSent });
+      throw e;
+    }
+  };
+  try {
+    const { createClient } = await import('@libsql/client/http');
+    const client = createClient({ url: httpUrl, authToken: token, fetch: loggingFetch });
+    const res = await client.execute('SELECT 1 AS ok');
+    return c.json({ ok: true, elapsedMs: Date.now() - t0, result: res.rows, logged });
+  } catch (err: any) {
+    return c.json(
+      { ok: false, message: err?.message, code: err?.code, elapsedMs: Date.now() - t0, logged },
+      500,
+    );
+  }
+});
+
 dbtestRouter.get('/raw', async (c) => {
   const t0 = Date.now();
   const raw = env.TURSO_DATABASE_URL;
