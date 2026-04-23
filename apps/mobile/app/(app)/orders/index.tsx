@@ -1,10 +1,23 @@
 /**
  * 每日订餐 — 今日视图（午/晚分组）
- * 功能：会员餐录入、散餐录入、出餐状态管理、类型筛选
+ *
+ * 数据源：
+ *  - 订单：useOrdersToday()（GET /api/orders/today）
+ *  - 会员：useMembersView() 用于丰富订单（会员名、是否院内、地址等）
+ *
+ * Mutation：
+ *  - 创建：ordersApi.create（会员餐模式）；录入成功后 invalidate 今日订单缓存
+ *  - 状态切换：ordersApi.setStatus（pending/fulfilled/delivered）
+ *  - 取消：ordersApi.cancel（cancelled 是终态，走单独路由）
+ *
+ * TODO（后端未实现）：
+ *  - 散客（无会员账户）录单：当前后端 POST /api/orders 要求 member_id > 0；
+ *    录入 Tab 的「散餐」子模式仍显示，但提交时会提示未接入。
  */
 
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   Pressable,
@@ -19,7 +32,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../../theme/paperTheme';
-import { MOCK_TODAY_ORDERS, MOCK_MEMBERS, type MockOrder } from '../../../constants/mockData';
+import { type MockMember, type MockOrder } from '../../../constants/mockData';
+import { ordersApi } from '../../../api/orders';
+import { useOrdersToday, useInvalidateOrders } from '../../../hooks/useOrdersToday';
+import {
+  useMembersView,
+  useInvalidateMembersView,
+} from '../../../hooks/useMembersView';
+import { dailyOrderToMockOrder, membersByIdFrom } from '../../../lib/order-view';
 import { AppHeader, MeshBackground } from '../../../components/ui';
 
 const STATUS_MAP = {
@@ -30,7 +50,6 @@ const STATUS_MAP = {
 } as const;
 
 const ADHOC_DEFAULT_PRICE = 35;
-let _nextId = 9000;
 
 function todayStr(): string {
   const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
@@ -61,9 +80,24 @@ const TABS: {
 // Main screen
 // ============================================================
 export default function OrdersScreen() {
-  const [orders, setOrders] = useState<MockOrder[]>(MOCK_TODAY_ORDERS);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
-  const [activeOrder,  setActiveOrder]  = useState<MockOrder | null>(null);
+  const [activeOrder, setActiveOrder] = useState<MockOrder | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const ordersQuery = useOrdersToday();
+  const membersView = useMembersView();
+  const invalidateOrders = useInvalidateOrders();
+  const invalidateMembers = useInvalidateMembersView();
+
+  const membersById = useMemo(
+    () => membersByIdFrom(membersView.data ?? []),
+    [membersView.data],
+  );
+
+  const orders: MockOrder[] = useMemo(() => {
+    const raw = ordersQuery.data ?? [];
+    return raw.map((o) => dailyOrderToMockOrder(o, membersById));
+  }, [ordersQuery.data, membersById]);
 
   const lunch  = orders.filter((o) => o.meal_type === 'lunch');
   const dinner = orders.filter((o) => o.meal_type === 'dinner');
@@ -77,14 +111,55 @@ export default function OrdersScreen() {
   const pending     = orders.filter((o) => o.status === 'pending').length;
   const adhocCount  = orders.filter((o) => o.card_type === null).length;
 
-  const handleAddOrders = (newOrders: Omit<MockOrder, 'id'>[]) => {
-    setOrders((prev) => [...prev, ...newOrders.map((o) => ({ ...o, id: ++_nextId }))]);
-  };
+  const flashToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2400);
+  }, []);
 
-  const handleUpdateStatus = (id: number, status: MockOrder['status']) => {
-    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
-    setActiveOrder(null);
-  };
+  const handleAddMemberOrder = useCallback(
+    async (payload: {
+      memberId: number;
+      orderDate: string;
+      lunchQty: number;
+      dinnerQty: number;
+      notes?: string;
+    }) => {
+      try {
+        await ordersApi.create({
+          member_id: payload.memberId,
+          order_date: payload.orderDate,
+          lunch_qty: payload.lunchQty,
+          dinner_qty: payload.dinnerQty,
+          notes: payload.notes ?? '',
+        });
+        // 会员卡可能被扣减，会员列表也要失效
+        await Promise.all([invalidateOrders(), invalidateMembers(payload.memberId)]);
+      } catch (e) {
+        flashToast(e instanceof Error ? e.message : '录入失败');
+        throw e;
+      }
+    },
+    [invalidateOrders, invalidateMembers, flashToast],
+  );
+
+  const handleUpdateStatus = useCallback(
+    async (id: number, status: MockOrder['status']) => {
+      setActiveOrder(null);
+      try {
+        if (status === 'cancelled') {
+          await ordersApi.cancel(id);
+        } else {
+          await ordersApi.setStatus(id, status);
+        }
+        await invalidateOrders();
+        // 取消订单会退餐给卡，会员列表也要刷新
+        if (status === 'cancelled') await invalidateMembers();
+      } catch (e) {
+        flashToast(e instanceof Error ? e.message : '更新状态失败');
+      }
+    },
+    [invalidateOrders, invalidateMembers, flashToast],
+  );
 
   const now = new Date();
 
@@ -150,9 +225,8 @@ export default function OrdersScreen() {
       {/* —— 录入 —— */}
       {activeTab === 'entry' && (
         <EntryPanel
-          onAdd={(newOrders) => {
-            handleAddOrders(newOrders);
-          }}
+          members={membersView.data ?? []}
+          onAddMemberOrder={handleAddMemberOrder}
           onJumpToOverview={() => setActiveTab('overview')}
         />
       )}
@@ -376,10 +450,12 @@ function PrepCard({
 // ============================================================
 function DeliveryView({
   orders,
+  membersById,
   onMarkDelivered,
   onOpenDetail,
 }: {
   orders: MockOrder[];
+  membersById: Record<number, MockMember>;
   onMarkDelivered: (id: number) => void;
   onOpenDetail: (o: MockOrder) => void;
 }) {
@@ -457,14 +533,15 @@ function DeliveryView({
 
 function DeliveryCard({
   order,
+  member,
   onConfirm,
   onOpen,
 }: {
   order: MockOrder;
+  member?: MockMember;
   onConfirm: () => void;
   onOpen: () => void;
 }) {
-  const member = MOCK_MEMBERS.find((m) => m.id === order.member_id);
   const address = member?.address ?? (order.is_hospital ? '院内' : '未知地址');
   return (
     <View style={prepStyles.card}>
@@ -590,23 +667,32 @@ function OrderRow({
 type EntryMode = 'member' | 'adhoc';
 
 function EntryPanel({
-  onAdd,
+  members,
+  onAddMemberOrder,
   onJumpToOverview,
 }: {
-  onAdd: (orders: Omit<MockOrder, 'id'>[]) => void;
+  members: MockMember[];
+  onAddMemberOrder: (payload: {
+    memberId: number;
+    orderDate: string;
+    lunchQty: number;
+    dinnerQty: number;
+    notes?: string;
+  }) => Promise<void>;
   onJumpToOverview?: () => void;
 }) {
   const [toast, setToast] = useState<string | null>(null);
   const [mode, setMode] = useState<EntryMode>('member');
+  const [submitting, setSubmitting] = useState(false);
 
   // 会员餐 state
   const [memberQuery,    setMemberQuery]    = useState('');
-  const [selectedMember, setSelectedMember] = useState<typeof MOCK_MEMBERS[0] | null>(null);
+  const [selectedMember, setSelectedMember] = useState<MockMember | null>(null);
   const [lunchQty,       setLunchQty]       = useState(0);
   const [dinnerQty,      setDinnerQty]      = useState(0);
   const [memberNotes,    setMemberNotes]    = useState('');
 
-  // 散餐 state
+  // 散餐 state（前端保留，后端 POST /api/orders 暂不支持无 member_id 录入，提交时会提示）
   const [adhocName,     setAdhocName]     = useState('');
   const [adhocMeal,     setAdhocMeal]     = useState<'lunch' | 'dinner'>('lunch');
   const [adhocQty,      setAdhocQty]      = useState(1);
@@ -616,12 +702,14 @@ function EntryPanel({
 
   const q = memberQuery.trim();
   const filteredMembers = q
-    ? MOCK_MEMBERS.filter(
-        (m) =>
-          m.name.includes(q) ||
-          m.nickname.includes(q) ||
-          m.phone.includes(q),
-      ).slice(0, 8)
+    ? members
+        .filter(
+          (m) =>
+            m.name.includes(q) ||
+            m.nickname.includes(q) ||
+            m.phone.includes(q),
+        )
+        .slice(0, 8)
     : [];
   const dropdownOpen = !selectedMember && q.length > 0;
 
@@ -638,52 +726,35 @@ function EntryPanel({
     setTimeout(() => setToast(null), 2000);
   };
 
-  const handleSubmitMember = () => {
+  const handleSubmitMember = async () => {
     if (!selectedMember || lunchQty + dinnerQty === 0) return;
-    const base = {
-      member_id:       selectedMember.id,
-      member_name:     selectedMember.name,
-      member_nickname: selectedMember.nickname,
-      order_date:      todayStr(),
-      is_hospital:     selectedMember.is_hospital,
-      dietary_notes:   selectedMember.dietary_notes,
-      notes:           memberNotes.trim(),
-      card_type:       selectedMember.active_card?.card_name ?? '会员',
-      status:          'pending' as const,
-    };
-    const toAdd: Omit<MockOrder, 'id'>[] = [];
-    if (lunchQty  > 0) toAdd.push({ ...base, meal_type: 'lunch',  quantity: lunchQty,  amount: 0 });
-    if (dinnerQty > 0) toAdd.push({ ...base, meal_type: 'dinner', quantity: dinnerQty, amount: 0 });
-    const name = selectedMember.nickname || selectedMember.name;
-    onAdd(toAdd);
-    reset();
-    flashToast(`已为 ${name} 录入 ${lunchQty + dinnerQty} 份`);
+    setSubmitting(true);
+    try {
+      await onAddMemberOrder({
+        memberId: selectedMember.id,
+        orderDate: todayStr(),
+        lunchQty,
+        dinnerQty,
+        notes: memberNotes.trim() || undefined,
+      });
+      const name = selectedMember.nickname || selectedMember.name;
+      const qty = lunchQty + dinnerQty;
+      reset();
+      flashToast(`已为 ${name} 录入 ${qty} 份`);
+    } catch {
+      // 错误 toast 由上层 handleAddMemberOrder 处理；这里保持 UI
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSubmitAdhoc = () => {
-    if (!adhocName.trim() || adhocQty < 1) return;
-    const unitPrice = parseFloat(adhocPrice) || ADHOC_DEFAULT_PRICE;
-    const name = adhocName.trim();
-    onAdd([{
-      member_id:       0,
-      member_name:     name,
-      member_nickname: name,
-      order_date:      todayStr(),
-      meal_type:       adhocMeal,
-      quantity:        adhocQty,
-      amount:          unitPrice * adhocQty,
-      status:          'pending',
-      is_hospital:     adhocHospital,
-      dietary_notes:   '',
-      notes:           adhocNotes.trim(),
-      card_type:       null,
-    }]);
-    reset();
-    flashToast(`已录入散餐 ${name} ${adhocQty} 份`);
+    // 后端暂不支持无 member_id 的散客录单（POST /api/orders 要求 member_id > 0）
+    flashToast('散客录单尚未接入后台；请在会员档案中为该顾客建档后再录入');
   };
 
-  const canSubmitMember = !!selectedMember && lunchQty + dinnerQty > 0;
-  const canSubmitAdhoc  = adhocName.trim().length > 0 && adhocQty >= 1;
+  const canSubmitMember = !!selectedMember && lunchQty + dinnerQty > 0 && !submitting;
+  const canSubmitAdhoc  = adhocName.trim().length > 0 && adhocQty >= 1 && !submitting;
   const canSubmit       = mode === 'member' ? canSubmitMember : canSubmitAdhoc;
 
   return (
@@ -950,9 +1021,16 @@ function EntryPanel({
         <Pressable
           style={[eStyles.submitBtn, !canSubmit && eStyles.submitBtnDisabled]}
           disabled={!canSubmit}
-          onPress={mode === 'member' ? handleSubmitMember : handleSubmitAdhoc}
+          onPress={() => {
+            if (mode === 'member') void handleSubmitMember();
+            else handleSubmitAdhoc();
+          }}
         >
-          <Text style={eStyles.submitBtnText}>确认录入</Text>
+          {submitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={eStyles.submitBtnText}>确认录入</Text>
+          )}
         </Pressable>
       </View>
 
