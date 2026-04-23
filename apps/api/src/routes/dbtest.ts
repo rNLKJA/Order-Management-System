@@ -45,23 +45,52 @@ dbtestRouter.get('/cmp', async (c) => {
     envTokenLen: (env.TURSO_AUTH_TOKEN ?? '').length,
     processEnvTokenLen: (process.env.TURSO_AUTH_TOKEN ?? '').length,
     envUrl: env.TURSO_DATABASE_URL,
-    processEnvUrl: process.env.TURSO_DATABASE_URL,
-    tokensEqual:
-      (env.TURSO_AUTH_TOKEN ?? '') === (process.env.TURSO_AUTH_TOKEN ?? ''),
   };
+
+  // 测试 A：inline 构造 http client，url=libsql://（未转换）
+  try {
+    const { createClient } = await import('@libsql/client/http');
+    const client = createClient({
+      url: env.TURSO_DATABASE_URL,
+      authToken: env.TURSO_AUTH_TOKEN,
+    });
+    const res = await client.execute('SELECT 1 AS ok');
+    out.aLibsqlUrlOk = true;
+    out.aLibsqlUrlRows = res.rows?.length;
+  } catch (err: any) {
+    out.aLibsqlUrlOk = false;
+    out.aLibsqlUrlError = err?.message;
+  }
+
+  // 测试 B：inline 构造 http client，url=https://（手动转换）
+  try {
+    const { createClient } = await import('@libsql/client/http');
+    const httpsUrl = env.TURSO_DATABASE_URL.replace(/^libsql:\/\//, 'https://');
+    const client = createClient({
+      url: httpsUrl,
+      authToken: env.TURSO_AUTH_TOKEN,
+    });
+    const res = await client.execute('SELECT 1 AS ok');
+    out.bHttpsUrlOk = true;
+    out.bHttpsUrlRows = res.rows?.length;
+  } catch (err: any) {
+    out.bHttpsUrlOk = false;
+    out.bHttpsUrlError = err?.message;
+  }
+
+  // 测试 C：全局 getClient
   try {
     const { resetDbForTesting, getClient } = await import('../db/client.js');
     resetDbForTesting();
     const client = getClient();
-    out.clientProtocol = (client as any).protocol;
-    const res = await client.execute('SELECT 1 AS one');
-    out.directExecuteOk = true;
-    out.directExecuteRows = res.rows?.length;
+    const res = await client.execute('SELECT 1 AS ok');
+    out.cGlobalOk = true;
+    out.cGlobalRows = res.rows?.length;
   } catch (err: any) {
-    out.directExecuteOk = false;
-    out.directExecuteError = err?.message;
-    out.directExecuteCode = err?.code;
+    out.cGlobalOk = false;
+    out.cGlobalError = err?.message;
   }
+
   out.elapsedMs = Date.now() - t0;
   return c.json(out);
 });
