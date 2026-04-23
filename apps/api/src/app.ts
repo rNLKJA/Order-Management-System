@@ -15,7 +15,6 @@ import { secureHeaders } from 'hono/secure-headers';
 import { HTTPException } from 'hono/http-exception';
 
 import { authRouter } from './routes/auth.js';
-import { debugRouter } from './routes/debug.js';
 import { auditRouter } from './routes/audit.js';
 import { cardsRouter } from './routes/cards.js';
 import { financeRouter } from './routes/finance.js';
@@ -60,7 +59,6 @@ export function createApp(deps: AppDeps = {}) {
 
   // 路由
   app.route('/api/health', healthRouter);
-  app.route('/api/debug', debugRouter);
   app.route('/api/auth', authRouter);
   app.route('/api/members', membersRouter);
   app.route('/api/cards', cardsRouter);
