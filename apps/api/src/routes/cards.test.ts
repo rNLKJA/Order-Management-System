@@ -559,6 +559,109 @@ describe('POST /api/cards/:id/upgrade', () => {
 });
 
 // ============================================================
+// POST /api/cards/:id/refund
+// ============================================================
+
+describe('POST /api/cards/:id/refund', () => {
+  let ctx: Ctx;
+
+  beforeEach(async () => {
+    ctx = await buildCtx();
+  });
+
+  it('active 卡退款成功：卡置 refunded + 写 expense FinanceEntry', async () => {
+    const { id: memberId } = await seedMember(ctx.db, {
+      created_by_user_id: ctx.userId,
+    });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'month',
+      is_hospital: false,
+      total_meals: 30,
+      used_meals: 5,
+      unit_price: 25,
+      paid_amount: 750,
+    });
+
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}/refund`, {
+      method: 'POST',
+      body: JSON.stringify({ refund_amount: 625, reason: '客户要求' }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      card: { status: string; refund_amount: number | null; refund_reason: string | null };
+      financeEntry: { amount: number; type: string; category: string };
+      refund_amount: number;
+    };
+    expect(body.card.status).toBe('refunded');
+    expect(body.card.refund_amount).toBe(625);
+    expect(body.card.refund_reason).toBe('客户要求');
+    expect(body.financeEntry.type).toBe('expense');
+    expect(body.financeEntry.category).toBe('manual_expense');
+    expect(body.financeEntry.amount).toBe(625);
+    expect(body.refund_amount).toBe(625);
+  });
+
+  it('退款金额 > 已付 → 422 INVALID_REFUND_AMOUNT', async () => {
+    const { id: memberId } = await seedMember(ctx.db, {
+      created_by_user_id: ctx.userId,
+    });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      unit_price: 28,
+      paid_amount: 280,
+    });
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}/refund`, {
+      method: 'POST',
+      body: JSON.stringify({ refund_amount: 500, reason: 'x' }),
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe('INVALID_REFUND_AMOUNT');
+  });
+
+  it('非 active 卡退款 → 422 CARD_NOT_ACTIVE', async () => {
+    const { id: memberId } = await seedMember(ctx.db, {
+      created_by_user_id: ctx.userId,
+    });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      used_meals: 10,
+      unit_price: 28,
+      paid_amount: 280,
+      status: 'exhausted',
+    });
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}/refund`, {
+      method: 'POST',
+      body: JSON.stringify({ refund_amount: 0, reason: 'x' }),
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe('CARD_NOT_ACTIVE');
+  });
+
+  it('不存在的卡 → 404', async () => {
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/9999/refund`, {
+      method: 'POST',
+      body: JSON.stringify({ refund_amount: 0 }),
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+// ============================================================
 // PATCH /api/cards/:id  (MEA-17)
 // ============================================================
 

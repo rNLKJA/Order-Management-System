@@ -16,5 +16,7 @@ export type { PressableCardProps } from './PressableCard';
 export { Button } from './Button';
 export type { ButtonProps, ButtonVariant } from './Button';
 export { SectionLabel } from './SectionLabel';
+export { DatePicker } from './DatePicker';
+export type { DatePickerProps } from './DatePicker';
 export { ConfirmHost, confirm as confirmDialog } from './ConfirmDialog';
 export type { ConfirmOptions, ConfirmTone } from './ConfirmDialog';

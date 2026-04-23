@@ -8,7 +8,7 @@
 import type { SubscriptionCardCode } from '@meal/shared';
 import { api } from './client';
 
-export type CardStatus = 'active' | 'upgraded' | 'exhausted';
+export type CardStatus = 'active' | 'upgraded' | 'exhausted' | 'refunded';
 
 export interface Card {
   id: number;
@@ -28,6 +28,10 @@ export interface Card {
   created_at: number;
   updated_at: number;
   notes: string;
+  refund_amount: number | null;
+  refund_reason: string | null;
+  refunded_at: number | null;
+  refunded_by_user_id: number | null;
 }
 
 export interface FinanceEntrySummary {
@@ -64,6 +68,25 @@ export interface RenewInput {
   notes?: string;
 }
 
+export interface RefundInput {
+  refund_amount: number;
+  reason?: string;
+  collector_user_id?: number;
+  created_by_user_id?: number;
+}
+
+export interface RefundResponse {
+  card: Card;
+  financeEntry: {
+    id: number;
+    entry_date: string;
+    amount: number;
+    type: 'expense';
+    category: 'manual_expense';
+  };
+  refund_amount: number;
+}
+
 export const cardsApi = {
   list: (memberId: number, status: CardStatus | 'all' = 'all') =>
     api.get<{ cards: Card[] }>(
@@ -92,4 +115,7 @@ export const cardsApi = {
       carried_meals: number;
       paid_amount: number;
     }>(`/api/cards/${cardId}/renew`, input),
+
+  refund: (cardId: number, input: RefundInput) =>
+    api.post<RefundResponse>(`/api/cards/${cardId}/refund`, input),
 };

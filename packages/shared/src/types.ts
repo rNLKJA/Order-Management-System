@@ -29,12 +29,13 @@ export const MEAL_TYPE_LABEL: Record<MealType, string> = {
 
 // =========== 卡状态 ===========
 
-export type CardStatus = 'active' | 'upgraded' | 'exhausted';
+export type CardStatus = 'active' | 'upgraded' | 'exhausted' | 'refunded';
 
 export const CARD_STATUS_LABEL: Record<CardStatus, string> = {
   active: '进行中',
   upgraded: '已升级',
   exhausted: '已用完',
+  refunded: '已退卡',
 };
 
 // =========== 财务分类 ===========

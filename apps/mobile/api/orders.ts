@@ -12,6 +12,8 @@ export interface DailyOrder {
   meal_type: 'lunch' | 'dinner';
   quantity: number;
   amount: number;
+  /** 散客姓名（非空 → walk-in 订单，不扣卡） */
+  customer_name: string;
   status: 'pending' | 'fulfilled' | 'delivered' | 'cancelled';
   fulfilled_at: string | null;
   fulfilled_by_user_id: number | null;
@@ -40,11 +42,16 @@ export interface Card {
 }
 
 export interface CreateOrderInput {
-  member_id: number;
+  /** 会员模式必传；散客模式可省略，改用 customer_name */
+  member_id?: number;
   order_date: string;
   lunch_qty?: number;
   dinner_qty?: number;
   notes?: string;
+  /** 散客姓名 */
+  customer_name?: string;
+  /** 散客模式自定义单价（覆盖 ad_hoc_price） */
+  adhoc_unit_price?: number;
   created_by_user_id?: number;
 }
 

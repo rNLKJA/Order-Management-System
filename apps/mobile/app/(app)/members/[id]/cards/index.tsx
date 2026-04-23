@@ -313,6 +313,16 @@ function StatusBadge({ status }: { status: CardStatus }) {
       bg = theme.colors.surfaceVariant;
       fg = theme.colors.onSurfaceVariant;
       break;
+    case 'refunded':
+      label = '已退卡';
+      bg = theme.colors.errorContainer;
+      fg = theme.colors.onErrorContainer;
+      break;
+    default:
+      label = status;
+      bg = theme.colors.surfaceVariant;
+      fg = theme.colors.onSurfaceVariant;
+      break;
   }
   return (
     <Badge visible style={{ backgroundColor: bg, color: fg, alignSelf: 'center' }}>

@@ -19,6 +19,7 @@ import { and, desc, eq, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   cardPurchaseSchema,
+  cardRefundSchema,
   cardRenewSchema,
   cardUpgradeSchema,
   getCardSpec,
@@ -30,6 +31,7 @@ import { requireAuth, type AuthVariables } from '../middleware/jwt.js';
 import { computeUpgrade, UpgradeError } from '../services/upgrade.js';
 import { computeRenew, RenewError } from '../services/renew.js';
 import { createAutoSubscriptionIncome } from '../services/finance.js';
+import { refundCard, CardRefundError } from '../services/refund.js';
 
 export const cardsRouter = new Hono<{ Variables: AuthVariables }>();
 
@@ -371,6 +373,76 @@ cardsRouter.post(
       },
       201,
     );
+  },
+);
+
+// ================== POST /api/cards/:id/refund ==================
+
+/**
+ * 退卡：active 卡 → refunded，并自动写一条 manual_expense 的 FinanceEntry 跟踪退款。
+ * 规则：
+ *  - 仅 active 可退；upgraded / exhausted / refunded 都返回 422
+ *  - 0 ≤ refund_amount ≤ paid_amount
+ *  - 关联的 pending/fulfilled 订单不自动取消，如需冲销请单独走 /orders/:id/cancel
+ */
+cardsRouter.post(
+  '/:id/refund',
+  zValidator('param', paramSchema),
+  zValidator('json', cardRefundSchema),
+  async (c) => {
+    const { id: cardId } = c.req.valid('param');
+    const input = c.req.valid('json');
+    const authUser = c.get('authUser');
+    const db = requestDb(c);
+
+    const collectorUserId = await resolveCollectorUserId(
+      db,
+      input.collector_user_id,
+      authUser.id,
+    );
+    const createdByUserId = input.created_by_user_id ?? authUser.id;
+
+    try {
+      const result = await db.transaction(async (tx) => {
+        return refundCard(tx, {
+          cardId,
+          refundAmount: input.refund_amount,
+          reason: input.reason ?? '',
+          collectorUserId,
+          createdByUserId,
+          refundedByUserId: authUser.id,
+        });
+      });
+
+      await db.insert(schema.audit_logs).values({
+        user_id: authUser.id,
+        action: 'update',
+        entity: 'card',
+        entity_id: cardId,
+        diff_json: JSON.stringify({
+          status: ['active', 'refunded'],
+          refund_amount: input.refund_amount,
+          reason: input.reason ?? '',
+        }),
+      });
+
+      return c.json(
+        {
+          card: result.card,
+          financeEntry: result.financeEntry,
+          refund_amount: input.refund_amount,
+        },
+        201,
+      );
+    } catch (err) {
+      if (err instanceof CardRefundError) {
+        if (err.code === 'CARD_NOT_FOUND') {
+          throw new HTTPException(404, { message: err.message });
+        }
+        return c.json({ code: err.code, message: err.message }, 422);
+      }
+      throw err;
+    }
   },
 );
 

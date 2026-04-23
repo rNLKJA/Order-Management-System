@@ -30,6 +30,7 @@ import {
   OrderNotFoundError,
 } from '../services/orders.js';
 import { toShanghaiDate } from '../services/finance.js';
+import { getOrCreateWalkinMemberId } from '../services/walkin.js';
 
 export const ordersRouter = new Hono<{ Variables: AuthVariables }>();
 
@@ -175,16 +176,24 @@ ordersRouter.get('/:id', zValidator('param', idParamSchema), async (c) => {
 
 const createOrderSchema = z
   .object({
-    member_id: z.number().int().positive(),
+    member_id: z.number().int().positive().optional(),
     order_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'order_date 格式 YYYY-MM-DD'),
     lunch_qty: z.number().int().min(0).optional().default(0),
     dinner_qty: z.number().int().min(0).optional().default(0),
     notes: z.string().optional().default(''),
+    /** 散客姓名；填了就是 walk-in，不关联任何会员卡 */
+    customer_name: z.string().max(64).optional().default(''),
+    /** 散客模式下指定单价（覆盖 settings.ad_hoc_price） */
+    adhoc_unit_price: z.number().nonnegative().optional(),
     created_by_user_id: z.number().int().positive().optional(),
   })
   .refine((d) => (d.lunch_qty ?? 0) + (d.dinner_qty ?? 0) > 0, {
     message: '午餐份数和晚餐份数至少有一项 > 0',
-  });
+  })
+  .refine(
+    (d) => (d.member_id ?? 0) > 0 || (d.customer_name ?? '').trim().length > 0,
+    { message: '请选择会员或填写散客姓名' },
+  );
 
 ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
   const input = c.req.valid('json');
@@ -214,33 +223,47 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
   const lunchQty = input.lunch_qty ?? 0;
   const dinnerQty = input.dinner_qty ?? 0;
   const totalQty = lunchQty + dinnerQty;
+  const customerName = (input.customer_name ?? '').trim();
+  const isWalkin = customerName.length > 0 && !input.member_id;
 
-  // 校验会员存在 + 活跃
-  const memberRows = await db
-    .select()
-    .from(schema.members)
-    .where(eq(schema.members.id, input.member_id))
-    .limit(1);
-  const member = memberRows[0];
-  if (!member) {
-    throw new HTTPException(404, { message: '会员不存在' });
-  }
-  if (!member.is_active) {
-    throw new HTTPException(422, { message: '会员已归档，不能录入订餐' });
+  // 会员模式：校验会员存在且活跃
+  if (!isWalkin) {
+    const memberRows = await db
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.id, input.member_id!))
+      .limit(1);
+    const member = memberRows[0];
+    if (!member) {
+      throw new HTTPException(404, { message: '会员不存在' });
+    }
+    if (!member.is_active) {
+      throw new HTTPException(422, { message: '会员已归档，不能录入订餐' });
+    }
   }
 
   const runTransaction = async () => {
     return db.transaction(async (tx) => {
-    // 读 ad_hoc_price
-    const adHocPrice = await getAdHocPrice(tx);
+    // 散客模式：挂到 __WALKIN__ 哨兵会员下
+    const memberId = isWalkin
+      ? await getOrCreateWalkinMemberId(tx, createdByUserId)
+      : input.member_id!;
 
-    // 尝试扣卡
+    // 读 ad_hoc_price（散客模式优先 body.adhoc_unit_price）
+    const adHocPrice =
+      input.adhoc_unit_price != null && input.adhoc_unit_price >= 0
+        ? input.adhoc_unit_price
+        : await getAdHocPrice(tx);
+
+    // 散客模式完全跳过扣卡
     let deductResult: Awaited<ReturnType<typeof deductMeals>> = null;
-    deductResult = await deductMeals(tx, {
-      memberId: input.member_id,
-      totalQty,
-      createdByUserId,
-    });
+    if (!isWalkin) {
+      deductResult = await deductMeals(tx, {
+        memberId,
+        totalQty,
+        createdByUserId,
+      });
+    }
 
     const hasCard = deductResult !== null;
     const cardId = hasCard ? deductResult!.card.id : null;
@@ -250,7 +273,7 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
 
     if (lunchQty > 0) {
       orderValues.push({
-        member_id: input.member_id,
+        member_id: memberId,
         card_id: cardId,
         order_date: input.order_date,
         meal_type: 'lunch',
@@ -259,11 +282,12 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
         status: 'pending',
         created_by_user_id: createdByUserId,
         notes: input.notes ?? '',
+        customer_name: customerName,
       });
     }
     if (dinnerQty > 0) {
       orderValues.push({
-        member_id: input.member_id,
+        member_id: memberId,
         card_id: cardId,
         order_date: input.order_date,
         meal_type: 'dinner',
@@ -272,6 +296,7 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
         status: 'pending',
         created_by_user_id: createdByUserId,
         notes: input.notes ?? '',
+        customer_name: customerName,
       });
     }
 
@@ -284,12 +309,13 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
     if (!hasCard) {
       const entryDate = toShanghaiDate(new Date());
       for (const order of insertedOrders) {
+        const who = customerName ? `${customerName} · ` : '';
         await tx.insert(schema.finance_entries).values({
           entry_date: entryDate,
           type: 'income',
           amount: order.amount,
           category: 'ad_hoc',
-          description: `散餐：${order.meal_type === 'lunch' ? '午餐' : '晚餐'} ${order.quantity} 份`,
+          description: `散餐：${who}${order.meal_type === 'lunch' ? '午餐' : '晚餐'} ${order.quantity} 份`,
           ref_order_id: order.id,
           source: 'auto',
           voided: false,

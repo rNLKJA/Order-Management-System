@@ -99,6 +99,21 @@ export const cardRenewSchema = z.object({
 export type CardRenewInput = z.infer<typeof cardRenewSchema>;
 
 /**
+ * 退卡：把 active 卡退钱并置 refunded，同时写一条支出 FinanceEntry 跟踪资金流。
+ * 业务规则：
+ *  - 仅 active 卡可退（upgraded / exhausted / refunded 都不行）
+ *  - 0 ≤ refund_amount ≤ paid_amount
+ *  - 已扣过的餐按原单价计算在 refund_amount 上由前端给出，后端只校验上下限
+ */
+export const cardRefundSchema = z.object({
+  refund_amount: zAmount,
+  reason: z.string().max(256).optional().default(''),
+  collector_user_id: z.number().int().positive().optional(),
+  created_by_user_id: z.number().int().positive().optional(),
+});
+export type CardRefundInput = z.infer<typeof cardRefundSchema>;
+
+/**
  * 允许触发"续卡"的剩餐阈值：当前 active 卡剩餐 ≤ 该值时才开放。
  * 前后端共用这个常量，保证 UI 提示和 API 校验一致。
  */
@@ -108,16 +123,24 @@ export const CARD_RENEWAL_THRESHOLD_MEALS = 2;
 
 export const orderCreateSchema = z
   .object({
-    member_id: z.number().int().positive(),
+    member_id: z.number().int().positive().optional(),
     order_date: zDate,
     lunch_qty: z.number().int().nonnegative().default(0),
     dinner_qty: z.number().int().nonnegative().default(0),
     notes: z.string().max(512).optional().default(''),
+    /** 散客姓名；填了就是 walk-in，可以不传 member_id */
+    customer_name: z.string().max(64).optional().default(''),
+    adhoc_unit_price: zAmount.optional(),
+    is_hospital: z.boolean().optional(),
     created_by_user_id: z.number().int().positive().optional(),
   })
   .refine((v) => v.lunch_qty + v.dinner_qty > 0, {
     message: '午餐和晚餐份数至少有一项 > 0',
     path: ['lunch_qty'],
+  })
+  .refine((v) => (v.member_id ?? 0) > 0 || (v.customer_name ?? '').trim().length > 0, {
+    message: '请选择会员或填写散客姓名',
+    path: ['member_id'],
   });
 export type OrderCreateInput = z.infer<typeof orderCreateSchema>;
 

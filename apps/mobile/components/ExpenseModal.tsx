@@ -18,6 +18,7 @@ import {
 } from 'react-native-paper';
 import { expenseCreateSchema, formatDate } from '@meal/shared';
 import { createExpense } from '../api/finance';
+import { DatePicker } from './ui';
 
 interface Props {
   visible: boolean;
@@ -85,15 +86,12 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
           新增支出
         </Text>
 
-        <TextInput
-          label="日期（YYYY-MM-DD）"
-          mode="outlined"
+        <DatePicker
+          label="日期"
           value={entryDate}
-          onChangeText={setEntryDate}
-          placeholder="2026-04-23"
-          style={styles.field}
-          autoCapitalize="none"
-          autoCorrect={false}
+          onChange={setEntryDate}
+          max={formatDate(new Date())}
+          style={{ marginBottom: 8 }}
         />
         {!dateValid && entryDate.length > 0 && (
           <HelperText type="error" visible>

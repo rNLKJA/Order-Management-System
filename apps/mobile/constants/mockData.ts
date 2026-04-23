@@ -77,6 +77,8 @@ export interface MockOrder {
   dietary_notes: string;
   notes: string;
   card_type: string | null;
+  /** 散客姓名（非空 → walk-in，不关联会员卡） */
+  customer_name?: string;
 }
 
 export interface MockFinance {

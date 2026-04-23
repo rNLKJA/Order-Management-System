@@ -97,7 +97,7 @@ export const cards = sqliteTable(
     remaining_meals: integer('remaining_meals').notNull(),
     unit_price: real('unit_price').notNull(),
     paid_amount: real('paid_amount').notNull(),
-    status: text('status', { enum: ['active', 'upgraded', 'exhausted'] })
+    status: text('status', { enum: ['active', 'upgraded', 'exhausted', 'refunded'] })
       .notNull()
       .default('active'),
     upgraded_from_id: integer('upgraded_from_id').references((): any => cards.id),
@@ -117,6 +117,11 @@ export const cards = sqliteTable(
       .notNull()
       .default(sql`(unixepoch('now') * 1000)`),
     notes: text('notes').notNull().default(''),
+    // 退卡相关（仅 status='refunded' 时有值；新增为 nullable 所以老数据不用迁移）
+    refund_amount: real('refund_amount'),
+    refund_reason: text('refund_reason'),
+    refunded_at: integer('refunded_at', { mode: 'timestamp_ms' }),
+    refunded_by_user_id: integer('refunded_by_user_id').references(() => users.id),
   },
   (t) => ({
     memberIdx: index('cards_member_idx').on(t.member_id),
@@ -138,6 +143,8 @@ export const daily_orders = sqliteTable(
     meal_type: text('meal_type', { enum: ['lunch', 'dinner'] }).notNull(),
     quantity: integer('quantity').notNull(),
     amount: real('amount').notNull().default(0),
+    /** 散客姓名（非空 → 该订单是散客 adhoc，不关联任何会员卡） */
+    customer_name: text('customer_name').notNull().default(''),
     status: text('status', {
       enum: ['pending', 'fulfilled', 'delivered', 'cancelled'],
     })

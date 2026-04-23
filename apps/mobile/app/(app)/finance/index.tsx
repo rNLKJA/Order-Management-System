@@ -18,7 +18,6 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
-  TextInput,
 } from 'react-native';
 import { confirmDestructive, notify } from '../../../lib/confirm';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,6 +31,7 @@ import {
   Bento,
   StatTile,
   SectionLabel,
+  DatePicker,
 } from '../../../components/ui';
 import {
   FINANCE_CATEGORY_LABEL,
@@ -233,30 +233,20 @@ export default function FinanceScreen() {
             <GlassSurface padding={SPACING.md} style={styles.filterCard}>
               {/* 日期区间 */}
               <View style={styles.dateRow}>
-                <View style={styles.dateField}>
-                  <Text style={styles.fieldLabel}>起</Text>
-                  <TextInput
-                    value={from}
-                    onChangeText={setFrom}
-                    style={styles.dateInput}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={COLORS.text.quaternary}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-                <View style={styles.dateField}>
-                  <Text style={styles.fieldLabel}>止</Text>
-                  <TextInput
-                    value={to}
-                    onChangeText={setTo}
-                    style={styles.dateInput}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={COLORS.text.quaternary}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
+                <DatePicker
+                  label="起"
+                  value={from}
+                  onChange={setFrom}
+                  max={to || undefined}
+                  style={styles.dateField}
+                />
+                <DatePicker
+                  label="止"
+                  value={to}
+                  onChange={setTo}
+                  min={from || undefined}
+                  style={styles.dateField}
+                />
               </View>
 
               {/* 类型 Segmented */}
@@ -505,25 +495,7 @@ const styles = StyleSheet.create({
   // 筛选卡
   filterCard: { gap: SPACING.md },
   dateRow: { flexDirection: 'row', gap: SPACING.sm },
-  dateField: {
-    flex: 1,
-    backgroundColor: 'rgba(118,118,128,0.08)',
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  fieldLabel: {
-    ...TYPE.caption,
-    color: COLORS.text.tertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  dateInput: {
-    fontSize: 15,
-    color: COLORS.text.primary,
-    paddingVertical: 4,
-    fontVariant: ['tabular-nums'],
-  },
+  dateField: { flex: 1 },
 
   segmentedBar: {
     flexDirection: 'row',

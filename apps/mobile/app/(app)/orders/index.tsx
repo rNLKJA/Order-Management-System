@@ -142,6 +142,33 @@ export default function OrdersScreen() {
     [invalidateOrders, invalidateMembers, flashToast],
   );
 
+  const handleAddWalkinOrder = useCallback(
+    async (payload: {
+      customerName: string;
+      orderDate: string;
+      meal: 'lunch' | 'dinner';
+      qty: number;
+      unitPrice: number;
+      notes?: string;
+    }) => {
+      try {
+        await ordersApi.create({
+          order_date: payload.orderDate,
+          lunch_qty: payload.meal === 'lunch' ? payload.qty : 0,
+          dinner_qty: payload.meal === 'dinner' ? payload.qty : 0,
+          notes: payload.notes ?? '',
+          customer_name: payload.customerName,
+          adhoc_unit_price: payload.unitPrice,
+        });
+        await invalidateOrders();
+      } catch (e) {
+        flashToast(e instanceof Error ? e.message : '录入失败');
+        throw e;
+      }
+    },
+    [invalidateOrders, flashToast],
+  );
+
   const handleUpdateStatus = useCallback(
     async (id: number, status: MockOrder['status']) => {
       setActiveOrder(null);
@@ -227,6 +254,7 @@ export default function OrdersScreen() {
         <EntryPanel
           members={membersView.data ?? []}
           onAddMemberOrder={handleAddMemberOrder}
+          onAddWalkinOrder={handleAddWalkinOrder}
           onJumpToOverview={() => setActiveTab('overview')}
         />
       )}
@@ -452,10 +480,16 @@ function PrepCard({
           {hasNotes ? (
             <View style={prepStyles.noteBox}>
               {order.dietary_notes ? (
-                <Text style={prepStyles.noteText}>忌：{order.dietary_notes}</Text>
+                <Text style={prepStyles.noteText}>
+                  <Text style={prepStyles.noteLabel}>个人忌口：</Text>
+                  {order.dietary_notes}
+                </Text>
               ) : null}
               {order.notes ? (
-                <Text style={prepStyles.noteText}>备注：{order.notes}</Text>
+                <Text style={prepStyles.noteText}>
+                  <Text style={prepStyles.noteLabel}>订单备注：</Text>
+                  {order.notes}
+                </Text>
               ) : null}
             </View>
           ) : null}
@@ -601,9 +635,20 @@ function DeliveryCard({
             {order.meal_type === 'lunch' ? '午餐' : '晚餐'} · {order.quantity} 份
             {member?.phone ? `  ·  ${member.phone}` : ''}
           </Text>
-          {order.notes ? (
+          {(order.dietary_notes || order.notes) ? (
             <View style={prepStyles.noteBox}>
-              <Text style={prepStyles.noteText}>备注：{order.notes}</Text>
+              {order.dietary_notes ? (
+                <Text style={prepStyles.noteText}>
+                  <Text style={prepStyles.noteLabel}>个人忌口：</Text>
+                  {order.dietary_notes}
+                </Text>
+              ) : null}
+              {order.notes ? (
+                <Text style={prepStyles.noteText}>
+                  <Text style={prepStyles.noteLabel}>订单备注：</Text>
+                  {order.notes}
+                </Text>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -681,8 +726,18 @@ function OrderRow({
           <Text style={styles.orderQty}>{order.quantity} 份</Text>
         </View>
 
-        {order.dietary_notes ? <Text style={styles.orderNote}>忌：{order.dietary_notes}</Text> : null}
-        {order.notes          ? <Text style={styles.orderNote}>备注：{order.notes}</Text>       : null}
+        {order.dietary_notes ? (
+          <Text style={styles.orderNote}>
+            <Text style={styles.orderNoteLabel}>个人忌口：</Text>
+            {order.dietary_notes}
+          </Text>
+        ) : null}
+        {order.notes ? (
+          <Text style={styles.orderNote}>
+            <Text style={styles.orderNoteLabel}>订单备注：</Text>
+            {order.notes}
+          </Text>
+        ) : null}
       </View>
 
       <Ionicons name="chevron-forward" size={18} color={IOS_COLORS.labelTertiary} style={styles.rowChevron} />
@@ -698,6 +753,7 @@ type EntryMode = 'member' | 'adhoc';
 function EntryPanel({
   members,
   onAddMemberOrder,
+  onAddWalkinOrder,
   onJumpToOverview,
 }: {
   members: MockMember[];
@@ -706,6 +762,14 @@ function EntryPanel({
     orderDate: string;
     lunchQty: number;
     dinnerQty: number;
+    notes?: string;
+  }) => Promise<void>;
+  onAddWalkinOrder: (payload: {
+    customerName: string;
+    orderDate: string;
+    meal: 'lunch' | 'dinner';
+    qty: number;
+    unitPrice: number;
     notes?: string;
   }) => Promise<void>;
   onJumpToOverview?: () => void;
@@ -777,9 +841,27 @@ function EntryPanel({
     }
   };
 
-  const handleSubmitAdhoc = () => {
-    // 后端暂不支持无 member_id 的散客录单（POST /api/orders 要求 member_id > 0）
-    flashToast('散客录单尚未接入后台；请在会员档案中为该顾客建档后再录入');
+  const handleSubmitAdhoc = async () => {
+    const name = adhocName.trim();
+    const price = parseFloat(adhocPrice);
+    if (!name || adhocQty < 1 || !Number.isFinite(price) || price < 0) return;
+    setSubmitting(true);
+    try {
+      await onAddWalkinOrder({
+        customerName: name,
+        orderDate: todayStr(),
+        meal: adhocMeal,
+        qty: adhocQty,
+        unitPrice: price,
+        notes: adhocNotes.trim() || undefined,
+      });
+      reset();
+      flashToast(`已录入散客 ${name} · ${adhocQty} 份`);
+    } catch {
+      // 错误上层 toast
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const canSubmitMember = !!selectedMember && lunchQty + dinnerQty > 0 && !submitting;
@@ -1052,7 +1134,7 @@ function EntryPanel({
           disabled={!canSubmit}
           onPress={() => {
             if (mode === 'member') void handleSubmitMember();
-            else handleSubmitAdhoc();
+            else void handleSubmitAdhoc();
           }}
         >
           {submitting ? (
@@ -1167,12 +1249,18 @@ function StatusSheet({
 
         {order.dietary_notes || order.notes ? (
           <View style={sStyles.notesRow}>
-            <Text style={sStyles.notesText}>
-              {[
-                order.dietary_notes && `忌：${order.dietary_notes}`,
-                order.notes,
-              ].filter(Boolean).join('  ·  ')}
-            </Text>
+            {order.dietary_notes ? (
+              <Text style={sStyles.notesText}>
+                <Text style={sStyles.notesLabel}>个人忌口：</Text>
+                {order.dietary_notes}
+              </Text>
+            ) : null}
+            {order.notes ? (
+              <Text style={sStyles.notesText}>
+                <Text style={sStyles.notesLabel}>订单备注：</Text>
+                {order.notes}
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -1337,6 +1425,7 @@ const styles = StyleSheet.create({
   adhocTag: { fontSize: 12, color: '#FF9500', backgroundColor: '#FFF4E5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   orderQty: { fontSize: 14, fontWeight: '600', color: IOS_COLORS.label },
   orderNote: { fontSize: 13, color: IOS_COLORS.orange, lineHeight: 18 },
+  orderNoteLabel: { fontWeight: '700' },
   rowChevron: { marginLeft: 4 },
 
   empty:     { alignItems: 'center', paddingTop: 80, gap: 12 },
@@ -1599,6 +1688,7 @@ const prepStyles = StyleSheet.create({
     gap: 2,
   },
   noteText: { fontSize: 13, color: '#8A5A00', lineHeight: 18 },
+  noteLabel: { fontWeight: '700' },
 
   addressRow: {
     flexDirection: 'row',
@@ -1670,7 +1760,8 @@ const sStyles = StyleSheet.create({
     backgroundColor: IOS_COLORS.card,
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: IOS_COLORS.separatorLight,
   },
-  notesText: { fontSize: 13, color: IOS_COLORS.orange },
+  notesText: { fontSize: 13, color: IOS_COLORS.orange, lineHeight: 18 },
+  notesLabel: { fontWeight: '700' },
 
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginTop: 8 },
   sectionLabel: {

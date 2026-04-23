@@ -1,12 +1,10 @@
 /**
- * 会员详情页 — 含卡管理（开卡、升级、续卡、历史卡）。
+ * 会员详情页 — 含卡管理（开卡、升级、续卡、退卡、历史卡）。
  *
  * 数据：useMemberView(id) 从 /api/members/:id + /api/cards?member_id=:id 拉真实数据
  * 卡动作：统一走 components/CardFlowModal → cardsApi.purchase/upgrade/renew
+ * 退卡：components/RefundCardModal → cardsApi.refund
  * 卡 mutation 成功后用 useInvalidateMembersView() 失效缓存，列表和首页自动刷新。
- *
- * TODO（后端未实现）：
- *  - 退卡路由：目前按钮会弹提示，不发请求。
  */
 
 import { useCallback, useState } from 'react';
@@ -24,6 +22,7 @@ import { cardsApi } from '../../../api/cards';
 import { membersApi } from '../../../api/members';
 import { useMemberView, useInvalidateMembersView } from '../../../hooks/useMembersView';
 import { CardFlowModal, type CardFlowSubmitPayload } from '../../../components/CardFlowModal';
+import { RefundCardModal, type RefundSubmitPayload } from '../../../components/RefundCardModal';
 import { MemberEditModal } from '../../../components/MemberEditModal';
 
 function triggerSuccessHaptic() {
@@ -41,6 +40,7 @@ export default function MemberDetailScreen() {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showRenewModal, setShowRenewModal] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -106,9 +106,22 @@ export default function MemberDetailScreen() {
     setToast('会员资料已更新');
   }, [member, invalidate]);
 
-  const handleRefund = useCallback(() => {
-    setToast('退卡功能尚未接入后台，请联系管理员在财务页手动记账后再归档卡片。');
-  }, []);
+  const handleRefund = useCallback(
+    async (p: RefundSubmitPayload) => {
+      if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
+      await cardsApi.refund(member.active_card.id, {
+        refund_amount: p.refund_amount,
+        reason: p.reason,
+      });
+      setShowRefundModal(false);
+      await invalidate(member.id);
+      triggerSuccessHaptic();
+      setToast(
+        `已退卡：${member.active_card.card_name}，退款 ¥${p.refund_amount}`,
+      );
+    },
+    [member, invalidate],
+  );
 
   if (isLoading || !member) {
     if (notFound) {
@@ -282,7 +295,7 @@ export default function MemberDetailScreen() {
             {/* 退卡：破坏性操作，放次级位置避免误触 */}
             <Pressable
               style={({ pressed }) => [styles.refundBtn, pressed && { opacity: 0.7 }]}
-              onPress={handleRefund}
+              onPress={() => setShowRefundModal(true)}
               hitSlop={6}
             >
               <Ionicons name="close-circle-outline" size={16} color="#FF3B30" />
@@ -382,6 +395,23 @@ export default function MemberDetailScreen() {
           }}
           onClose={() => setShowRenewModal(false)}
           onSubmit={handleRenew}
+        />
+      ) : null}
+      {card ? (
+        <RefundCardModal
+          visible={showRefundModal}
+          memberName={member.nickname || member.name}
+          currentCard={{
+            card_name: card.card_name,
+            is_hospital: card.is_hospital,
+            paid_amount: card.paid_amount,
+            total_meals: card.total_meals,
+            used_meals: card.used_meals,
+            remaining_meals: card.remaining_meals,
+            unit_price: card.unit_price,
+          }}
+          onClose={() => setShowRefundModal(false)}
+          onSubmit={handleRefund}
         />
       ) : null}
 

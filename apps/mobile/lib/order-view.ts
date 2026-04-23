@@ -20,20 +20,25 @@ export function dailyOrderToMockOrder(
       ? member.card_history.find((c) => c.id === order.card_id)
       : undefined;
 
+  const walkin = (order.customer_name ?? '').length > 0;
+
   return {
     id: order.id,
     member_id: order.member_id,
-    member_name: member?.name ?? `#${order.member_id}`,
-    member_nickname: member?.nickname ?? '',
-    is_hospital: member?.is_hospital ?? false,
-    dietary_notes: member?.dietary_notes ?? '',
+    // 散客订单优先显示 customer_name；会员订单照常显示
+    member_name: walkin ? order.customer_name : (member?.name ?? `#${order.member_id}`),
+    member_nickname: walkin ? '' : (member?.nickname ?? ''),
+    is_hospital: walkin ? false : (member?.is_hospital ?? false),
+    dietary_notes: walkin ? '' : (member?.dietary_notes ?? ''),
     order_date: order.order_date,
     meal_type: order.meal_type,
     quantity: order.quantity,
     amount: order.amount,
     status: order.status,
     notes: order.notes,
-    card_type: card?.card_name ?? null,
+    // 散客没有卡；会员有卡时显示卡名；会员无卡则 null（= 散餐）
+    card_type: walkin ? null : (card?.card_name ?? null),
+    customer_name: walkin ? order.customer_name : undefined,
   };
 }
 

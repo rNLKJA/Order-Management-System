@@ -827,4 +827,59 @@ describe('Orders API /api/orders', () => {
     const body = (await res.json()) as { order: schema.DailyOrder };
     expect(body.order.status).toBe('cancelled');
   });
+
+  // ====== 散客 walk-in ======
+
+  it('POST 散客 walk-in：customer_name + 无 member_id → 创建哨兵会员订单 + 写 ad_hoc FinanceEntry', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({
+          order_date: '2026-04-24',
+          lunch_qty: 2,
+          customer_name: '张叔叔',
+          adhoc_unit_price: 40,
+          notes: '不要辣',
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { orders: schema.DailyOrder[] };
+    expect(body.orders).toHaveLength(1);
+    expect(body.orders[0]!.customer_name).toBe('张叔叔');
+    expect(body.orders[0]!.amount).toBe(80);
+    expect(body.orders[0]!.card_id).toBeNull();
+    expect(body.orders[0]!.notes).toBe('不要辣');
+
+    // FinanceEntry 应该有一条 ad_hoc 收入
+    const entries = await db
+      .select()
+      .from(schema.finance_entries)
+      .where(eq(schema.finance_entries.ref_order_id, body.orders[0]!.id));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.category).toBe('ad_hoc');
+    expect(entries[0]!.amount).toBe(80);
+    expect(entries[0]!.description).toContain('张叔叔');
+  });
+
+  it('POST 既无 member_id 又无 customer_name → 422', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({
+          order_date: '2026-04-24',
+          lunch_qty: 1,
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
 });

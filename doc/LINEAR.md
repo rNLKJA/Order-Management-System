@@ -186,3 +186,25 @@ Closes MEA-12
 - **Q: GitHub 集成没生效？** A: `Settings → Integrations → GitHub → Reinstall`；确保 PR 标题或分支名里有完整的 `MEA-XX` 字样
 - **Q: Issue 太多怎么找？** A: 用 `Views` 建自定义视图（比如"我负责 + In Progress"）
 - **Q: 能导出吗？** A: Free 层只能导 CSV；Pro 层才有完整 API 历史导出
+
+## 11. 本地规格 ↔ Linear 云端对齐
+
+仓库内 [`scripts/src/linear-issues.ts`](../scripts/src/linear-issues.ts) 是 issue 的**本地事实**：`title / state / priority / labels / body` 五字段。[`scripts/src/sync-linear.ts`](../scripts/src/sync-linear.ts) 以 `title` 为键做幂等 upsert（已存在 → `issueUpdate`，不存在 → `issueCreate`）。
+
+### 何时更新本地规格
+
+- 一条 PR 合入 `main` 后，若对应 issue 的 `state` 在 [`linear-issues.ts`](../scripts/src/linear-issues.ts) 里仍是 `'Backlog'` / `'Todo'` / `'InProgress'`，改成 `'Done'`，并把 body 里的 `- [ ]` 按实际情况改成 `- [x]`。
+- 只要改了 body / priority / labels，也建议同步改本地规格，避免下次 `sync-linear` 把云端覆盖成旧版本。
+
+### 当 Linear 云端与 `main` 不一致时
+
+1. 以 **`main`** 为真相（代码事实）。
+2. 用 `git log --oneline --all | grep -iE 'MEA-[0-9]+'` 核对 commit 关联的 issue。
+3. 改 [`scripts/src/linear-issues.ts`](../scripts/src/linear-issues.ts) 的 `state` → 跑 `LINEAR_API_KEY=lin_api_xxx pnpm --filter @meal/scripts sync-linear` 把变更推到云端，或直接在 Linear UI 拖动状态。
+4. 若 PR 合并了但 Linear 仍非 Done：多半是 PR 标题没带 `MEA-XX` 或 `Closes MEA-XX`，去 Settings → Integrations → GitHub → Reinstall，并修 PR 描述补 `Closes MEA-XX`。
+
+### sync-linear 的幂等约定
+
+- **按 title 去重**：修标题等于新建 issue；想改标题请先在 Linear 改，再回写本地规格。
+- `state` 支持 `Backlog / Todo / InProgress / InReview / Done / Canceled`；其余值会被脚本拒绝。
+- `labels` 缺失会被脚本自动创建。

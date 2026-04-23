@@ -2,7 +2,7 @@
 
 一个面向小型订餐工作室的会员 + 卡券 + 订餐 + 出餐 + 财务管理系统。手机（iOS / Android）+ 电脑（Web）三端共用一套数据。
 
-> **当前阶段**：Phase 0–1 基础层构建中。功能模块将按 [计划](#实施阶段) 逐步上线。
+> **当前阶段**：Phase 0–3 已上线（会员 / 卡 / 订餐 / 出餐 / 财务 / 记录编辑全量 / 生产部署到 Vercel + EAS），正进入 Phase 4+（次日接龙汇总、收工报表、Summary、导出、备份、自有域名等）。详见 [实施阶段](#实施阶段)。
 
 ## 技术栈
 
@@ -71,20 +71,23 @@ pnpm format           # Prettier 格式化
 
 ## 实施阶段
 
-- **Phase 0**：Turborepo + GitHub + Linear 接入（进行中）
-- **Phase 1**：脚手架 + DB schema + 认证（进行中）
-- **Phase 2**：会员 + 卡业务 + 财务 skeleton（并行子 agent）
-- **Phase 2.5**：订餐录入 + 扣卡 + 余额防护
-- **Phase 3**：会员详情 + 部署 → **MVP 上线**
-- **Phase 4+**：出餐视图 / 次日汇总 / 收工报表 / Summary / 导出 / 备份 / 域名 / EAS Build …
+| 阶段 | 范围 | 状态 |
+| --- | --- | --- |
+| Phase 0 | Turborepo + GitHub 分支保护 + Linear 接入 | 已完成 |
+| Phase 1 | pnpm workspace 脚手架 + Turso/Drizzle schema + argon2 + JWT 认证 | 已完成 |
+| Phase 2 | 会员 CRUD + 卡业务（新购/升级/换卡） + 财务查询/支出 | 已完成 |
+| Phase 2.5 | 订餐录入 + 午/晚拆条 + 扣卡 + 余额防护 + 取消冲销 | 已完成 |
+| Phase 3 | 会员详情（当前卡/历史/累计） + Vercel 生产部署 + EAS Build | 已完成 |
+| Phase 4 | 手机出餐/送餐视图（Tab 合并进订餐页） + 记录编辑全量 + audit 列表 | 已完成 |
+| Phase 4+ | 次日接龙汇总 + 收工报表 + Summary 分析 + 多类型 Excel 导出 + R2 备份 + 自有域名 + TestFlight + hardening + 旧 Excel 迁移 + 文档终版 | 进行中 |
 
-详见 [计划](#) 章节 25。
+进度与任务对齐细节见 [`scripts/src/linear-issues.ts`](./scripts/src/linear-issues.ts)（本地规格，每次发版后由脚本同步到 Linear）。
 
 ## 文档索引
 
-- [业务流程图](./doc/PROCESS.md)
-- [视觉规范](./doc/DESIGN.md)（RN Paper 版将在第 16 步重写）
-- [Linear 使用教学](./doc/LINEAR.md)
+- [业务流程图 PROCESS.md](./doc/PROCESS.md)
+- [视觉规范 DESIGN.md](./doc/DESIGN.md)（v3：Glassmorphism + Bento + Apple/Material 融合；RN Paper 版已落地）
+- [Linear 使用教学 LINEAR.md](./doc/LINEAR.md)
 
 ## 许可
 

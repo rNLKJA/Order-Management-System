@@ -28,7 +28,7 @@ export class RenewError extends Error {
 }
 
 export interface RenewInput {
-  oldStatus: 'active' | 'upgraded' | 'exhausted';
+  oldStatus: 'active' | 'upgraded' | 'exhausted' | 'refunded';
   oldRemainingMeals: number;
   spec: CardSpec;
 }
