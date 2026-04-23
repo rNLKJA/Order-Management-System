@@ -22,9 +22,20 @@ function toHttpUrl(url: string): string {
   return url;
 }
 
+/**
+ * 显式包装 global fetch：
+ * 在 Vercel Node serverless runtime 上，`@libsql/isomorphic-fetch`
+ * 默认导出的 `const _fetch = fetch` 捕获的 fetch 引用在某些情况下会
+ * 丢失 globalThis 绑定，导致请求发出去后 Turso 认不出 Authorization
+ * header（500/401）。传一个自己的 fetch 就绕开这个问题。
+ */
+const fetchGlobal: typeof fetch = async (input, init) => {
+  const req = input instanceof Request ? input : new Request(input, init);
+  return fetch(req);
+};
+
 function createClient(config: { url: string; authToken?: string }): Client {
   const url = config.url;
-  // 远程 Turso：走纯 HTTP 的 client
   if (
     url.startsWith('libsql://') ||
     url.startsWith('wss://') ||
@@ -35,9 +46,9 @@ function createClient(config: { url: string; authToken?: string }): Client {
     return createHttpClient({
       url: toHttpUrl(url),
       authToken: config.authToken,
+      fetch: fetchGlobal,
     });
   }
-  // 本地 file:/:memory: → node client
   return createNodeClient({ url, authToken: config.authToken });
 }
 
@@ -57,13 +68,6 @@ export function getClient(): Client {
   const url = currentUrl();
   if (_client && _cachedUrl === url) return _client;
   const authToken = process.env.TURSO_AUTH_TOKEN ?? env.TURSO_AUTH_TOKEN;
-  // eslint-disable-next-line no-console
-  console.log('[db] creating libsql client', {
-    url,
-    tokenLen: authToken?.length ?? 0,
-    tokenPrefix: authToken?.slice(0, 20),
-    tokenSuffix: authToken?.slice(-20),
-  });
   _client = createClient({ url, authToken });
   _cachedUrl = url;
   _db = null;
