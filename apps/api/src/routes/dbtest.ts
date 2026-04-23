@@ -39,6 +39,35 @@ dbtestRouter.get('/', async (c) => {
   }
 });
 
+dbtestRouter.get('/cmp', async (c) => {
+  const t0 = Date.now();
+  const out: Record<string, unknown> = {
+    envTokenLen: (env.TURSO_AUTH_TOKEN ?? '').length,
+    processEnvTokenLen: (process.env.TURSO_AUTH_TOKEN ?? '').length,
+    envUrl: env.TURSO_DATABASE_URL,
+    processEnvUrl: process.env.TURSO_DATABASE_URL,
+    tokensEqual:
+      (env.TURSO_AUTH_TOKEN ?? '') === (process.env.TURSO_AUTH_TOKEN ?? ''),
+  };
+  try {
+    const { getClient } = await import('../db/client.js');
+    const { sql } = await import('drizzle-orm');
+    const { getDb } = await import('../db/client.js');
+    const client = getClient();
+    out.clientProtocol = (client as any).protocol;
+    const db = getDb();
+    const res = await db.run(sql`SELECT 1 AS one`);
+    out.rawRunOk = true;
+    out.rawRunRows = res.rows?.length;
+  } catch (err: any) {
+    out.rawRunOk = false;
+    out.rawRunError = err?.message;
+    out.rawRunCode = err?.code;
+  }
+  out.elapsedMs = Date.now() - t0;
+  return c.json(out);
+});
+
 dbtestRouter.get('/intercept', async (c) => {
   const t0 = Date.now();
   const raw = env.TURSO_DATABASE_URL;
