@@ -108,6 +108,8 @@ export interface AuthUser {
   username: string;
   full_name: string;
   role: UserRole;
+  /** data URL；无头像为 null */
+  avatar_url?: string | null;
 }
 
 export interface LoginResponse {

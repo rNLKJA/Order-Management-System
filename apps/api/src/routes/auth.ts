@@ -70,12 +70,26 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
       username: user.username,
       full_name: user.full_name,
       role: user.role,
+      avatar_url: user.avatar_url,
     },
   };
   return c.json(res);
 });
 
-authRouter.get('/me', requireAuth(), (c) => {
-  const user = c.get('authUser');
-  return c.json({ user });
+authRouter.get('/me', requireAuth(), async (c) => {
+  const authUser = c.get('authUser');
+  const db = requestDb(c);
+  // 重新拉一次 users 表，补 avatar_url；JWT payload 里不放头像 blob
+  const rows = await db
+    .select({
+      id: schema.users.id,
+      username: schema.users.username,
+      full_name: schema.users.full_name,
+      role: schema.users.role,
+      avatar_url: schema.users.avatar_url,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, authUser.id))
+    .limit(1);
+  return c.json({ user: rows[0] ?? authUser });
 });

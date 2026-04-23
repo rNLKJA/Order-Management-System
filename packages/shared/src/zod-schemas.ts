@@ -193,3 +193,19 @@ export const userUpdateSchema = z.object({
   is_active: z.boolean().optional(),
 });
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
+
+/**
+ * 头像 data URL 上传。
+ *  - 必须是 `data:image/(jpeg|png|webp);base64,` 开头
+ *  - base64 总长上限 ~150KB（约 110KB 图片），前端压缩到 256×256 JPEG 通常 <40KB
+ */
+export const userAvatarUpdateSchema = z.object({
+  avatar: z
+    .string()
+    .regex(
+      /^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/,
+      '头像必须是 data:image/(jpeg|png|webp);base64 形式',
+    )
+    .max(200_000, '头像过大，请压缩后重试（上限约 150KB base64）'),
+});
+export type UserAvatarUpdateInput = z.infer<typeof userAvatarUpdateSchema>;

@@ -1,14 +1,21 @@
 /**
  * 当前用户信息页 — v3 玻璃。
+ *
+ * 头像：点击弹动作菜单（拍照 / 从相册选 / 移除），上传成功后 refresh()
+ * 让全应用订阅 useAuth 的页面都拿到最新头像 URL。
  */
 
-import { StyleSheet, ScrollView, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { useState } from 'react';
+import { Image, Pressable, StyleSheet, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../hooks/useAuth';
 import { COLORS, GLASS, SPACING, TYPE } from '../../../theme/paperTheme';
-import { confirmDestructive } from '../../../lib/confirm';
+import { confirmDestructive, notify } from '../../../lib/confirm';
+import { confirmDialog } from '../../../components/ui';
+import { pickAvatar } from '../../../lib/avatar';
+import { usersApi } from '../../../api/users';
 import {
   AppHeader,
   Button,
@@ -20,7 +27,8 @@ import {
 } from '../../../components/ui';
 
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refresh } = useAuth();
+  const [uploading, setUploading] = useState(false);
 
   const handleSignOut = () => {
     confirmDestructive(
@@ -29,6 +37,59 @@ export default function ProfileScreen() {
       () => { void signOut(); },
       '退出',
     );
+  };
+
+  const runUpload = async (dataUrl: string) => {
+    setUploading(true);
+    try {
+      await usersApi.updateMyAvatar(dataUrl);
+      await refresh();
+    } catch (err) {
+      await notify(
+        '上传失败',
+        err instanceof Error ? err.message : '请稍后重试',
+        'destructive',
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleCamera = async () => {
+    if (uploading) return;
+    const dataUrl = await pickAvatar({ fromLibrary: false });
+    if (dataUrl) await runUpload(dataUrl);
+  };
+
+  const handleLibrary = async () => {
+    if (uploading) return;
+    const dataUrl = await pickAvatar({ fromLibrary: true });
+    if (dataUrl) await runUpload(dataUrl);
+  };
+
+  const handleRemove = async () => {
+    if (uploading) return;
+    const ok = await confirmDialog({
+      title: '移除头像？',
+      message: '移除后将显示默认头像，可以随时重新上传。',
+      confirmLabel: '移除',
+      cancelLabel: '保留',
+      tone: 'destructive',
+    });
+    if (!ok) return;
+    setUploading(true);
+    try {
+      await usersApi.clearMyAvatar();
+      await refresh();
+    } catch (err) {
+      await notify(
+        '移除失败',
+        err instanceof Error ? err.message : '请稍后重试',
+        'destructive',
+      );
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -40,13 +101,35 @@ export default function ProfileScreen() {
             <AppHeader title="当前用户" />
 
             <GlassSurface padding={SPACING.xl} style={styles.profileCard}>
-              <IconAvatar
-                icon="person-outline"
-                size={76}
-                color="#FFFFFF"
-                bg={COLORS.brand}
-                style={styles.avatar}
-              />
+              <Pressable
+                onPress={handleCamera}
+                disabled={uploading}
+                style={styles.avatarWrap}
+                hitSlop={8}
+              >
+                {user?.avatar_url ? (
+                  <Image
+                    source={{ uri: user.avatar_url }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <IconAvatar
+                    icon="person-outline"
+                    size={76}
+                    color="#FFFFFF"
+                    bg={COLORS.brand}
+                  />
+                )}
+                {uploading ? (
+                  <View style={styles.avatarOverlay}>
+                    <ActivityIndicator color="#FFFFFF" />
+                  </View>
+                ) : (
+                  <View style={styles.avatarCameraBadge}>
+                    <Ionicons name="camera" size={14} color="#FFFFFF" />
+                  </View>
+                )}
+              </Pressable>
               <Text style={styles.fullName}>{user?.full_name ?? '未登录'}</Text>
               <Text style={styles.username}>@{user?.username ?? '—'}</Text>
               <StatusChip
@@ -55,6 +138,61 @@ export default function ProfileScreen() {
                 dot
                 style={styles.roleChip}
               />
+
+              <View style={styles.avatarActions}>
+                <Pressable
+                  onPress={handleCamera}
+                  disabled={uploading}
+                  style={styles.avatarActionBtn}
+                  hitSlop={6}
+                >
+                  <Ionicons
+                    name="camera-outline"
+                    size={15}
+                    color={COLORS.brand}
+                  />
+                  <Text style={styles.avatarActionText}>拍照</Text>
+                </Pressable>
+                <View style={styles.avatarActionDivider} />
+                <Pressable
+                  onPress={handleLibrary}
+                  disabled={uploading}
+                  style={styles.avatarActionBtn}
+                  hitSlop={6}
+                >
+                  <Ionicons
+                    name="image-outline"
+                    size={15}
+                    color={COLORS.brand}
+                  />
+                  <Text style={styles.avatarActionText}>相册</Text>
+                </Pressable>
+                {user?.avatar_url ? (
+                  <>
+                    <View style={styles.avatarActionDivider} />
+                    <Pressable
+                      onPress={handleRemove}
+                      disabled={uploading}
+                      style={styles.avatarActionBtn}
+                      hitSlop={6}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={15}
+                        color={COLORS.danger}
+                      />
+                      <Text
+                        style={[
+                          styles.avatarActionText,
+                          { color: COLORS.danger },
+                        ]}
+                      >
+                        移除
+                      </Text>
+                    </Pressable>
+                  </>
+                ) : null}
+              </View>
             </GlassSurface>
 
             <View style={styles.section}>
@@ -132,10 +270,72 @@ const styles = StyleSheet.create({
   },
 
   profileCard: { alignItems: 'center', marginTop: SPACING.sm, marginBottom: SPACING.lg },
-  avatar: { marginBottom: SPACING.md },
+  avatarWrap: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    marginBottom: SPACING.md,
+    position: 'relative',
+  },
+  avatarImage: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: COLORS.brandSoft,
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 38,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: COLORS.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   fullName: { ...TYPE.title2, color: COLORS.text.primary, marginBottom: 2 },
   username: { ...TYPE.footnote, color: COLORS.text.tertiary, marginBottom: SPACING.sm },
-  roleChip: { alignSelf: 'center' },
+  roleChip: { alignSelf: 'center', marginBottom: SPACING.md },
+
+  avatarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,122,255,0.08)',
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  avatarActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  avatarActionText: {
+    ...TYPE.footnote,
+    color: COLORS.brand,
+    fontWeight: '600',
+  },
+  avatarActionDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 16,
+    backgroundColor: 'rgba(0,122,255,0.25)',
+  },
 
   section: { marginBottom: SPACING.lg },
 

@@ -29,6 +29,12 @@ export const users = sqliteTable(
     role: text('role', { enum: ['admin', 'staff'] }).notNull(),
     is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
     token_version: integer('token_version').notNull().default(1),
+    /**
+     * 头像：data URL（data:image/jpeg;base64,...）。
+     * 前端上传前压缩到 256×256 JPEG，base64 不超过 ~80KB；
+     * 生产大规模用户时应该换成 R2/S3 URL，现在图省事直接塞 DB。
+     */
+    avatar_url: text('avatar_url'),
     created_at: integer('created_at', { mode: 'timestamp_ms' })
       .notNull()
       .default(sql`(unixepoch('now') * 1000)`),
