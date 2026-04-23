@@ -475,6 +475,21 @@ function PrepView({
   );
 }
 
+function navigateToMemberProfile(order: MockOrder) {
+  const isWalkin = !!order.customer_name;
+  if (isWalkin) {
+    router.push({
+      pathname: '/(app)/walkins/[id]',
+      params: { id: String(order.member_id) },
+    });
+  } else {
+    router.push({
+      pathname: '/(app)/members/[id]',
+      params: { id: String(order.member_id) },
+    });
+  }
+}
+
 function PrepCard({
   order,
   onConfirm,
@@ -496,7 +511,20 @@ function PrepCard({
         </View>
         <View style={prepStyles.cardContent}>
           <View style={prepStyles.cardTop}>
-            <Text style={prepStyles.cardName}>{order.member_nickname || order.member_name}</Text>
+            <Pressable
+              onPress={() => navigateToMemberProfile(order)}
+              style={prepStyles.nameLink}
+              hitSlop={6}
+            >
+              <Text style={[prepStyles.cardName, prepStyles.cardNameLink]}>
+                {order.member_nickname || order.member_name}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color={IOS_COLORS.blue}
+              />
+            </Pressable>
             {order.is_hospital ? (
               <View style={prepStyles.tag}><Text style={prepStyles.tagText}>院内</Text></View>
             ) : null}
@@ -642,7 +670,12 @@ function DeliveryCard({
   onConfirm: () => void;
   onOpen: () => void;
 }) {
-  const address = member?.address ?? (order.is_hospital ? '院内' : '未知地址');
+  const isWalkin = !!order.customer_name;
+  const phone = member?.phone?.trim() || (isWalkin ? '' : '');
+  const address =
+    member?.address?.trim() ||
+    (order.is_hospital ? '院内（门诊 / 病区）' : isWalkin ? '散客自取' : '未填写地址');
+
   return (
     <View style={prepStyles.card}>
       <Pressable style={prepStyles.cardBody} onPress={onOpen}>
@@ -653,7 +686,20 @@ function DeliveryCard({
         </View>
         <View style={prepStyles.cardContent}>
           <View style={prepStyles.cardTop}>
-            <Text style={prepStyles.cardName}>{order.member_nickname || order.member_name}</Text>
+            <Pressable
+              onPress={() => navigateToMemberProfile(order)}
+              style={prepStyles.nameLink}
+              hitSlop={6}
+            >
+              <Text style={[prepStyles.cardName, prepStyles.cardNameLink]}>
+                {order.member_nickname || order.member_name}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color={IOS_COLORS.blue}
+              />
+            </Pressable>
             {order.is_hospital ? (
               <View style={prepStyles.tag}><Text style={prepStyles.tagText}>院内</Text></View>
             ) : (
@@ -661,17 +707,44 @@ function DeliveryCard({
                 <Text style={[prepStyles.tagText, { color: '#34C759' }]}>院外</Text>
               </View>
             )}
+            {isWalkin ? (
+              <View style={[prepStyles.tag, { backgroundColor: '#FFF4E5' }]}>
+                <Text style={[prepStyles.tagText, { color: '#FF9500' }]}>散客</Text>
+              </View>
+            ) : null}
           </View>
-          <View style={prepStyles.addressRow}>
-            <Ionicons name="location-outline" size={15} color={IOS_COLORS.labelSecondary} />
-            <Text style={prepStyles.addressText} numberOfLines={2}>
+
+          {/* 手机号 */}
+          <View style={prepStyles.infoRow}>
+            <Ionicons
+              name="call-outline"
+              size={14}
+              color={IOS_COLORS.labelSecondary}
+            />
+            <Text
+              style={[prepStyles.infoText, !phone && prepStyles.infoTextMuted]}
+              numberOfLines={1}
+            >
+              {phone || '未填手机号'}
+            </Text>
+          </View>
+
+          {/* 地址 */}
+          <View style={prepStyles.infoRow}>
+            <Ionicons
+              name="location-outline"
+              size={14}
+              color={IOS_COLORS.labelSecondary}
+            />
+            <Text style={prepStyles.infoText} numberOfLines={2}>
               {address}
             </Text>
           </View>
-          <Text style={prepStyles.cardMeta}>
+
+          <Text style={prepStyles.cardMetaDim}>
             {order.meal_type === 'lunch' ? '午餐' : '晚餐'} · {order.quantity} 份
-            {member?.phone ? `  ·  ${member.phone}` : ''}
           </Text>
+
           {(order.dietary_notes || order.notes) ? (
             <View style={prepStyles.noteBox}>
               {order.dietary_notes ? (
@@ -1716,6 +1789,34 @@ const prepStyles = StyleSheet.create({
 
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   cardName: { fontSize: 18, fontWeight: '700', color: IOS_COLORS.label },
+  cardNameLink: { color: IOS_COLORS.blue },
+  nameLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginRight: 2,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: IOS_COLORS.label,
+    fontWeight: '500',
+  },
+  infoTextMuted: {
+    color: IOS_COLORS.labelTertiary,
+    fontWeight: '400',
+  },
+  cardMetaDim: {
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
+    marginTop: 4,
+  },
 
   metaRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   qtyBig: { fontSize: 24, fontWeight: '700', color: IOS_COLORS.label, letterSpacing: -0.5, lineHeight: 28 },

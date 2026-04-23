@@ -31,6 +31,8 @@ import {
   CardFlowModal,
   type CardFlowSubmitPayload,
 } from '../../../components/CardFlowModal';
+import { MemberEditModal } from '../../../components/MemberEditModal';
+import type { MockMember } from '../../../constants/mockData';
 
 const STATUS_MAP = {
   pending: { label: '待出餐', color: IOS_COLORS.orange, bg: '#FFF4E5' },
@@ -78,6 +80,7 @@ export default function WalkinDetailScreen() {
   );
 
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
 
@@ -167,7 +170,18 @@ export default function WalkinDetailScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <AppHeader title="散客详情" />
+        <AppHeader
+          title="散客详情"
+          right={
+            <Pressable
+              onPress={() => setShowEditModal(true)}
+              hitSlop={8}
+              style={{ paddingHorizontal: 6 }}
+            >
+              <Text style={styles.editBtn}>编辑</Text>
+            </Pressable>
+          }
+        />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -324,6 +338,19 @@ export default function WalkinDetailScreen() {
           onSubmit={handlePurchase}
         />
 
+        {/* 编辑资料 Modal —— 和会员详情共用 */}
+        <MemberEditModal
+          visible={showEditModal}
+          member={toMockMemberLite(member)}
+          onClose={() => setShowEditModal(false)}
+          onSaved={async () => {
+            setShowEditModal(false);
+            await qc.invalidateQueries({ queryKey: detailKey });
+            await qc.invalidateQueries({ queryKey: ['walkins'] });
+            setToast('资料已保存');
+          }}
+        />
+
         <Snackbar
           visible={!!toast}
           onDismiss={() => setToast(null)}
@@ -336,6 +363,33 @@ export default function WalkinDetailScreen() {
       </SafeAreaView>
     </View>
   );
+}
+
+/**
+ * 把 /api/walkins 返回的 Member 塞进 MemberEditModal 要的 MockMember 形状。
+ * 只有基础资料字段会被 modal 读；卡 / stats 给默认空值。
+ */
+function toMockMemberLite(
+  member: WalkinDetailResp['member'],
+): MockMember {
+  return {
+    id: member.id,
+    uid: member.uid,
+    name: member.name,
+    nickname: member.nickname ?? '',
+    phone: member.phone ?? '',
+    wechat_id: member.wechat_id ?? '',
+    address: member.address ?? '',
+    dietary_notes: member.dietary_notes ?? '',
+    is_hospital: member.is_hospital,
+    active_card: null,
+    card_history: [],
+    stats: {
+      total_purchased_meals: 0,
+      total_consumed_meals: 0,
+      total_paid_amount: 0,
+    },
+  };
 }
 
 function Section({
@@ -388,6 +442,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   link: { fontSize: 15, color: IOS_COLORS.blue },
+  editBtn: { fontSize: 15, color: IOS_COLORS.blue, fontWeight: '500' },
 
   profileSection: {
     alignItems: 'center',
