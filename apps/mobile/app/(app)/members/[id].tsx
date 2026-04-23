@@ -1,11 +1,16 @@
 /**
- * 会员详情页 — 含卡管理（开卡、升级、历史卡）
+ * 会员详情页 — 含卡管理（开卡、升级、续卡、历史卡）。
  *
- * 开卡 / 升级 统一走 components/CardFlowModal。
+ * 数据：useMemberView(id) 从 /api/members/:id + /api/cards?member_id=:id 拉真实数据
+ * 卡动作：统一走 components/CardFlowModal → cardsApi.purchase/upgrade/renew
+ * 卡 mutation 成功后用 useInvalidateMembersView() 失效缓存，列表和首页自动刷新。
+ *
+ * TODO（后端未实现）：
+ *  - 退卡路由：目前按钮会弹提示，不发请求。
  */
 
 import { useCallback, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -14,19 +19,12 @@ import * as Haptics from 'expo-haptics';
 import { IOS_COLORS } from '../../../theme/paperTheme';
 import { AppHeader, MeshBackground } from '../../../components/ui';
 import { CARD_RENEWAL_THRESHOLD_MEALS, type SubscriptionCardCode } from '@meal/shared';
-import {
-  MOCK_MEMBERS,
-  mockPurchaseCard,
-  mockRefundCard,
-  mockRenewCard,
-  mockUpgradeCard,
-  calcRefundAmount,
-  DEFAULT_COLLECTOR,
-  type MockCard,
-} from '../../../constants/mockData';
+import { type MockCard } from '../../../constants/mockData';
+import { cardsApi } from '../../../api/cards';
+import { membersApi } from '../../../api/members';
+import { useMemberView, useInvalidateMembersView } from '../../../hooks/useMembersView';
 import { CardFlowModal, type CardFlowSubmitPayload } from '../../../components/CardFlowModal';
 import { MemberEditModal } from '../../../components/MemberEditModal';
-import { confirmDestructive } from '../../../lib/confirm';
 
 function triggerSuccessHaptic() {
   if (Platform.OS !== 'web') {
@@ -37,129 +35,121 @@ function triggerSuccessHaptic() {
 export default function MemberDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const memberId = Number(id);
-  const member = MOCK_MEMBERS.find((m) => m.id === memberId);
+  const { data: member, isLoading, notFound, error } = useMemberView(memberId);
+  const invalidate = useInvalidateMembersView();
 
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [tick, setTick] = useState(0); // 触发 re-render（mock 数据直接原地改）
   const [toast, setToast] = useState<string | null>(null);
-
-  const refresh = useCallback(() => setTick((v) => v + 1), []);
 
   const handlePurchase = useCallback(
     async (p: CardFlowSubmitPayload) => {
       if (!member) throw new Error('会员不存在');
-      const { card } = mockPurchaseCard({
-        memberId: member.id,
-        spec: p.spec,
-        isHospital: p.isHospital,
-        collector: p.collector,
-        recorder: p.recorder,
+      const { card } = await cardsApi.purchase({
+        member_id: member.id,
+        card_code: p.spec.code,
+        is_hospital: p.isHospital,
         notes: p.notes,
       });
       setShowPurchaseModal(false);
-      refresh();
+      await invalidate(member.id);
       triggerSuccessHaptic();
-      setToast(`已为 ${member.nickname || member.name} 开通【${card.card_name}】，应收 ¥${card.paid_amount}`);
+      setToast(
+        `已为 ${member.nickname || member.name} 开通【${p.spec.name}】，应收 ¥${card.paid_amount}`,
+      );
     },
-    [member, refresh],
+    [member, invalidate],
   );
 
   const handleUpgrade = useCallback(
     async (p: CardFlowSubmitPayload) => {
       if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
       const fromName = member.active_card.card_name;
-      const { card, diff } = mockUpgradeCard({
-        memberId: member.id,
-        fromCardId: member.active_card.id,
-        spec: p.spec,
-        isHospital: p.isHospital,
-        collector: p.collector,
-        recorder: p.recorder,
+      const { new_card, diff } = await cardsApi.upgrade(member.active_card.id, {
+        card_code: p.spec.code,
+        is_hospital: p.isHospital,
         notes: p.notes,
       });
       setShowUpgradeModal(false);
-      refresh();
+      await invalidate(member.id);
       triggerSuccessHaptic();
       setToast(
-        `已升级：${fromName} → ${card.card_name}，补差价 ¥${diff}，剩 ${card.remaining_meals} 份`,
+        `已升级：${fromName} → ${p.spec.name}，补差价 ¥${diff}，剩 ${new_card.remaining_meals} 份`,
       );
     },
-    [member, refresh],
+    [member, invalidate],
   );
 
   const handleRenew = useCallback(
     async (p: CardFlowSubmitPayload) => {
       if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
-      const { card, carriedMeals } = mockRenewCard({
-        memberId: member.id,
-        fromCardId: member.active_card.id,
-        collector: p.collector,
-        recorder: p.recorder,
-        notes: p.notes,
-      });
+      const { new_card, carried_meals, paid_amount } = await cardsApi.renew(
+        member.active_card.id,
+        { notes: p.notes },
+      );
       setShowRenewModal(false);
-      refresh();
+      await invalidate(member.id);
       triggerSuccessHaptic();
       setToast(
-        `已续卡：${card.card_name}，应收 ¥${card.paid_amount}，结转 ${carriedMeals} 份，共剩 ${card.remaining_meals} 份`,
+        `已续卡：${p.spec.name}，应收 ¥${paid_amount}，结转 ${carried_meals} 份，共剩 ${new_card.remaining_meals} 份`,
       );
     },
-    [member, refresh],
+    [member, invalidate],
   );
 
-  const handleEditSave = useCallback(() => {
+  const handleEditSave = useCallback(async () => {
     setShowEditModal(false);
-    refresh();
+    if (member) await invalidate(member.id);
     triggerSuccessHaptic();
     setToast('会员资料已更新');
-  }, [refresh]);
+  }, [member, invalidate]);
 
   const handleRefund = useCallback(() => {
-    if (!member || !member.active_card) return;
-    const activeCard = member.active_card;
-    const refund = calcRefundAmount(activeCard);
-    const name = member.nickname || member.name;
-    confirmDestructive(
-      '确认退卡',
-      [
-        `卡片：${activeCard.card_name}`,
-        `剩餐：${activeCard.remaining_meals} / ${activeCard.total_meals} 份`,
-        `退款：¥${refund}（剩 ${activeCard.remaining_meals} × ¥${activeCard.unit_price}）`,
-        '退卡后该卡立即失效，不可再订餐；如需继续使用请重新开卡。退款将记入今日支出。',
-      ].join('\n'),
-      () => {
-        try {
-          const { refundAmount } = mockRefundCard({
-            memberId: member.id,
-            fromCardId: activeCard.id,
-            operator: DEFAULT_COLLECTOR,
-          });
-          refresh();
-          triggerSuccessHaptic();
-          setToast(`已退卡：${name} · ${activeCard.card_name}，退款 ¥${refundAmount} 已记入支出`);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : '退卡失败';
-          setToast(msg);
-        }
-      },
-      '确认退卡',
-    );
-  }, [member, refresh]);
+    setToast('退卡功能尚未接入后台，请联系管理员在财务页手动记账后再归档卡片。');
+  }, []);
 
-  if (!member) {
+  if (isLoading || !member) {
+    if (notFound) {
+      return (
+        <View style={styles.root}>
+          <MeshBackground />
+          <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+            <AppHeader title="会员详情" />
+            <View style={styles.center}>
+              <Text style={styles.centerText}>会员不存在</Text>
+              <Pressable onPress={() => router.back()}>
+                <Text style={styles.link}>返回</Text>
+              </Pressable>
+            </View>
+          </SafeAreaView>
+        </View>
+      );
+    }
+    if (error) {
+      return (
+        <View style={styles.root}>
+          <MeshBackground />
+          <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+            <AppHeader title="会员详情" />
+            <View style={styles.center}>
+              <Text style={styles.centerText}>加载失败：{error.message}</Text>
+              <Pressable onPress={() => router.back()}>
+                <Text style={styles.link}>返回</Text>
+              </Pressable>
+            </View>
+          </SafeAreaView>
+        </View>
+      );
+    }
     return (
       <View style={styles.root}>
         <MeshBackground />
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <AppHeader title="会员详情" />
           <View style={styles.center}>
-            <Text style={styles.centerText}>会员不存在</Text>
-            <Pressable onPress={() => router.back()}>
-              <Text style={styles.link}>返回</Text>
-            </Pressable>
+            <ActivityIndicator color={IOS_COLORS.blue} />
           </View>
         </SafeAreaView>
       </View>
@@ -175,7 +165,7 @@ export default function MemberDetailScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} key={tick}>
+      <ScrollView showsVerticalScrollIndicator={false}>
         <AppHeader
           title="会员详情"
           right={

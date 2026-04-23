@@ -3,17 +3,43 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./card-catalog": "./src/card-catalog.ts",
-    "./types": "./src/types.ts",
-    "./zod-schemas": "./src/zod-schemas.ts",
-    "./format": "./src/format.ts",
-    "./holidays": "./src/holidays.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "react-native": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./card-catalog": {
+      "types": "./dist/card-catalog.d.ts",
+      "react-native": "./src/card-catalog.ts",
+      "default": "./dist/card-catalog.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "react-native": "./src/types.ts",
+      "default": "./dist/types.js"
+    },
+    "./zod-schemas": {
+      "types": "./dist/zod-schemas.d.ts",
+      "react-native": "./src/zod-schemas.ts",
+      "default": "./dist/zod-schemas.js"
+    },
+    "./format": {
+      "types": "./dist/format.d.ts",
+      "react-native": "./src/format.ts",
+      "default": "./dist/format.js"
+    },
+    "./holidays": {
+      "types": "./dist/holidays.d.ts",
+      "react-native": "./src/holidays.ts",
+      "default": "./dist/holidays.js"
+    }
   },
+  "files": ["dist", "src"],
   "scripts": {
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint configured'",
     "test": "vitest run",

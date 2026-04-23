@@ -21,6 +21,7 @@ import { financeRouter } from './routes/finance.js';
 import { healthRouter } from './routes/health.js';
 import { membersRouter } from './routes/members.js';
 import { ordersRouter } from './routes/orders.js';
+import { usersRouter } from './routes/users.js';
 import type { Db } from './db/client.js';
 
 export interface AppDeps {
@@ -63,6 +64,7 @@ export function createApp(deps: AppDeps = {}) {
   app.route('/api/cards', cardsRouter);
   app.route('/api/finance', financeRouter);
   app.route('/api/orders', ordersRouter);
+  app.route('/api/users', usersRouter);
   app.route('/api/audit-logs', auditRouter);
 
   // 根路径

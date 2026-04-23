@@ -3,25 +3,20 @@
  * 布局：问候 → 速览 4 连格 → 主入口 2×2 → 余餐提醒横条（若有）。
  */
 
-import { useCallback, useState } from 'react';
 import { StyleSheet, ScrollView, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { CARD_RENEWAL_THRESHOLD_MEALS } from '@meal/shared';
 import { useAuth } from '../../hooks/useAuth';
+import { useFinanceToday, useMembersView } from '../../hooks/useMembersView';
+import { useOrdersToday } from '../../hooks/useOrdersToday';
 import {
   COLORS,
   SPACING,
   TYPE,
 } from '../../theme/paperTheme';
-import {
-  MOCK_TODAY_SUMMARY,
-  MOCK_MEMBERS,
-  summariseFinanceForDate,
-  TODAY,
-} from '../../constants/mockData';
 import {
   MeshBackground,
   BentoGrid,
@@ -43,31 +38,45 @@ type EntryDef = {
   accent?: string;
 };
 
+function todayISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export default function HomeScreen() {
   const { user } = useAuth();
   const hour = new Date().getHours();
   const timeGreeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
 
-  // Mock 数据会被 购卡 / 升级 / 续卡 等动作原地 mutate。
-  // 每次首页聚焦（从详情页返回）时 +1 tick 触发重新渲染，
-  // 让下面的 renewalCount / fin 基于最新 MOCK_MEMBERS 快照重算。
-  const [, setTick] = useState(0);
-  useFocusEffect(
-    useCallback(() => {
-      setTick((v) => v + 1);
-    }, []),
-  );
+  const membersView = useMembersView();
+  const financeToday = useFinanceToday(todayISO());
+  const ordersToday = useOrdersToday();
 
-  const renewalCount = MOCK_MEMBERS.filter(
+  const members = membersView.data ?? [];
+  const renewalCount = members.filter(
     (m) => m.active_card && m.active_card.remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS,
   ).length;
-  const fin = summariseFinanceForDate(TODAY);
+
+  const fin = financeToday.data ?? { income: 0, expense: 0, net: 0 };
+
+  const orders = ordersToday.data ?? [];
+  const totalCount = orders
+    .filter((o) => o.status !== 'cancelled')
+    .reduce((sum, o) => sum + o.quantity, 0);
+  const pendingCount = orders
+    .filter((o) => o.status === 'pending')
+    .reduce((sum, o) => sum + o.quantity, 0);
 
   const entries: EntryDef[] = [
     {
       key: 'members',
       title: '会员档案',
-      subtitle: `${MOCK_MEMBERS.length} 位会员 · ${renewalCount} 人需续卡`,
+      subtitle: membersView.isLoading
+        ? '加载中...'
+        : `${members.length} 位会员${renewalCount > 0 ? ` · ${renewalCount} 人需续卡` : ''}`,
       icon: 'people-outline',
       color: COLORS.brand,
       bg: COLORS.brandSoft,
@@ -76,7 +85,9 @@ export default function HomeScreen() {
     {
       key: 'orders',
       title: '每日订餐',
-      subtitle: `待出 ${MOCK_TODAY_SUMMARY.pending}`,
+      subtitle: ordersToday.isLoading
+        ? '加载中...'
+        : `${totalCount} 份 · 待出 ${pendingCount}`,
       icon: 'restaurant-outline',
       color: COLORS.success,
       bg: COLORS.successSoft,
@@ -85,7 +96,9 @@ export default function HomeScreen() {
     {
       key: 'finance',
       title: '财务记账',
-      subtitle: `今日净额 ¥${fin.net.toLocaleString()}`,
+      subtitle: financeToday.isLoading
+        ? '加载中...'
+        : `今日净额 ¥${fin.net.toLocaleString()}`,
       icon: 'wallet-outline',
       color: COLORS.warning,
       bg: COLORS.warningSoft,
@@ -186,7 +199,7 @@ export default function HomeScreen() {
                 <Bento span={3} mobileSpan={6}>
                   <StatTile
                     label="待出餐"
-                    value={`${MOCK_TODAY_SUMMARY.pending} 份`}
+                    value={`${pendingCount} 份`}
                     icon="time-outline"
                     color={COLORS.warning}
                     tint="warn"

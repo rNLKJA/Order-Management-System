@@ -48,7 +48,6 @@ import {
   type ListFinanceParams,
 } from '../../../api/finance';
 import { ExpenseModal } from '../../../components/ExpenseModal';
-import { MOCK_FINANCE } from '../../../constants/mockData';
 import { COLORS, SPACING, RADIUS, TYPE } from '../../../theme/paperTheme';
 
 type TypeFilter = 'all' | 'income' | 'expense';
@@ -70,70 +69,6 @@ function firstOfMonth(): string {
   return `${y}-${m}-01`;
 }
 
-/** 把 MOCK_FINANCE 映射为 API 格式。 */
-function mockAsEntries(): FinanceEntryDTO[] {
-  return MOCK_FINANCE.map((m) => ({
-    id: -m.id, // 负 id 避免与真实 id 冲突
-    entry_date: m.entry_date,
-    type: m.type,
-    amount: m.amount,
-    category: m.category,
-    description: m.description,
-    ref_card_id: null,
-    ref_order_id: null,
-    source: m.source,
-    voided: m.voided,
-    collector_user_id: null,
-    created_by_user_id: 0,
-    created_at: m.entry_date,
-    updated_at: m.entry_date,
-  }));
-}
-
-function passesFilter(e: FinanceEntryDTO, p: ListFinanceParams): boolean {
-  if (p.from && e.entry_date < p.from) return false;
-  if (p.to && e.entry_date > p.to) return false;
-  if (p.type && p.type !== 'all' && e.type !== p.type) return false;
-  if (p.category && e.category !== p.category) return false;
-  if (!p.include_voided && e.voided) return false;
-  return true;
-}
-
-function summarise(items: FinanceEntryDTO[]): FinanceListResponse['summary'] {
-  let income = 0;
-  let expense = 0;
-  const byCategory: Record<string, number> = {};
-  for (const it of items) {
-    if (it.voided) continue;
-    if (it.type === 'income') income += it.amount;
-    else expense += it.amount;
-    byCategory[it.category] = (byCategory[it.category] ?? 0) + it.amount;
-  }
-  return { income, expense, net: income - expense, byCategory };
-}
-
-/** API + Mock 合并（去重：API 真实 id 为准，mock 只补 API 没有的 description+date+amount 组合）。 */
-function mergeWithMock(
-  apiItems: FinanceEntryDTO[],
-  params: ListFinanceParams,
-): FinanceListResponse {
-  const key = (e: FinanceEntryDTO) =>
-    `${e.entry_date}|${e.type}|${e.amount}|${e.description ?? ''}`;
-  const seen = new Set(apiItems.map(key));
-  const mockItems = mockAsEntries().filter(
-    (e) => passesFilter(e, params) && !seen.has(key(e)),
-  );
-  const apiFiltered = apiItems.filter((e) => passesFilter(e, params));
-  const items = [...apiFiltered, ...mockItems].sort((a, b) =>
-    b.entry_date.localeCompare(a.entry_date),
-  );
-  return {
-    items,
-    total: items.length,
-    summary: summarise(items),
-  };
-}
-
 export default function FinanceScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -149,6 +84,7 @@ export default function FinanceScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const params = useMemo<ListFinanceParams>(
     () => ({
@@ -166,12 +102,17 @@ export default function FinanceScreen() {
     async (mode: 'load' | 'refresh' = 'load') => {
       if (mode === 'load') setLoading(true);
       else setRefreshing(true);
+      setFetchError(null);
       try {
         const res = await listFinance(params);
-        setData(mergeWithMock(res.items, params));
-      } catch {
-        // API 失败时用纯 mock，避免白屏
-        setData(mergeWithMock([], params));
+        setData(res);
+      } catch (e) {
+        setData({
+          items: [],
+          total: 0,
+          summary: { income: 0, expense: 0, net: 0, byCategory: {} },
+        });
+        setFetchError(e instanceof Error ? e.message : '加载失败');
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -238,6 +179,16 @@ export default function FinanceScreen() {
           }
           showsVerticalScrollIndicator={false}
         >
+          {fetchError ? (
+            <View style={styles.block}>
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorBannerText}>
+                  加载失败：{fetchError}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           {/* 汇总（3 格 Bento） */}
           <View style={styles.block}>
             <SectionLabel>{`汇总 · ${from} ~ ${to}`}</SectionLabel>
@@ -538,6 +489,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   block: { marginBottom: SPACING.lg },
+
+  errorBanner: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(255,59,48,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,59,48,0.2)',
+  },
+  errorBannerText: { ...TYPE.footnote, color: COLORS.danger },
 
   headerAction: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
   headerActionText: { fontSize: 15, color: COLORS.brand, fontWeight: '500' },

@@ -3,11 +3,12 @@
  *
  * 字段：姓名、昵称、手机号、微信号、地址、忌口、院内/院外。
  * 校验：复用 packages/shared 的 memberCreateSchema，保证前后端契约一致。
- * 提交：mock 侧直接原地改 MOCK_MEMBERS；接 API 时仅需改 onSaved 回调里的实现。
+ * 提交：直接调 PATCH /api/members/:id；上层 onSaved 回调负责刷新列表 / 详情。
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -20,11 +21,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { memberCreateSchema } from '@meal/shared';
 import { IOS_COLORS } from '../theme/paperTheme';
-import {
-  mockUpdateMember,
-  type MockMember,
-  type MemberUpdateInput,
-} from '../constants/mockData';
+import { type MockMember, type MemberUpdateInput } from '../constants/mockData';
+import { membersApi } from '../api/members';
 
 export interface MemberEditModalProps {
   visible: boolean;
@@ -43,6 +41,7 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
   const [isHospital, setIsHospital] = useState(member.is_hospital);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -55,6 +54,7 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
       setIsHospital(member.is_hospital);
       setErrors({});
       setSubmitError(null);
+      setSubmitting(false);
     }
   }, [visible, member]);
 
@@ -82,9 +82,9 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
     candidate.dietary_notes !== member.dietary_notes ||
     candidate.is_hospital !== member.is_hospital;
 
-  const canSave = validation.success && dirty;
+  const canSave = validation.success && dirty && !submitting;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validation.success) {
       const next: Record<string, string> = {};
       for (const issue of validation.error.issues) {
@@ -95,11 +95,15 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
       return;
     }
     setErrors({});
+    setSubmitError(null);
+    setSubmitting(true);
     try {
-      mockUpdateMember(member.id, candidate);
+      await membersApi.update(member.id, candidate);
       onSaved();
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : '保存失败');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -112,12 +116,16 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
     >
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
         <View style={styles.header}>
-          <Pressable onPress={onClose}>
-            <Text style={styles.cancel}>取消</Text>
+          <Pressable onPress={onClose} disabled={submitting}>
+            <Text style={[styles.cancel, submitting && styles.disabled]}>取消</Text>
           </Pressable>
           <Text style={styles.title}>编辑会员</Text>
           <Pressable onPress={handleSave} disabled={!canSave}>
-            <Text style={[styles.save, !canSave && styles.disabled]}>保存</Text>
+            {submitting ? (
+              <ActivityIndicator color={IOS_COLORS.blue} />
+            ) : (
+              <Text style={[styles.save, !canSave && styles.disabled]}>保存</Text>
+            )}
           </Pressable>
         </View>
 

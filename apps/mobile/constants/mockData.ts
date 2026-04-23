@@ -88,6 +88,8 @@ export interface MockFinance {
   description: string;
   source: 'auto' | 'manual';
   voided: boolean;
+  /** 真实发生时间戳（ISO）；mock 种子数据没有则回退到 entry_date */
+  created_at?: string;
 }
 
 export const TODAY = '2026-04-23';
@@ -578,7 +580,11 @@ function todayDateStr(): string {
 }
 
 function pushFinance(entry: Omit<MockFinance, 'id'>): MockFinance {
-  const full: MockFinance = { id: nextFinanceId++, ...entry };
+  const full: MockFinance = {
+    id: nextFinanceId++,
+    created_at: new Date().toISOString(),
+    ...entry,
+  };
   MOCK_FINANCE.unshift(full);
   return full;
 }

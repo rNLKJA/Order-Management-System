@@ -1,14 +1,16 @@
 /**
- * 会员列表 — iOS 风格，含 mock data
+ * 会员列表 — 从 /api/members + /api/cards 拉真实数据（走 useMembersView hook）。
+ * 筛选 / 搜索仍在前端做：数据量小，体验上更顺滑。
  */
 
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, FlatList } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../../theme/paperTheme';
-import { MOCK_MEMBERS, type MockMember } from '../../../constants/mockData';
+import { type MockMember } from '../../../constants/mockData';
+import { useMembersView } from '../../../hooks/useMembersView';
 import { AppHeader, MeshBackground } from '../../../components/ui';
 
 type MemberFilter = 'all' | 'hospital' | 'regular' | 'expired';
@@ -17,7 +19,10 @@ export default function MembersScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<MemberFilter>('all');
 
-  const filtered = MOCK_MEMBERS.filter((m) => {
+  const { data, isLoading, error, refetch } = useMembersView();
+  const members = data ?? [];
+
+  const filtered = members.filter((m) => {
     const q = query.toLowerCase();
     const matchQ = !q || [m.name, m.nickname, m.phone, m.wechat_id, m.uid]
       .some((v) => v.toLowerCase().includes(q));
@@ -29,7 +34,7 @@ export default function MembersScreen() {
     return matchQ && matchFilter;
   });
 
-  const expiredCount = MOCK_MEMBERS.filter((m) => !m.active_card).length;
+  const expiredCount = members.filter((m) => !m.active_card).length;
 
   return (
     <View style={styles.root}>
@@ -98,11 +103,30 @@ export default function MembersScreen() {
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => <MemberRow member={item} />}
+        refreshing={isLoading}
+        onRefresh={() => void refetch()}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>—</Text>
-            <Text style={styles.emptyText}>没有找到匹配的会员</Text>
-          </View>
+          isLoading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator color={IOS_COLORS.blue} />
+              <Text style={styles.emptyText}>加载中...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyIcon}>⚠︎</Text>
+              <Text style={styles.emptyText}>加载失败：{error.message}</Text>
+              <Pressable onPress={() => void refetch()}>
+                <Text style={{ color: IOS_COLORS.blue, fontSize: 15 }}>重试</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <Text style={styles.emptyIcon}>—</Text>
+              <Text style={styles.emptyText}>
+                {members.length === 0 ? '还没有会员，点击右上「新增」开始' : '没有找到匹配的会员'}
+              </Text>
+            </View>
+          )
         }
       />
       </SafeAreaView>

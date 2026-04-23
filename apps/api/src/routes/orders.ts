@@ -6,6 +6,7 @@
  * - GET    /api/orders/:id
  * - POST   /api/orders                 拆 1~2 条 DailyOrder，原子扣卡或写散餐 FinanceEntry
  * - PATCH  /api/orders/:id             仅修改 notes + created_by_user_id
+ * - PATCH  /api/orders/:id/status      pending/fulfilled/delivered 流转
  * - PATCH  /api/orders/:id/cancel      原子冲销
  *
  * 所有接口需要登录。
@@ -403,6 +404,121 @@ ordersRouter.patch('/:id', zValidator('param', idParamSchema), zValidator('json'
 
   return c.json({ order: updated[0] });
 });
+
+// ==================== PATCH /api/orders/:id/status ====================
+
+/**
+ * 订单状态流转（pending → fulfilled → delivered，允许反向回退）。
+ *
+ * 规则：
+ *  - pending   → fulfilled / cancelled
+ *  - fulfilled → delivered / pending（回退，清 fulfilled_at）
+ *  - delivered → fulfilled（回退，清 delivered_at）
+ *  - cancelled 是终态：不能由本路由回退（要走新建单流程）
+ *
+ * 变更 fulfilled_at / delivered_at / fulfilled_by_user_id / delivered_by_user_id：
+ *  - 进入 fulfilled：set fulfilled_at/by = now / authUser
+ *  - 从 fulfilled 回退：clear fulfilled_at/by
+ *  - 进入 delivered：set delivered_at/by
+ *  - 从 delivered 回退到 fulfilled：clear delivered_at/by
+ */
+
+const statusTransitionBodySchema = z.object({
+  status: z.enum(['pending', 'fulfilled', 'delivered']),
+});
+
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  pending: ['fulfilled'],
+  fulfilled: ['pending', 'delivered'],
+  delivered: ['fulfilled'],
+  cancelled: [],
+};
+
+ordersRouter.patch(
+  '/:id/status',
+  zValidator('param', idParamSchema),
+  zValidator('json', statusTransitionBodySchema),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const { status: nextStatus } = c.req.valid('json');
+    const authUser = c.get('authUser');
+    const db = requestDb(c);
+
+    const rows = await db
+      .select()
+      .from(schema.daily_orders)
+      .where(eq(schema.daily_orders.id, id))
+      .limit(1);
+    const order = rows[0];
+    if (!order) {
+      throw new HTTPException(404, { message: '订单不存在' });
+    }
+
+    if (order.status === nextStatus) {
+      return c.json({ order });
+    }
+
+    const allowed = ALLOWED_TRANSITIONS[order.status] ?? [];
+    if (!allowed.includes(nextStatus)) {
+      return c.json(
+        {
+          code: 'INVALID_STATUS_TRANSITION',
+          message: `不允许从 ${order.status} 流转到 ${nextStatus}`,
+        },
+        422,
+      );
+    }
+
+    const now = new Date();
+    const patch: Partial<typeof schema.daily_orders.$inferInsert> = {
+      status: nextStatus,
+      updated_at: now,
+    };
+
+    // fulfilled_at / fulfilled_by
+    if (nextStatus === 'fulfilled' && order.status === 'pending') {
+      patch.fulfilled_at = now;
+      patch.fulfilled_by_user_id = authUser.id;
+    }
+    if (nextStatus === 'pending' && order.status === 'fulfilled') {
+      patch.fulfilled_at = null;
+      patch.fulfilled_by_user_id = null;
+    }
+
+    // delivered_at / delivered_by
+    if (nextStatus === 'delivered' && order.status === 'fulfilled') {
+      patch.delivered_at = now;
+      patch.delivered_by_user_id = authUser.id;
+    }
+    if (nextStatus === 'fulfilled' && order.status === 'delivered') {
+      patch.delivered_at = null;
+      patch.delivered_by_user_id = null;
+    }
+
+    await db
+      .update(schema.daily_orders)
+      .set(patch)
+      .where(eq(schema.daily_orders.id, id));
+
+    await db.insert(schema.audit_logs).values({
+      user_id: authUser.id,
+      action: 'update',
+      entity: 'daily_order',
+      entity_id: id,
+      diff_json: JSON.stringify({
+        status: [order.status, nextStatus],
+      }),
+    });
+
+    const updated = await db
+      .select()
+      .from(schema.daily_orders)
+      .where(eq(schema.daily_orders.id, id))
+      .limit(1);
+
+    return c.json({ order: updated[0] });
+  },
+);
 
 // ==================== PATCH /api/orders/:id/cancel ====================
 

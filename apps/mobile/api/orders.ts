@@ -104,6 +104,10 @@ export const ordersApi = {
   updateNotes: (id: number, notes: string) =>
     api.patch<{ order: DailyOrder }>(`/api/orders/${id}`, { notes }),
 
+  /** 切换状态：pending → fulfilled → delivered，或反向回退一步。不能到 cancelled（走 cancel 路由）。 */
+  setStatus: (id: number, status: 'pending' | 'fulfilled' | 'delivered') =>
+    api.patch<{ order: DailyOrder }>(`/api/orders/${id}/status`, { status }),
+
   cancel: (id: number, reason?: string) =>
     api.patch<{ order: DailyOrder; card?: Card }>(`/api/orders/${id}/cancel`, { reason }),
 };

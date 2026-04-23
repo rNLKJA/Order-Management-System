@@ -2,13 +2,14 @@
  * 余餐不足提醒 — v3 玻璃 + Bento。
  */
 
-import { FlatList, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { CARD_RENEWAL_THRESHOLD_MEALS } from '@meal/shared';
 import { COLORS, SPACING, TYPE } from '../../../theme/paperTheme';
-import { MOCK_MEMBERS, type MockMember } from '../../../constants/mockData';
+import { useMembersView } from '../../../hooks/useMembersView';
 import {
   AppHeader,
   GlassSurface,
@@ -18,14 +19,11 @@ import {
   StatusChip,
 } from '../../../components/ui';
 
-function membersLowBalance(): MockMember[] {
-  return MOCK_MEMBERS.filter(
-    (m) => m.active_card && m.active_card.remaining_meals <= 2,
-  );
-}
-
 export default function RemindersScreen() {
-  const list = membersLowBalance();
+  const { data, isLoading, error, refetch } = useMembersView();
+  const list = (data ?? []).filter(
+    (m) => m.active_card && m.active_card.remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS,
+  );
 
   return (
     <View style={styles.root}>
@@ -55,16 +53,37 @@ export default function RemindersScreen() {
             data={list}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={styles.listContent}
+            refreshing={isLoading}
+            onRefresh={() => void refetch()}
             ListEmptyComponent={
-              <GlassSurface padding={SPACING.xl} style={styles.empty}>
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={32}
-                  color={COLORS.success}
-                />
-                <Text style={styles.emptyTitle}>暂无需要跟进的会员</Text>
-                <Text style={styles.emptySub}>所有会员余餐均高于 2 份</Text>
-              </GlassSurface>
+              isLoading ? (
+                <GlassSurface padding={SPACING.xl} style={styles.empty}>
+                  <ActivityIndicator color={COLORS.brand} />
+                  <Text style={styles.emptyTitle}>加载中</Text>
+                </GlassSurface>
+              ) : error ? (
+                <GlassSurface padding={SPACING.xl} style={styles.empty}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={32}
+                    color={COLORS.danger}
+                  />
+                  <Text style={styles.emptyTitle}>加载失败</Text>
+                  <Text style={styles.emptySub}>{error.message}</Text>
+                </GlassSurface>
+              ) : (
+                <GlassSurface padding={SPACING.xl} style={styles.empty}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={32}
+                    color={COLORS.success}
+                  />
+                  <Text style={styles.emptyTitle}>暂无需要跟进的会员</Text>
+                  <Text style={styles.emptySub}>
+                    所有会员余餐均高于 {CARD_RENEWAL_THRESHOLD_MEALS} 份
+                  </Text>
+                </GlassSurface>
+              )
             }
             renderItem={({ item }) => {
               const c = item.active_card!;
