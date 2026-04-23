@@ -19,6 +19,9 @@ export default function AppLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: '面板' }} />
+      <Stack.Screen name="members/index" options={{ headerShown: false }} />
+      <Stack.Screen name="members/new" options={{ headerShown: false }} />
+      <Stack.Screen name="members/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }
