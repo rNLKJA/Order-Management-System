@@ -7,12 +7,14 @@
  */
 
 import { useState } from 'react';
-import { Appbar, Dialog, Portal, Text, Button, Snackbar } from 'react-native-paper';
+import { SafeAreaView, View } from 'react-native';
+import { Dialog, Portal, Text, Button, Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { MemberForm } from '../../../components/MemberForm';
 import { membersApi, type DuplicatePhoneHint } from '../../../api/members';
 import { ApiError } from '../../../api/client';
+import { MeshBackground, AppHeader } from '../../../components/ui';
 
 export default function NewMemberScreen() {
   const router = useRouter();
@@ -24,12 +26,11 @@ export default function NewMemberScreen() {
   >(null);
 
   return (
-    <>
-      <Appbar.Header elevated>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="新增会员" />
-      </Appbar.Header>
-
+    <View style={{ flex: 1 }}>
+      <MeshBackground />
+      <SafeAreaView style={{ flex: 1 }}>
+        <AppHeader title="新增会员" onBack={() => router.back()} />
+        <View style={{ flex: 1 }}>
       <MemberForm
         submitLabel="创建会员"
         submitting={submitting}
@@ -95,6 +96,8 @@ export default function NewMemberScreen() {
       >
         {errorMsg ?? ''}
       </Snackbar>
-    </>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }

@@ -1,165 +1,167 @@
 /**
- * 当前用户信息页（含退出登录）
+ * 当前用户信息页 — v3 玻璃。
  */
 
-import { View, Text, Pressable, StyleSheet, ScrollView, Alert } from 'react-native';
+import { StyleSheet, ScrollView, View } from 'react-native';
+import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../hooks/useAuth';
-import { IOS_COLORS } from '../../../theme/paperTheme';
+import { COLORS, GLASS, SPACING, TYPE } from '../../../theme/paperTheme';
+import { confirmDestructive } from '../../../lib/confirm';
+import {
+  AppHeader,
+  Button,
+  GlassSurface,
+  IconAvatar,
+  MeshBackground,
+  SectionLabel,
+  StatusChip,
+} from '../../../components/ui';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
 
   const handleSignOut = () => {
-    if (typeof Alert !== 'undefined' && Alert.alert) {
-      Alert.alert('退出登录', '确定要退出登录吗？', [
-        { text: '取消', style: 'cancel' },
-        { text: '退出', style: 'destructive', onPress: async () => { await signOut(); } },
-      ]);
-    } else {
-      // Web fallback
-      if (window.confirm('确定要退出登录吗？')) signOut();
-    }
+    confirmDestructive(
+      '退出登录',
+      '确定要退出登录吗？',
+      () => { void signOut(); },
+      '退出',
+    );
   };
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      <ScrollView>
-        {/* 头部导航 */}
-        <View style={styles.nav}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={styles.backText}>‹ 返回</Text>
-          </Pressable>
-          <Text style={styles.navTitle}>当前用户</Text>
-          <View style={{ width: 60 }} />
-        </View>
+    <View style={styles.root}>
+      <MeshBackground />
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.container}>
+            <AppHeader title="当前用户" />
 
-        {/* 用户卡片 */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.full_name?.[0] ?? '?'}</Text>
-          </View>
-          <Text style={styles.fullName}>{user?.full_name ?? '—'}</Text>
-          <Text style={styles.username}>@{user?.username ?? '—'}</Text>
-          <View style={[styles.roleBadge, user?.role === 'admin' ? styles.adminBadge : styles.staffBadge]}>
-            <Text style={styles.roleText}>{user?.role === 'admin' ? '管理员' : '员工'}</Text>
-          </View>
-        </View>
+            <GlassSurface padding={SPACING.xl} style={styles.profileCard}>
+              <IconAvatar
+                icon="person-outline"
+                size={76}
+                color="#FFFFFF"
+                bg={COLORS.brand}
+                style={styles.avatar}
+              />
+              <Text style={styles.fullName}>{user?.full_name ?? '未登录'}</Text>
+              <Text style={styles.username}>@{user?.username ?? '—'}</Text>
+              <StatusChip
+                label={user?.role === 'admin' ? '管理员' : '员工'}
+                variant={user?.role === 'admin' ? 'danger' : 'fulfilled'}
+                dot
+                style={styles.roleChip}
+              />
+            </GlassSurface>
 
-        {/* 信息列表 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>账号信息</Text>
-          <View style={styles.infoCard}>
-            <InfoRow label="用户名" value={user?.username ?? '—'} />
-            <InfoRow label="显示名称" value={user?.full_name ?? '—'} />
-            <InfoRow label="权限角色" value={user?.role === 'admin' ? '管理员（全部权限）' : '员工（日常操作）'} isLast />
-          </View>
-        </View>
-
-        {/* 权限说明 */}
-        {user?.role === 'staff' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>我能做什么</Text>
-            <View style={styles.permCard}>
-              {['建档会员 / 编辑会员信息', '购卡 / 升级 / 换卡', '录入每日订餐', '新增支出', '完成出餐 / 确认送达 / 取消订单', '查看财务概览'].map((p) => (
-                <View key={p} style={styles.permRow}>
-                  <Text style={styles.permCheck}>✓</Text>
-                  <Text style={styles.permText}>{p}</Text>
-                </View>
-              ))}
+            <View style={styles.section}>
+              <SectionLabel>账号信息</SectionLabel>
+              <GlassSurface padding={0} style={styles.infoCard}>
+                <InfoRow label="用户名" value={user?.username ?? '—'} />
+                <InfoRow label="显示名称" value={user?.full_name ?? '—'} />
+                <InfoRow
+                  label="权限角色"
+                  value={user?.role === 'admin' ? '管理员（全部权限）' : '员工（日常操作）'}
+                  isLast
+                />
+              </GlassSurface>
             </View>
+
+            {user?.role === 'staff' ? (
+              <View style={styles.section}>
+                <SectionLabel>我能做什么</SectionLabel>
+                <GlassSurface padding={SPACING.base} style={styles.permCard}>
+                  {[
+                    '建档会员 / 编辑会员信息',
+                    '购卡 / 升级 / 换卡',
+                    '录入每日订餐',
+                    '新增支出',
+                    '完成出餐 / 确认送达 / 取消订单',
+                    '查看财务概览',
+                  ].map((p) => (
+                    <View key={p} style={styles.permRow}>
+                      <Ionicons
+                        name="checkmark-circle-outline"
+                        size={16}
+                        color={COLORS.success}
+                      />
+                      <Text style={styles.permText}>{p}</Text>
+                    </View>
+                  ))}
+                </GlassSurface>
+              </View>
+            ) : null}
+
+            <View style={styles.section}>
+              <Button
+                label="退出登录"
+                variant="danger"
+                fullWidth
+                onPress={handleSignOut}
+              />
+            </View>
+
+            <Text style={styles.footer}>如需修改密码，请联系管理员重置</Text>
           </View>
-        )}
-
-        {/* 退出按钮 */}
-        <View style={styles.section}>
-          <Pressable
-            style={({ pressed }) => [styles.signOutBtn, pressed && styles.signOutBtnPressed]}
-            onPress={handleSignOut}
-          >
-            <Text style={styles.signOutText}>退出登录</Text>
-          </Pressable>
-        </View>
-
-        <Text style={styles.footer}>如需修改密码，请联系管理员重置</Text>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 function InfoRow({ label, value, isLast }: { label: string; value: string; isLast?: boolean }) {
   return (
-    <View style={[styles.infoRow, isLast && styles.infoRowLast]}>
+    <View style={[styles.infoRow, !isLast && styles.infoRowDivider]}>
       <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+      <Text style={styles.infoValue} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
-
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: IOS_COLORS.card,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: IOS_COLORS.separatorLight,
+  root: { flex: 1, backgroundColor: COLORS.systemGrouped },
+  scroll: { paddingBottom: 32 },
+  container: {
+    width: '100%',
+    maxWidth: SPACING.maxWidth,
+    alignSelf: 'center',
+    paddingHorizontal: SPACING.page,
   },
-  backBtn: { width: 60 },
-  backText: { fontSize: 17, color: IOS_COLORS.blue },
-  navTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
 
-  profileCard: {
-    alignItems: 'center',
-    backgroundColor: IOS_COLORS.card,
-    paddingVertical: 32,
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: IOS_COLORS.blue,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12,
-  },
-  avatarText: { fontSize: 32, fontWeight: '700', color: '#fff' },
-  fullName: { fontSize: 22, fontWeight: '700', color: IOS_COLORS.label, marginBottom: 4 },
-  username: { fontSize: 15, color: IOS_COLORS.labelSecondary, marginBottom: 10 },
-  roleBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  adminBadge: { backgroundColor: '#FFE5E5' },
-  staffBadge: { backgroundColor: IOS_COLORS.blueLight },
-  roleText: { fontSize: 13, fontWeight: '600', color: IOS_COLORS.label },
+  profileCard: { alignItems: 'center', marginTop: SPACING.sm, marginBottom: SPACING.lg },
+  avatar: { marginBottom: SPACING.md },
+  fullName: { ...TYPE.title2, color: COLORS.text.primary, marginBottom: 2 },
+  username: { ...TYPE.footnote, color: COLORS.text.tertiary, marginBottom: SPACING.sm },
+  roleChip: { alignSelf: 'center' },
 
-  section: { paddingHorizontal: 20, marginBottom: 20 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, paddingLeft: 4 },
+  section: { marginBottom: SPACING.lg },
 
-  infoCard: { backgroundColor: IOS_COLORS.card, borderRadius: 12, overflow: 'hidden' },
+  infoCard: {},
   infoRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 13,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
-  },
-  infoRowLast: { borderBottomWidth: 0 },
-  infoLabel: { fontSize: 15, color: IOS_COLORS.label },
-  infoValue: { fontSize: 15, color: IOS_COLORS.labelSecondary },
-
-  permCard: { backgroundColor: IOS_COLORS.card, borderRadius: 12, padding: 14, gap: 10 },
-  permRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  permCheck: { fontSize: 15, color: '#34C759', fontWeight: '700', width: 20 },
-  permText: { fontSize: 15, color: IOS_COLORS.label },
-
-  signOutBtn: {
-    backgroundColor: '#FFF0F0',
-    borderRadius: 14,
-    height: 50,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: SPACING.base,
+    paddingVertical: 14,
   },
-  signOutBtnPressed: { opacity: 0.8 },
-  signOutText: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.red },
+  infoRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: GLASS.outline,
+  },
+  infoLabel: { ...TYPE.body, color: COLORS.text.primary },
+  infoValue: { ...TYPE.body, color: COLORS.text.tertiary, flexShrink: 1, marginLeft: 12 },
 
-  footer: { textAlign: 'center', fontSize: 13, color: IOS_COLORS.labelSecondary, marginBottom: 32, paddingHorizontal: 20 },
+  permCard: { gap: SPACING.sm },
+  permRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  permText: { ...TYPE.body, color: COLORS.text.primary, flex: 1 },
+
+  footer: {
+    textAlign: 'center',
+    ...TYPE.footnote,
+    color: COLORS.text.tertiary,
+    marginBottom: 32,
+  },
 });

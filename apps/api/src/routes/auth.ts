@@ -24,12 +24,12 @@ import { rateLimit } from '../middleware/rate-limit.js';
 
 export const authRouter = new Hono<{ Variables: AuthVariables }>();
 
-// 限流：60 秒 10 次（全局 IP 维度；登录本身也再按 username 扩一道可放到 phase 4）
+// 限流：生产 60s / 10 次；开发 60s / 50 次（避免 HMR + 调试反复触发）
 authRouter.use(
   '/login',
   rateLimit({
     windowMs: 60_000,
-    max: 10,
+    max: process.env.NODE_ENV === 'production' ? 10 : 50,
     message: '登录尝试过多，请 1 分钟后重试',
   }),
 );

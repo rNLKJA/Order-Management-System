@@ -87,6 +87,23 @@ export const cardUpgradeSchema = z.object({
 });
 export type CardUpgradeInput = z.infer<typeof cardUpgradeSchema>;
 
+/**
+ * 续卡：不改卡种，按当前卡规格再买一张同级卡，剩余餐数结转到新卡。
+ * 业务前提（在 API 层校验）：当前 active 卡 remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS。
+ */
+export const cardRenewSchema = z.object({
+  collector_user_id: z.number().int().positive().optional(),
+  created_by_user_id: z.number().int().positive().optional(),
+  notes: z.string().max(512).optional().default(''),
+});
+export type CardRenewInput = z.infer<typeof cardRenewSchema>;
+
+/**
+ * 允许触发"续卡"的剩餐阈值：当前 active 卡剩餐 ≤ 该值时才开放。
+ * 前后端共用这个常量，保证 UI 提示和 API 校验一致。
+ */
+export const CARD_RENEWAL_THRESHOLD_MEALS = 2;
+
 // =========== 订餐 ===========
 
 export const orderCreateSchema = z

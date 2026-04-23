@@ -7,9 +7,13 @@
  * 提供：
  * - getToken / setToken / clearToken 原子操作
  * - useAuth() hook 提供 { user, loading, signIn, signOut }
+ *
+ * 状态共享：
+ * - 所有 useAuth() 实例共享同一份模块级 state（订阅模式），
+ *   避免登录后 login 页更新了本地 state 但 index 重定向页拿不到新 user 的 bug。
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { Platform } from 'react-native';
 import type { AuthUser, LoginResponse } from '@meal/shared';
 import { api } from '../api/client';
@@ -74,6 +78,91 @@ async function readCachedUser(): Promise<AuthUser | null> {
   }
 }
 
+// ============================================================
+// 模块级共享 store（所有 useAuth 实例订阅同一份状态）
+// ============================================================
+
+interface AuthState {
+  user: AuthUser | null;
+  loading: boolean;
+}
+
+let state: AuthState = { user: null, loading: true };
+const listeners = new Set<() => void>();
+
+function getSnapshot(): AuthState {
+  return state;
+}
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+function setState(next: Partial<AuthState>): void {
+  state = { ...state, ...next };
+  for (const l of listeners) l();
+}
+
+// 只在首次挂载时执行一次的引导流程（读缓存 + 校验 token）
+let bootstrapped = false;
+let bootstrapPromise: Promise<void> | null = null;
+
+async function bootstrap(): Promise<void> {
+  if (bootstrapped) return;
+  if (bootstrapPromise) return bootstrapPromise;
+  bootstrapPromise = (async () => {
+    const cached = await readCachedUser();
+    if (cached) setState({ user: cached });
+
+    const token = await getToken();
+    if (!token) {
+      setState({ user: null, loading: false });
+      bootstrapped = true;
+      return;
+    }
+    try {
+      const { user } = await api.get<{ user: AuthUser }>('/api/auth/me');
+      await cacheUser(user);
+      setState({ user, loading: false });
+    } catch {
+      await clearToken();
+      setState({ user: null, loading: false });
+    } finally {
+      bootstrapped = true;
+    }
+  })();
+  return bootstrapPromise;
+}
+
+async function refreshInternal(): Promise<void> {
+  const token = await getToken();
+  if (!token) {
+    setState({ user: null, loading: false });
+    return;
+  }
+  try {
+    const { user } = await api.get<{ user: AuthUser }>('/api/auth/me');
+    await cacheUser(user);
+    setState({ user, loading: false });
+  } catch {
+    await clearToken();
+    setState({ user: null, loading: false });
+  }
+}
+
+async function signInInternal(username: string, password: string): Promise<void> {
+  const res = await api.post<LoginResponse>('/api/auth/login', { username, password });
+  await setToken(res.token);
+  await cacheUser(res.user);
+  setState({ user: res.user, loading: false });
+}
+
+async function signOutInternal(): Promise<void> {
+  await clearToken();
+  setState({ user: null, loading: false });
+}
+
 export interface UseAuthResult {
   user: AuthUser | null;
   loading: boolean;
@@ -83,48 +172,21 @@ export interface UseAuthResult {
 }
 
 export function useAuth(): UseAuthResult {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(async () => {
-    const token = await getToken();
-    if (!token) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-    try {
-      const { user } = await api.get<{ user: AuthUser }>('/api/auth/me');
-      await cacheUser(user);
-      setUser(user);
-    } catch {
-      await clearToken();
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   useEffect(() => {
-    // 先从缓存回填，再静默 refresh 校验
-    (async () => {
-      const cached = await readCachedUser();
-      if (cached) setUser(cached);
-      await refresh();
-    })();
-  }, [refresh]);
-
-  const signIn = useCallback(async (username: string, password: string) => {
-    const res = await api.post<LoginResponse>('/api/auth/login', { username, password });
-    await setToken(res.token);
-    await cacheUser(res.user);
-    setUser(res.user);
+    void bootstrap();
   }, []);
 
-  const signOut = useCallback(async () => {
-    await clearToken();
-    setUser(null);
-  }, []);
+  const signIn = useCallback(signInInternal, []);
+  const signOut = useCallback(signOutInternal, []);
+  const refresh = useCallback(refreshInternal, []);
 
-  return { user, loading, signIn, signOut, refresh };
+  return {
+    user: snapshot.user,
+    loading: snapshot.loading,
+    signIn,
+    signOut,
+    refresh,
+  };
 }

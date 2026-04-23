@@ -1,135 +1,525 @@
 /**
  * 每日订餐 — 今日视图（午/晚分组）
+ * 功能：会员餐录入、散餐录入、出餐状态管理、类型筛选
  */
 
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, SectionList } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  SectionList,
+  Modal,
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../../theme/paperTheme';
-import { MOCK_TODAY_ORDERS, type MockOrder } from '../../../constants/mockData';
+import { MOCK_TODAY_ORDERS, MOCK_MEMBERS, type MockOrder } from '../../../constants/mockData';
+import { AppHeader, MeshBackground } from '../../../components/ui';
 
 const STATUS_MAP = {
-  pending: { label: '待出餐', color: IOS_COLORS.orange, bg: '#FFF4E5' },
-  fulfilled: { label: '已出餐', color: IOS_COLORS.blue, bg: IOS_COLORS.blueLight },
-  delivered: { label: '已送达', color: '#34C759', bg: '#E8F8ED' },
+  pending:   { label: '待出餐', color: IOS_COLORS.orange,         bg: '#FFF4E5' },
+  fulfilled: { label: '已出餐', color: IOS_COLORS.blue,           bg: IOS_COLORS.blueLight },
+  delivered: { label: '已送达', color: '#34C759',                  bg: '#E8F8ED' },
   cancelled: { label: '已取消', color: IOS_COLORS.labelSecondary, bg: IOS_COLORS.fillLight },
-};
+} as const;
 
+const ADHOC_DEFAULT_PRICE = 35;
+let _nextId = 9000;
+
+function todayStr(): string {
+  const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(now.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// ============================================================
+// Tabs
+// ============================================================
+type TabKey = 'entry' | 'overview' | 'prep' | 'delivery';
+
+const TABS: {
+  key: TabKey;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  hint: string;
+}[] = [
+  { key: 'entry',    label: '录入', icon: 'add-circle-outline',      hint: '快速录单' },
+  { key: 'overview', label: '总览', icon: 'list-outline',            hint: '全部订单' },
+  { key: 'prep',     label: '出餐', icon: 'fast-food-outline',       hint: '打包备餐' },
+  { key: 'delivery', label: '送餐', icon: 'bicycle-outline',         hint: '检查配送' },
+];
+
+// ============================================================
+// Main screen
+// ============================================================
 export default function OrdersScreen() {
-  const [date] = useState('2026-04-23');
-  const [mealFilter, setMealFilter] = useState<'all' | 'lunch' | 'dinner'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'fulfilled' | 'delivered' | 'cancelled'>('all');
+  const [orders, setOrders] = useState<MockOrder[]>(MOCK_TODAY_ORDERS);
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [activeOrder,  setActiveOrder]  = useState<MockOrder | null>(null);
 
-  const filtered = MOCK_TODAY_ORDERS.filter((o) => {
-    if (mealFilter !== 'all' && o.meal_type !== mealFilter) return false;
-    if (statusFilter !== 'all' && o.status !== statusFilter) return false;
-    return true;
-  });
-
-  const lunch = filtered.filter((o) => o.meal_type === 'lunch');
-  const dinner = filtered.filter((o) => o.meal_type === 'dinner');
-
-  const sections = [
-    ...(lunch.length > 0 ? [{ title: '午餐', data: lunch }] : []),
+  const lunch  = orders.filter((o) => o.meal_type === 'lunch');
+  const dinner = orders.filter((o) => o.meal_type === 'dinner');
+  const allSections = [
+    ...(lunch.length  > 0 ? [{ title: '午餐', data: lunch  }] : []),
     ...(dinner.length > 0 ? [{ title: '晚餐', data: dinner }] : []),
   ];
 
-  const pending = MOCK_TODAY_ORDERS.filter((o) => o.status === 'pending').length;
-  const totalLunch = MOCK_TODAY_ORDERS.filter((o) => o.meal_type === 'lunch')
-    .reduce((sum, o) => sum + o.quantity, 0);
-  const totalDinner = MOCK_TODAY_ORDERS.filter((o) => o.meal_type === 'dinner')
-    .reduce((sum, o) => sum + o.quantity, 0);
+  const totalLunch  = lunch.reduce((s, o) => s + o.quantity, 0);
+  const totalDinner = dinner.reduce((s, o) => s + o.quantity, 0);
+  const pending     = orders.filter((o) => o.status === 'pending').length;
+  const adhocCount  = orders.filter((o) => o.card_type === null).length;
+
+  const handleAddOrders = (newOrders: Omit<MockOrder, 'id'>[]) => {
+    setOrders((prev) => [...prev, ...newOrders.map((o) => ({ ...o, id: ++_nextId }))]);
+  };
+
+  const handleUpdateStatus = (id: number, status: MockOrder['status']) => {
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+    setActiveOrder(null);
+  };
+
+  const now = new Date();
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      {/* 导航栏 */}
-      <View style={styles.nav}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.backText}>‹ 返回</Text>
-        </Pressable>
-        <View>
-          <Text style={styles.navTitle}>每日订餐</Text>
-          <Text style={styles.navDate}>今日 4月23日</Text>
-        </View>
-        <Pressable>
-          <Text style={styles.addBtn}>+ 录入</Text>
-        </Pressable>
-      </View>
-
-      {/* 今日汇总条 */}
-      <View style={styles.summaryBar}>
-        <SummaryItem label="午餐" value={`${totalLunch}份`} color={IOS_COLORS.blue} />
-        <View style={styles.summaryDivider} />
-        <SummaryItem label="晚餐" value={`${totalDinner}份`} color="#AF52DE" />
-        <View style={styles.summaryDivider} />
-        <SummaryItem label="待出餐" value={`${pending}份`} color={IOS_COLORS.orange} />
-        <View style={styles.summaryDivider} />
-        <SummaryItem label="总计" value={`${totalLunch + totalDinner}份`} color={IOS_COLORS.label} />
-      </View>
-
-      {/* 筛选条 */}
-      <View style={styles.filterSection}>
-        <View style={styles.filterRow}>
-          {(['all', 'lunch', 'dinner'] as const).map((v) => (
-            <Pressable
-              key={v}
-              style={[styles.chip, mealFilter === v && styles.chipActive]}
-              onPress={() => setMealFilter(v)}
-            >
-              <Text style={[styles.chipText, mealFilter === v && styles.chipTextActive]}>
-                {v === 'all' ? '全部' : v === 'lunch' ? '午餐' : '晚餐'}
-              </Text>
-            </Pressable>
-          ))}
-          <View style={{ flex: 1 }} />
-          {(['all', 'pending', 'fulfilled', 'delivered'] as const).map((v) => (
-            <Pressable
-              key={v}
-              style={[styles.chip, statusFilter === v && styles.chipStatusActive]}
-              onPress={() => setStatusFilter(v)}
-            >
-              <Text style={[styles.chipText, statusFilter === v && styles.chipTextActive]}>
-                {v === 'all' ? '全部状态' : STATUS_MAP[v].label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      {/* 订单列表 */}
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => String(item.id)}
-        stickySectionHeadersEnabled
-        renderSectionHeader={({ section }) => (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionHeaderTitle}>
-              {section.title === '午餐' ? '🌤 午餐' : '🌙 晚餐'}
-            </Text>
-            <Text style={styles.sectionCount}>
-              {section.data.reduce((s, o) => s + o.quantity, 0)} 份
-            </Text>
-          </View>
-        )}
-        renderItem={({ item, index, section }) => (
-          <OrderRow
-            order={item}
-            isLast={index === section.data.length - 1}
-          />
-        )}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📋</Text>
-            <Text style={styles.emptyText}>暂无订餐记录</Text>
-          </View>
-        }
-        contentContainerStyle={{ paddingBottom: 32 }}
+    <View style={styles.root}>
+      <MeshBackground />
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <AppHeader
+        title="每日订餐"
+        subtitle={`今日 ${now.getMonth() + 1}月${now.getDate()}日`}
       />
-    </SafeAreaView>
+
+      {/* 二级导航 */}
+      <OrderTabBar activeTab={activeTab} onChange={setActiveTab} />
+
+      {/* —— 总览 —— */}
+      {activeTab === 'overview' && (
+        <>
+          {/* 今日汇总条 */}
+          <View style={styles.summaryBar}>
+            <SummaryItem label="午餐"  value={`${totalLunch}份`}  color={IOS_COLORS.blue} />
+            <View style={styles.summaryDivider} />
+            <SummaryItem label="晚餐"  value={`${totalDinner}份`} color="#AF52DE" />
+            <View style={styles.summaryDivider} />
+            <SummaryItem label="待出餐" value={`${pending}份`}    color={IOS_COLORS.orange} />
+            <View style={styles.summaryDivider} />
+            <SummaryItem label="散餐"  value={`${adhocCount}份`}  color="#FF9500" />
+          </View>
+
+          {/* 订单列表 — 展示当日全部订单，午晚分组 */}
+          <SectionList
+            sections={allSections}
+            keyExtractor={(item) => String(item.id)}
+            stickySectionHeadersEnabled
+            renderSectionHeader={({ section }) => (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeaderTitle}>{section.title}</Text>
+                <Text style={styles.sectionCount}>
+                  {section.data.reduce((s, o) => s + o.quantity, 0)} 份
+                </Text>
+              </View>
+            )}
+            renderItem={({ item, index, section }) => (
+              <OrderRow
+                order={item}
+                isLast={index === section.data.length - 1}
+                onPress={() => setActiveOrder(item)}
+              />
+            )}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>暂无订餐记录</Text>
+                <Pressable onPress={() => setActiveTab('entry')}>
+                  <Text style={styles.emptyLink}>+ 点此录入</Text>
+                </Pressable>
+              </View>
+            }
+            contentContainerStyle={{ paddingBottom: 32 }}
+          />
+        </>
+      )}
+
+      {/* —— 录入 —— */}
+      {activeTab === 'entry' && (
+        <EntryPanel
+          onAdd={(newOrders) => {
+            handleAddOrders(newOrders);
+          }}
+          onJumpToOverview={() => setActiveTab('overview')}
+        />
+      )}
+
+      {/* —— 出餐 —— */}
+      {activeTab === 'prep' && (
+        <PrepView
+          orders={orders}
+          onMarkFulfilled={(id) => handleUpdateStatus(id, 'fulfilled')}
+          onOpenDetail={setActiveOrder}
+        />
+      )}
+
+      {/* —— 送餐 —— */}
+      {activeTab === 'delivery' && (
+        <DeliveryView
+          orders={orders}
+          onMarkDelivered={(id) => handleUpdateStatus(id, 'delivered')}
+          onOpenDetail={setActiveOrder}
+        />
+      )}
+
+      {/* 状态更新弹层 */}
+      {activeOrder && (
+        <StatusSheet
+          order={activeOrder}
+          onClose={() => setActiveOrder(null)}
+          onUpdate={handleUpdateStatus}
+        />
+      )}
+      </SafeAreaView>
+    </View>
   );
 }
 
+// ============================================================
+// OrderTabBar — 二级导航
+// ============================================================
+function OrderTabBar({
+  activeTab,
+  onChange,
+}: {
+  activeTab: TabKey;
+  onChange: (t: TabKey) => void;
+}) {
+  return (
+    <View style={styles.tabBar}>
+      {TABS.map((t) => {
+        const active = activeTab === t.key;
+        return (
+          <Pressable
+            key={t.key}
+            onPress={() => onChange(t.key)}
+            style={[styles.tabItem, active && styles.tabItemActive]}
+          >
+            <Ionicons
+              name={t.icon}
+              size={18}
+              color={active ? IOS_COLORS.blue : IOS_COLORS.labelSecondary}
+            />
+            <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+              {t.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// ============================================================
+// PrepView — 出餐预览（以午餐优先、按会员分组展示待出餐订单）
+// ============================================================
+function PrepView({
+  orders,
+  onMarkFulfilled,
+  onOpenDetail,
+}: {
+  orders: MockOrder[];
+  onMarkFulfilled: (id: number) => void;
+  onOpenDetail: (o: MockOrder) => void;
+}) {
+  const pendingOrders = orders.filter((o) => o.status === 'pending');
+  const lunch = pendingOrders.filter((o) => o.meal_type === 'lunch');
+  const dinner = pendingOrders.filter((o) => o.meal_type === 'dinner');
+  const totalLunch = lunch.reduce((s, o) => s + o.quantity, 0);
+  const totalDinner = dinner.reduce((s, o) => s + o.quantity, 0);
+
+  return (
+    <ScrollView contentContainerStyle={prepStyles.scroll}>
+      {/* 顶部汇总：今天还需要出多少份 */}
+      <View style={prepStyles.summary}>
+        <View style={[prepStyles.summaryTile, { backgroundColor: IOS_COLORS.blueLight }]}>
+          <Text style={prepStyles.summaryLabel}>待出午餐</Text>
+          <Text style={[prepStyles.summaryValue, { color: IOS_COLORS.blue }]}>
+            {totalLunch}
+            <Text style={prepStyles.summaryUnit}> 份</Text>
+          </Text>
+          <Text style={prepStyles.summarySub}>{lunch.length} 位客户</Text>
+        </View>
+        <View style={[prepStyles.summaryTile, { backgroundColor: '#F5E9FC' }]}>
+          <Text style={prepStyles.summaryLabel}>待出晚餐</Text>
+          <Text style={[prepStyles.summaryValue, { color: '#AF52DE' }]}>
+            {totalDinner}
+            <Text style={prepStyles.summaryUnit}> 份</Text>
+          </Text>
+          <Text style={prepStyles.summarySub}>{dinner.length} 位客户</Text>
+        </View>
+      </View>
+
+      {/* 午餐优先 */}
+      {lunch.length > 0 && (
+        <View style={prepStyles.mealBlock}>
+          <View style={prepStyles.mealHeader}>
+            <Text style={prepStyles.mealTitle}>午餐 · 优先出餐</Text>
+            <Text style={prepStyles.mealCount}>{totalLunch} 份</Text>
+          </View>
+          {lunch.map((o) => (
+            <PrepCard
+              key={o.id}
+              order={o}
+              onConfirm={() => onMarkFulfilled(o.id)}
+              onOpen={() => onOpenDetail(o)}
+            />
+          ))}
+        </View>
+      )}
+
+      {dinner.length > 0 && (
+        <View style={prepStyles.mealBlock}>
+          <View style={prepStyles.mealHeader}>
+            <Text style={prepStyles.mealTitle}>晚餐</Text>
+            <Text style={prepStyles.mealCount}>{totalDinner} 份</Text>
+          </View>
+          {dinner.map((o) => (
+            <PrepCard
+              key={o.id}
+              order={o}
+              onConfirm={() => onMarkFulfilled(o.id)}
+              onOpen={() => onOpenDetail(o)}
+            />
+          ))}
+        </View>
+      )}
+
+      {pendingOrders.length === 0 && (
+        <View style={prepStyles.empty}>
+          <Ionicons name="checkmark-circle" size={48} color="#34C759" />
+          <Text style={prepStyles.emptyTitle}>所有订单已出餐</Text>
+          <Text style={prepStyles.emptySub}>请去「送餐」页面检查配送</Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function PrepCard({
+  order,
+  onConfirm,
+  onOpen,
+}: {
+  order: MockOrder;
+  onConfirm: () => void;
+  onOpen: () => void;
+}) {
+  const isAdhoc = order.card_type === null;
+  const hasNotes = !!order.dietary_notes || !!order.notes;
+  return (
+    <View style={prepStyles.card}>
+      <Pressable style={prepStyles.cardBody} onPress={onOpen}>
+        <View style={[prepStyles.cardAvatarLg, { backgroundColor: order.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+          <Text style={prepStyles.cardAvatarTextLg}>
+            {(order.member_nickname || order.member_name)[0]}
+          </Text>
+        </View>
+        <View style={prepStyles.cardContent}>
+          <View style={prepStyles.cardTop}>
+            <Text style={prepStyles.cardName}>{order.member_nickname || order.member_name}</Text>
+            {order.is_hospital ? (
+              <View style={prepStyles.tag}><Text style={prepStyles.tagText}>院内</Text></View>
+            ) : null}
+            {isAdhoc ? (
+              <View style={[prepStyles.tag, { backgroundColor: '#FFF4E5' }]}>
+                <Text style={[prepStyles.tagText, { color: '#FF9500' }]}>散餐</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={prepStyles.metaRow}>
+            <Text style={prepStyles.qtyBig}>{order.quantity}</Text>
+            <Text style={prepStyles.qtyUnit}>份</Text>
+            <Text style={prepStyles.cardMetaSep}>·</Text>
+            <Text style={prepStyles.cardMeta}>
+              {isAdhoc ? `¥${order.amount}` : order.card_type}
+            </Text>
+          </View>
+          {hasNotes ? (
+            <View style={prepStyles.noteBox}>
+              {order.dietary_notes ? (
+                <Text style={prepStyles.noteText}>忌：{order.dietary_notes}</Text>
+              ) : null}
+              {order.notes ? (
+                <Text style={prepStyles.noteText}>备注：{order.notes}</Text>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      </Pressable>
+      <Pressable
+        style={({ pressed }) => [prepStyles.sideConfirm, pressed && { opacity: 0.85 }]}
+        onPress={onConfirm}
+      >
+        <Ionicons name="checkmark" size={22} color="#fff" />
+        <Text style={prepStyles.sideConfirmText}>出餐{'\n'}完成</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ============================================================
+// DeliveryView — 送餐（已出餐但未送达）
+// ============================================================
+function DeliveryView({
+  orders,
+  onMarkDelivered,
+  onOpenDetail,
+}: {
+  orders: MockOrder[];
+  onMarkDelivered: (id: number) => void;
+  onOpenDetail: (o: MockOrder) => void;
+}) {
+  const fulfilled = orders.filter((o) => o.status === 'fulfilled');
+  const lunch = fulfilled.filter((o) => o.meal_type === 'lunch');
+  const dinner = fulfilled.filter((o) => o.meal_type === 'dinner');
+  const hospitalCount = fulfilled.filter((o) => o.is_hospital).length;
+  const outsideCount = fulfilled.filter((o) => !o.is_hospital).length;
+
+  return (
+    <ScrollView contentContainerStyle={prepStyles.scroll}>
+      <View style={prepStyles.summary}>
+        <View style={[prepStyles.summaryTile, { backgroundColor: IOS_COLORS.blueLight }]}>
+          <Text style={prepStyles.summaryLabel}>院内配送</Text>
+          <Text style={[prepStyles.summaryValue, { color: IOS_COLORS.blue }]}>
+            {hospitalCount}
+            <Text style={prepStyles.summaryUnit}> 单</Text>
+          </Text>
+          <Text style={prepStyles.summarySub}>门诊 / 病区</Text>
+        </View>
+        <View style={[prepStyles.summaryTile, { backgroundColor: '#E8F8ED' }]}>
+          <Text style={prepStyles.summaryLabel}>院外配送</Text>
+          <Text style={[prepStyles.summaryValue, { color: '#34C759' }]}>
+            {outsideCount}
+            <Text style={prepStyles.summaryUnit}> 单</Text>
+          </Text>
+          <Text style={prepStyles.summarySub}>家庭地址</Text>
+        </View>
+      </View>
+
+      {lunch.length > 0 && (
+        <View style={prepStyles.mealBlock}>
+          <View style={prepStyles.mealHeader}>
+            <Text style={prepStyles.mealTitle}>午餐 · 待送达</Text>
+            <Text style={prepStyles.mealCount}>{lunch.length} 单</Text>
+          </View>
+          {lunch.map((o) => (
+            <DeliveryCard
+              key={o.id}
+              order={o}
+              onConfirm={() => onMarkDelivered(o.id)}
+              onOpen={() => onOpenDetail(o)}
+            />
+          ))}
+        </View>
+      )}
+
+      {dinner.length > 0 && (
+        <View style={prepStyles.mealBlock}>
+          <View style={prepStyles.mealHeader}>
+            <Text style={prepStyles.mealTitle}>晚餐 · 待送达</Text>
+            <Text style={prepStyles.mealCount}>{dinner.length} 单</Text>
+          </View>
+          {dinner.map((o) => (
+            <DeliveryCard
+              key={o.id}
+              order={o}
+              onConfirm={() => onMarkDelivered(o.id)}
+              onOpen={() => onOpenDetail(o)}
+            />
+          ))}
+        </View>
+      )}
+
+      {fulfilled.length === 0 && (
+        <View style={prepStyles.empty}>
+          <Ionicons name="bicycle-outline" size={48} color={IOS_COLORS.labelTertiary} />
+          <Text style={prepStyles.emptyTitle}>当前没有待送达订单</Text>
+          <Text style={prepStyles.emptySub}>请去「出餐」页面先打包出餐</Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function DeliveryCard({
+  order,
+  onConfirm,
+  onOpen,
+}: {
+  order: MockOrder;
+  onConfirm: () => void;
+  onOpen: () => void;
+}) {
+  const member = MOCK_MEMBERS.find((m) => m.id === order.member_id);
+  const address = member?.address ?? (order.is_hospital ? '院内' : '未知地址');
+  return (
+    <View style={prepStyles.card}>
+      <Pressable style={prepStyles.cardBody} onPress={onOpen}>
+        <View style={[prepStyles.cardAvatarLg, { backgroundColor: order.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+          <Text style={prepStyles.cardAvatarTextLg}>
+            {(order.member_nickname || order.member_name)[0]}
+          </Text>
+        </View>
+        <View style={prepStyles.cardContent}>
+          <View style={prepStyles.cardTop}>
+            <Text style={prepStyles.cardName}>{order.member_nickname || order.member_name}</Text>
+            {order.is_hospital ? (
+              <View style={prepStyles.tag}><Text style={prepStyles.tagText}>院内</Text></View>
+            ) : (
+              <View style={[prepStyles.tag, { backgroundColor: '#E8F8ED' }]}>
+                <Text style={[prepStyles.tagText, { color: '#34C759' }]}>院外</Text>
+              </View>
+            )}
+          </View>
+          <View style={prepStyles.addressRow}>
+            <Ionicons name="location-outline" size={15} color={IOS_COLORS.labelSecondary} />
+            <Text style={prepStyles.addressText} numberOfLines={2}>
+              {address}
+            </Text>
+          </View>
+          <Text style={prepStyles.cardMeta}>
+            {order.meal_type === 'lunch' ? '午餐' : '晚餐'} · {order.quantity} 份
+            {member?.phone ? `  ·  ${member.phone}` : ''}
+          </Text>
+          {order.notes ? (
+            <View style={prepStyles.noteBox}>
+              <Text style={prepStyles.noteText}>备注：{order.notes}</Text>
+            </View>
+          ) : null}
+        </View>
+      </Pressable>
+      <Pressable
+        style={({ pressed }) => [
+          prepStyles.sideConfirm,
+          { backgroundColor: '#34C759' },
+          pressed && { opacity: 0.85 },
+        ]}
+        onPress={onConfirm}
+      >
+        <Ionicons name="checkmark-done" size={22} color="#fff" />
+        <Text style={prepStyles.sideConfirmText}>确认{'\n'}送达</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ============================================================
+// SummaryItem
+// ============================================================
 function SummaryItem({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <View style={styles.summaryItem}>
@@ -139,30 +529,35 @@ function SummaryItem({ label, value, color }: { label: string; value: string; co
   );
 }
 
-function OrderRow({ order, isLast }: { order: MockOrder; isLast: boolean }) {
+// ============================================================
+// OrderRow
+// ============================================================
+function OrderRow({
+  order, isLast, onPress,
+}: {
+  order: MockOrder; isLast: boolean; onPress: () => void;
+}) {
   const s = STATUS_MAP[order.status];
-  const isAdhoc = !order.card_type;
+  const isAdhoc = order.card_type === null;
 
   return (
     <Pressable
+      onPress={onPress}
       style={({ pressed }) => [
         styles.orderRow,
         isLast && styles.orderRowLast,
         pressed && { backgroundColor: IOS_COLORS.fillLight },
       ]}
     >
-      {/* 左侧：会员信息 */}
       <View style={[styles.orderAvatar, { backgroundColor: order.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
         <Text style={styles.orderAvatarText}>
-          {order.member_nickname?.[0] ?? order.member_name[0]}
+          {(order.member_nickname || order.member_name)[0]}
         </Text>
       </View>
 
       <View style={styles.orderContent}>
         <View style={styles.orderTop}>
-          <Text style={styles.orderName}>
-            {order.member_nickname || order.member_name}
-          </Text>
+          <Text style={styles.orderName}>{order.member_nickname || order.member_name}</Text>
           {order.is_hospital && (
             <View style={styles.hospitalBadge}><Text style={styles.hospitalText}>院内</Text></View>
           )}
@@ -171,7 +566,6 @@ function OrderRow({ order, isLast }: { order: MockOrder; isLast: boolean }) {
           </View>
         </View>
 
-        {/* 卡/散餐类型 */}
         <View style={styles.orderMeta}>
           {isAdhoc ? (
             <Text style={styles.adhocTag}>散餐 ¥{order.amount}</Text>
@@ -181,91 +575,982 @@ function OrderRow({ order, isLast }: { order: MockOrder; isLast: boolean }) {
           <Text style={styles.orderQty}>{order.quantity} 份</Text>
         </View>
 
-        {/* 忌口 / 备注 */}
-        {order.dietary_notes ? (
-          <Text style={styles.orderNote}>忌：{order.dietary_notes}</Text>
-        ) : null}
-        {order.notes ? (
-          <Text style={styles.orderNote}>备注：{order.notes}</Text>
-        ) : null}
+        {order.dietary_notes ? <Text style={styles.orderNote}>忌：{order.dietary_notes}</Text> : null}
+        {order.notes          ? <Text style={styles.orderNote}>备注：{order.notes}</Text>       : null}
       </View>
+
+      <Ionicons name="chevron-forward" size={18} color={IOS_COLORS.labelTertiary} style={styles.rowChevron} />
     </Pressable>
   );
 }
 
+// ============================================================
+// EntryPanel — 快速录入（会员餐 / 散餐），内嵌在「录入」Tab 中
+// ============================================================
+type EntryMode = 'member' | 'adhoc';
+
+function EntryPanel({
+  onAdd,
+  onJumpToOverview,
+}: {
+  onAdd: (orders: Omit<MockOrder, 'id'>[]) => void;
+  onJumpToOverview?: () => void;
+}) {
+  const [toast, setToast] = useState<string | null>(null);
+  const [mode, setMode] = useState<EntryMode>('member');
+
+  // 会员餐 state
+  const [memberQuery,    setMemberQuery]    = useState('');
+  const [selectedMember, setSelectedMember] = useState<typeof MOCK_MEMBERS[0] | null>(null);
+  const [lunchQty,       setLunchQty]       = useState(0);
+  const [dinnerQty,      setDinnerQty]      = useState(0);
+  const [memberNotes,    setMemberNotes]    = useState('');
+
+  // 散餐 state
+  const [adhocName,     setAdhocName]     = useState('');
+  const [adhocMeal,     setAdhocMeal]     = useState<'lunch' | 'dinner'>('lunch');
+  const [adhocQty,      setAdhocQty]      = useState(1);
+  const [adhocPrice,    setAdhocPrice]    = useState(String(ADHOC_DEFAULT_PRICE));
+  const [adhocHospital, setAdhocHospital] = useState(false);
+  const [adhocNotes,    setAdhocNotes]    = useState('');
+
+  const q = memberQuery.trim();
+  const filteredMembers = q
+    ? MOCK_MEMBERS.filter(
+        (m) =>
+          m.name.includes(q) ||
+          m.nickname.includes(q) ||
+          m.phone.includes(q),
+      ).slice(0, 8)
+    : [];
+  const dropdownOpen = !selectedMember && q.length > 0;
+
+  const reset = () => {
+    setMode('member');
+    setMemberQuery(''); setSelectedMember(null);
+    setLunchQty(0); setDinnerQty(0); setMemberNotes('');
+    setAdhocName(''); setAdhocMeal('lunch'); setAdhocQty(1);
+    setAdhocPrice(String(ADHOC_DEFAULT_PRICE)); setAdhocHospital(false); setAdhocNotes('');
+  };
+
+  const flashToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
+
+  const handleSubmitMember = () => {
+    if (!selectedMember || lunchQty + dinnerQty === 0) return;
+    const base = {
+      member_id:       selectedMember.id,
+      member_name:     selectedMember.name,
+      member_nickname: selectedMember.nickname,
+      order_date:      todayStr(),
+      is_hospital:     selectedMember.is_hospital,
+      dietary_notes:   selectedMember.dietary_notes,
+      notes:           memberNotes.trim(),
+      card_type:       selectedMember.active_card?.card_name ?? '会员',
+      status:          'pending' as const,
+    };
+    const toAdd: Omit<MockOrder, 'id'>[] = [];
+    if (lunchQty  > 0) toAdd.push({ ...base, meal_type: 'lunch',  quantity: lunchQty,  amount: 0 });
+    if (dinnerQty > 0) toAdd.push({ ...base, meal_type: 'dinner', quantity: dinnerQty, amount: 0 });
+    const name = selectedMember.nickname || selectedMember.name;
+    onAdd(toAdd);
+    reset();
+    flashToast(`已为 ${name} 录入 ${lunchQty + dinnerQty} 份`);
+  };
+
+  const handleSubmitAdhoc = () => {
+    if (!adhocName.trim() || adhocQty < 1) return;
+    const unitPrice = parseFloat(adhocPrice) || ADHOC_DEFAULT_PRICE;
+    const name = adhocName.trim();
+    onAdd([{
+      member_id:       0,
+      member_name:     name,
+      member_nickname: name,
+      order_date:      todayStr(),
+      meal_type:       adhocMeal,
+      quantity:        adhocQty,
+      amount:          unitPrice * adhocQty,
+      status:          'pending',
+      is_hospital:     adhocHospital,
+      dietary_notes:   '',
+      notes:           adhocNotes.trim(),
+      card_type:       null,
+    }]);
+    reset();
+    flashToast(`已录入散餐 ${name} ${adhocQty} 份`);
+  };
+
+  const canSubmitMember = !!selectedMember && lunchQty + dinnerQty > 0;
+  const canSubmitAdhoc  = adhocName.trim().length > 0 && adhocQty >= 1;
+  const canSubmit       = mode === 'member' ? canSubmitMember : canSubmitAdhoc;
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* 模式切换（会员餐 / 散餐） */}
+      <View style={eStyles.modeRow}>
+        <View style={eStyles.modeGroup}>
+          {(['member', 'adhoc'] as const).map((m) => (
+            <Pressable
+              key={m}
+              style={[eStyles.modeBtn, mode === m && eStyles.modeBtnActive]}
+              onPress={() => setMode(m)}
+            >
+              <Text style={[eStyles.modeBtnText, mode === m && eStyles.modeBtnTextActive]}>
+                {m === 'member' ? '会员餐' : '散餐'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={eStyles.modeHint}>
+          {mode === 'member' ? '从会员档案中选择，自动扣卡' : '无需会员账户，现金收费'}
+        </Text>
+      </View>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={eStyles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+            {mode === 'member' ? (
+              /* ===== 会员餐 ===== */
+              <>
+                <Text style={eStyles.sectionLabel}>选择会员</Text>
+                <View style={eStyles.searchBox}>
+                  <TextInput
+                    style={eStyles.searchInput}
+                    placeholder="姓名 / 昵称 / 手机号搜索"
+                    placeholderTextColor={IOS_COLORS.labelTertiary}
+                    value={memberQuery}
+                    onChangeText={(q) => {
+                      setMemberQuery(q);
+                      if (selectedMember) setSelectedMember(null);
+                    }}
+                    clearButtonMode="while-editing"
+                  />
+                </View>
+
+                {/* 已选会员卡片 */}
+                {selectedMember ? (
+                  <View style={eStyles.selectedMemberCard}>
+                    <View style={[eStyles.selAvatar, { backgroundColor: selectedMember.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+                      <Text style={eStyles.selAvatarText}>
+                        {(selectedMember.nickname || selectedMember.name)[0]}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={eStyles.selName}>
+                        {selectedMember.name}「{selectedMember.nickname}」
+                      </Text>
+                      <Text style={eStyles.selSub}>
+                        {selectedMember.is_hospital ? '院内' : '院外'} ·{' '}
+                        {selectedMember.active_card?.card_name ?? '无有效卡'} · 剩{' '}
+                        {selectedMember.active_card?.remaining_meals ?? 0} 份
+                      </Text>
+                      {selectedMember.dietary_notes ? (
+                        <Text style={eStyles.selDiet}>忌：{selectedMember.dietary_notes}</Text>
+                      ) : null}
+                    </View>
+                    <Pressable
+                      onPress={() => { setSelectedMember(null); setMemberQuery(''); }}
+                    >
+                      <Text style={eStyles.changeBtn}>更换</Text>
+                    </Pressable>
+                  </View>
+                ) : dropdownOpen ? (
+                  /* 搜索结果下拉 */
+                  filteredMembers.length > 0 ? (
+                    <View style={eStyles.memberList}>
+                      {filteredMembers.map((m, i) => (
+                        <Pressable
+                          key={m.id}
+                          style={({ pressed }) => [
+                            eStyles.memberRow,
+                            i === filteredMembers.length - 1 && eStyles.memberRowLast,
+                            pressed && { backgroundColor: IOS_COLORS.fillLight },
+                          ]}
+                          onPress={() => {
+                            setSelectedMember(m);
+                            setMemberQuery(m.nickname || m.name);
+                          }}
+                        >
+                          <View style={[eStyles.memberAvatar, { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+                            <Text style={eStyles.memberAvatarText}>{(m.nickname || m.name)[0]}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={eStyles.memberName}>{m.name}</Text>
+                            <Text style={eStyles.memberNick}>
+                              「{m.nickname}」· {m.is_hospital ? '院内' : '院外'}
+                            </Text>
+                          </View>
+                          {m.active_card ? (
+                            <Text style={eStyles.memberCardBadge}>
+                              {m.active_card.card_name} 剩{m.active_card.remaining_meals}份
+                            </Text>
+                          ) : (
+                            <Text style={eStyles.memberNoCard}>无卡</Text>
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={eStyles.dropdownEmpty}>
+                      <Text style={eStyles.dropdownEmptyText}>
+                        没有匹配的会员
+                      </Text>
+                    </View>
+                  )
+                ) : (
+                  <Text style={eStyles.searchHint}>
+                    输入姓名、昵称或手机号开始搜索
+                  </Text>
+                )}
+
+                <View style={eStyles.divider} />
+                <Text style={eStyles.sectionLabel}>份数</Text>
+                <View style={eStyles.qtySection}>
+                  <QtyRow label="午餐份数" value={lunchQty}  onChange={setLunchQty} />
+                  <QtyRow label="晚餐份数" value={dinnerQty} onChange={setDinnerQty} />
+                </View>
+
+                <View style={eStyles.notesBox}>
+                  <TextInput
+                    style={eStyles.notesInput}
+                    placeholder="备注（可选，如：今日忌辣）"
+                    placeholderTextColor={IOS_COLORS.labelTertiary}
+                    value={memberNotes}
+                    onChangeText={setMemberNotes}
+                    multiline
+                    numberOfLines={2}
+                  />
+                </View>
+              </>
+            ) : (
+              /* ===== 散餐 ===== */
+              <>
+                <Text style={eStyles.sectionLabel}>顾客信息</Text>
+                <View style={eStyles.inlineCard}>
+                  <View style={eStyles.fieldRow}>
+                    <Text style={eStyles.fieldLabel}>姓名 / 称呼</Text>
+                    <TextInput
+                      style={eStyles.fieldInput}
+                      placeholder="必填"
+                      placeholderTextColor={IOS_COLORS.labelTertiary}
+                      value={adhocName}
+                      onChangeText={setAdhocName}
+                    />
+                  </View>
+                  <View style={eStyles.fieldDivider} />
+                  <View style={eStyles.fieldRow}>
+                    <Text style={eStyles.fieldLabel}>类型</Text>
+                    <View style={eStyles.toggleGroup}>
+                      {([false, true] as const).map((v) => (
+                        <Pressable
+                          key={String(v)}
+                          style={[eStyles.toggleBtn, adhocHospital === v && eStyles.toggleBtnActive]}
+                          onPress={() => setAdhocHospital(v)}
+                        >
+                          <Text style={[eStyles.toggleText, adhocHospital === v && eStyles.toggleTextActive]}>
+                            {v ? '院内' : '院外'}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <Text style={[eStyles.sectionLabel, { marginTop: 20 }]}>餐次与数量</Text>
+                <View style={eStyles.inlineCard}>
+                  <View style={eStyles.fieldRow}>
+                    <Text style={eStyles.fieldLabel}>餐次</Text>
+                    <View style={eStyles.toggleGroup}>
+                      {([['lunch', '午餐'], ['dinner', '晚餐']] as const).map(([v, label]) => (
+                        <Pressable
+                          key={v}
+                          style={[eStyles.toggleBtn, adhocMeal === v && eStyles.toggleBtnActive]}
+                          onPress={() => setAdhocMeal(v)}
+                        >
+                          <Text style={[eStyles.toggleText, adhocMeal === v && eStyles.toggleTextActive]}>
+                            {label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                  <View style={eStyles.fieldDivider} />
+                  <View style={eStyles.qtySection}>
+                    <QtyRow label="份数" value={adhocQty} onChange={setAdhocQty} min={1} />
+                  </View>
+                  <View style={eStyles.fieldDivider} />
+                  <View style={eStyles.fieldRow}>
+                    <Text style={eStyles.fieldLabel}>单价（元）</Text>
+                    <TextInput
+                      style={[eStyles.fieldInput, { textAlign: 'right' }]}
+                      value={adhocPrice}
+                      onChangeText={setAdhocPrice}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                </View>
+
+                {/* 合计 */}
+                <View style={eStyles.adhocTotal}>
+                  <Text style={eStyles.adhocTotalLabel}>合计应收</Text>
+                  <Text style={eStyles.adhocTotalValue}>
+                    ¥{((parseFloat(adhocPrice) || 0) * adhocQty).toFixed(0)}
+                  </Text>
+                </View>
+
+                <View style={eStyles.notesBox}>
+                  <TextInput
+                    style={eStyles.notesInput}
+                    placeholder="备注（可选）"
+                    placeholderTextColor={IOS_COLORS.labelTertiary}
+                    value={adhocNotes}
+                    onChangeText={setAdhocNotes}
+                    multiline
+                    numberOfLines={2}
+                  />
+                </View>
+              </>
+            )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* 底部提交条 */}
+      <View style={eStyles.submitBar}>
+        <View style={{ flex: 1 }}>
+          {mode === 'member' && selectedMember ? (
+            <>
+              <Text style={eStyles.submitMain}>
+                {selectedMember.nickname || selectedMember.name}
+              </Text>
+              <Text style={eStyles.submitSub}>
+                午 {lunchQty} · 晚 {dinnerQty} · 共 {lunchQty + dinnerQty} 份
+              </Text>
+            </>
+          ) : mode === 'adhoc' && adhocName.trim() ? (
+            <>
+              <Text style={eStyles.submitMain}>{adhocName.trim()}</Text>
+              <Text style={eStyles.submitSub}>
+                {adhocMeal === 'lunch' ? '午餐' : '晚餐'} · {adhocQty} 份 · ¥
+                {((parseFloat(adhocPrice) || 0) * adhocQty).toFixed(0)}
+              </Text>
+            </>
+          ) : (
+            <Text style={eStyles.submitHint}>
+              {mode === 'member' ? '请选择会员并录入份数' : '请填写顾客姓名与份数'}
+            </Text>
+          )}
+        </View>
+        <Pressable
+          style={[eStyles.submitBtn, !canSubmit && eStyles.submitBtnDisabled]}
+          disabled={!canSubmit}
+          onPress={mode === 'member' ? handleSubmitMember : handleSubmitAdhoc}
+        >
+          <Text style={eStyles.submitBtnText}>确认录入</Text>
+        </Pressable>
+      </View>
+
+      {/* Toast */}
+      {toast ? (
+        <View style={eStyles.toast}>
+          <Ionicons name="checkmark-circle" size={16} color="#fff" />
+          <Text style={eStyles.toastText}>{toast}</Text>
+          {onJumpToOverview ? (
+            <Pressable onPress={onJumpToOverview} hitSlop={8}>
+              <Text style={eStyles.toastLink}>查看总览</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ============================================================
+// QtyRow — stepper 组件
+// ============================================================
+function QtyRow({
+  label, value, onChange, min = 0,
+}: {
+  label: string; value: number; onChange: (v: number) => void; min?: number;
+}) {
+  return (
+    <View style={eStyles.qtyRow}>
+      <Text style={eStyles.qtyLabel}>{label}</Text>
+      <View style={eStyles.qtyControls}>
+        <Pressable
+          style={[eStyles.qtyBtn, value <= min && eStyles.qtyBtnDisabled]}
+          onPress={() => onChange(Math.max(min, value - 1))}
+        >
+          <Text style={eStyles.qtyBtnText}>−</Text>
+        </Pressable>
+        <Text style={eStyles.qtyValue}>{value}</Text>
+        <Pressable style={eStyles.qtyBtn} onPress={() => onChange(value + 1)}>
+          <Text style={eStyles.qtyBtnText}>＋</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ============================================================
+// StatusSheet — 点击订单行更新出餐状态
+// ============================================================
+const STATUS_FLOW = [
+  { key: 'pending'   as const, label: '待出餐', color: IOS_COLORS.orange,         bg: '#FFF4E5',            icon: 'time-outline' as const },
+  { key: 'fulfilled' as const, label: '已出餐', color: IOS_COLORS.blue,           bg: IOS_COLORS.blueLight, icon: 'checkmark-circle-outline' as const },
+  { key: 'delivered' as const, label: '已送达', color: '#34C759',                  bg: '#E8F8ED',            icon: 'checkmark-done-outline' as const },
+  { key: 'cancelled' as const, label: '已取消', color: IOS_COLORS.labelSecondary, bg: IOS_COLORS.fillLight, icon: 'close-circle-outline' as const },
+];
+
+function StatusSheet({
+  order, onClose, onUpdate,
+}: {
+  order: MockOrder;
+  onClose: () => void;
+  onUpdate: (id: number, status: MockOrder['status']) => void;
+}) {
+  const isAdhoc = order.card_type === null;
+  const cur = STATUS_MAP[order.status];
+
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={sStyles.overlay} onPress={onClose} />
+      <View style={sStyles.sheet}>
+        {/* 拖拽指示条 */}
+        <View style={sStyles.handle} />
+
+        {/* 订单信息 */}
+        <View style={sStyles.orderInfo}>
+          <View style={sStyles.orderInfoLeft}>
+            <View style={[sStyles.orderAvatar, { backgroundColor: order.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+              <Text style={sStyles.orderAvatarText}>
+                {(order.member_nickname || order.member_name)[0]}
+              </Text>
+            </View>
+            <View>
+              <Text style={sStyles.orderName}>{order.member_nickname || order.member_name}</Text>
+              <Text style={sStyles.orderSub}>
+                {order.meal_type === 'lunch' ? '午餐' : '晚餐'} · {order.quantity} 份
+                {' · '}{isAdhoc ? `散餐 ¥${order.amount}` : order.card_type}
+                {order.is_hospital ? ' · 院内' : ''}
+              </Text>
+            </View>
+          </View>
+          <View style={[sStyles.curStatusBadge, { backgroundColor: cur.bg }]}>
+            <Text style={[sStyles.curStatusText, { color: cur.color }]}>{cur.label}</Text>
+          </View>
+        </View>
+
+        {order.dietary_notes || order.notes ? (
+          <View style={sStyles.notesRow}>
+            <Text style={sStyles.notesText}>
+              {[
+                order.dietary_notes && `忌：${order.dietary_notes}`,
+                order.notes,
+              ].filter(Boolean).join('  ·  ')}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={sStyles.divider} />
+        <Text style={sStyles.sectionLabel}>更新出餐状态</Text>
+
+        <View style={sStyles.statusGrid}>
+          {STATUS_FLOW.map((s) => {
+            const isCurrent = order.status === s.key;
+            return (
+              <Pressable
+                key={s.key}
+                style={({ pressed }) => [
+                  sStyles.statusBtn,
+                  { backgroundColor: s.bg, borderColor: isCurrent ? s.color : 'transparent' },
+                  isCurrent && sStyles.statusBtnCurrent,
+                  pressed && { opacity: 0.75 },
+                ]}
+                onPress={() => onUpdate(order.id, s.key)}
+              >
+                <Ionicons name={s.icon} size={20} color={s.color} style={sStyles.statusBtnIcon} />
+                <Text style={[sStyles.statusBtnLabel, { color: s.color }]}>{s.label}</Text>
+                {isCurrent && <Text style={[sStyles.statusBtnCurDot, { color: s.color }]}>当前</Text>}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Pressable style={sStyles.closeBtn} onPress={onClose}>
+          <Text style={sStyles.closeBtnText}>取消</Text>
+        </Pressable>
+      </View>
+    </Modal>
+  );
+}
+
+// ============================================================
+// Styles — main screen
+// ============================================================
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
 
-  nav: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    backgroundColor: IOS_COLORS.card,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
+  headerAction: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
+  headerActionText: { fontSize: 15, color: IOS_COLORS.blue, fontWeight: '500' },
+
+  // ======= 二级导航 Tab Bar =======
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderRadius: 14,
+    padding: 4,
   },
-  backText: { fontSize: 17, color: IOS_COLORS.blue, width: 60 },
-  navTitle: { fontSize: 16, fontWeight: '600', color: IOS_COLORS.label, textAlign: 'center' },
-  navDate: { fontSize: 12, color: IOS_COLORS.labelSecondary, textAlign: 'center' },
-  addBtn: { fontSize: 17, color: IOS_COLORS.blue, width: 60, textAlign: 'right' },
+  tabItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  tabItemActive: {
+    backgroundColor: IOS_COLORS.blueLight,
+  },
+  tabLabel: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+  tabLabelActive: { color: IOS_COLORS.blue, fontWeight: '700' },
 
   summaryBar: {
-    flexDirection: 'row', backgroundColor: IOS_COLORS.card,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderRadius: 14,
+    marginHorizontal: 12, marginBottom: 10,
     paddingVertical: 14, paddingHorizontal: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
   },
-  summaryItem: { flex: 1, alignItems: 'center', gap: 2 },
-  summaryValue: { fontSize: 18, fontWeight: '700' },
-  summaryLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
-  summaryDivider: { width: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginVertical: 4 },
+  summaryItem:    { flex: 1, alignItems: 'center', gap: 2 },
+  summaryValue:   { fontSize: 18, fontWeight: '700' },
+  summaryLabel:   { fontSize: 12, color: IOS_COLORS.labelSecondary },
+  summaryDivider: { width: StyleSheet.hairlineWidth, backgroundColor: 'rgba(0,0,0,0.08)', marginVertical: 4 },
 
   filterSection: {
-    backgroundColor: IOS_COLORS.card,
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
+    paddingHorizontal: 12, paddingVertical: 8, gap: 8,
   },
-  filterRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  chip: {
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 16,
-    backgroundColor: IOS_COLORS.fillLight,
+  segmentedBar: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(118,118,128,0.12)',
+    borderRadius: 10,
+    padding: 2,
   },
-  chipActive: { backgroundColor: IOS_COLORS.blue },
-  chipStatusActive: { backgroundColor: '#34C759' },
-  chipText: { fontSize: 13, color: IOS_COLORS.labelSecondary },
-  chipTextActive: { color: '#fff', fontWeight: '600' },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  segmentActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  segmentText: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+  segmentTextActive: { color: IOS_COLORS.label, fontWeight: '600' },
+
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  pillGap: { flexBasis: '100%', height: 0 },
+  pill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+  },
+  pillStatusActive: { backgroundColor: '#34C759' },
+  pillTypeActive:   { backgroundColor: '#FF9500' },
+  pillText:         { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+  pillTextActive:   { color: '#fff', fontWeight: '600' },
 
   sectionHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 10,
-    backgroundColor: IOS_COLORS.systemGrouped,
+    paddingHorizontal: 16, paddingVertical: 8, marginTop: 4,
   },
-  sectionHeaderTitle: { fontSize: 16, fontWeight: '700', color: IOS_COLORS.label },
-  sectionCount: { fontSize: 14, color: IOS_COLORS.labelSecondary },
+  sectionHeaderTitle: { fontSize: 13, fontWeight: '700', color: IOS_COLORS.labelSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
+  sectionCount:       { fontSize: 13, color: IOS_COLORS.labelSecondary },
 
   orderRow: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: IOS_COLORS.card, paddingHorizontal: 16, paddingVertical: 14, gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderRadius: 14,
+    marginHorizontal: 12, marginBottom: 8,
+    paddingHorizontal: 14, paddingVertical: 12, gap: 12,
   },
-  orderRowLast: { borderBottomWidth: 0 },
-
+  orderRowLast: {},
   orderAvatar: {
     width: 44, height: 44, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   orderAvatarText: { fontSize: 18, fontWeight: '600', color: IOS_COLORS.blue },
-  orderContent: { flex: 1, gap: 4 },
-  orderTop: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  orderName: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
-  hospitalBadge: { backgroundColor: IOS_COLORS.blueLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  hospitalText: { fontSize: 11, color: IOS_COLORS.blue, fontWeight: '600' },
-  statusBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  statusText: { fontSize: 11, fontWeight: '600' },
-  orderMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cardTag: { fontSize: 12, color: IOS_COLORS.labelSecondary, backgroundColor: IOS_COLORS.fillLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  orderContent:    { flex: 1, gap: 4 },
+  orderTop:        { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  orderName:       { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
+  hospitalBadge:   { backgroundColor: IOS_COLORS.blueLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  hospitalText:    { fontSize: 11, color: IOS_COLORS.blue, fontWeight: '600' },
+  statusBadge:     { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  statusText:      { fontSize: 11, fontWeight: '600' },
+  orderMeta:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardTag:  { fontSize: 12, color: IOS_COLORS.labelSecondary, backgroundColor: IOS_COLORS.fillLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   adhocTag: { fontSize: 12, color: '#FF9500', backgroundColor: '#FFF4E5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   orderQty: { fontSize: 14, fontWeight: '600', color: IOS_COLORS.label },
   orderNote: { fontSize: 13, color: IOS_COLORS.orange, lineHeight: 18 },
+  rowChevron: { marginLeft: 4 },
 
-  empty: { alignItems: 'center', paddingTop: 80, gap: 8 },
-  emptyIcon: { fontSize: 40 },
+  empty:     { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyText: { fontSize: 16, color: IOS_COLORS.labelSecondary },
+  emptyLink: { fontSize: 16, color: IOS_COLORS.blue },
+});
+
+// ============================================================
+// Styles — EntrySheet
+// ============================================================
+const eStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 14,
+    backgroundColor: IOS_COLORS.card,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
+  },
+  cancel:  { fontSize: 17, color: IOS_COLORS.labelSecondary },
+  title:   { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
+  confirm: { fontSize: 17, color: IOS_COLORS.blue, fontWeight: '600' },
+
+  modeRow: {
+    backgroundColor: IOS_COLORS.card,
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
+    gap: 6,
+  },
+  modeGroup: {
+    flexDirection: 'row',
+    backgroundColor: IOS_COLORS.fillMedium, borderRadius: 10, padding: 3, alignSelf: 'flex-start',
+  },
+  modeBtn:         { paddingHorizontal: 20, paddingVertical: 7, borderRadius: 8 },
+  modeBtnActive:   { backgroundColor: IOS_COLORS.card },
+  modeBtnText:     { fontSize: 15, color: IOS_COLORS.labelSecondary },
+  modeBtnTextActive: { color: IOS_COLORS.label, fontWeight: '600' },
+  modeHint: { fontSize: 12, color: IOS_COLORS.labelTertiary },
+
+  scroll: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
+
+  sectionLabel: {
+    fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary,
+    textTransform: 'uppercase', letterSpacing: 0.4,
+    marginBottom: 8, paddingLeft: 4,
+  },
+
+  searchBox: {
+    backgroundColor: IOS_COLORS.card, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 2, marginBottom: 10,
+  },
+  searchInput: {
+    fontSize: 15, color: IOS_COLORS.label, paddingVertical: 10,
+  },
+
+  memberList: {
+    backgroundColor: IOS_COLORS.card, borderRadius: 14, overflow: 'hidden', marginBottom: 4,
+  },
+  memberRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
+  },
+  memberRowLast: { borderBottomWidth: 0 },
+  memberAvatar:     { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  memberAvatarText: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.blue },
+  memberName:       { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
+  memberNick:       { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 1 },
+  memberCardBadge:  { fontSize: 12, color: IOS_COLORS.blue, backgroundColor: IOS_COLORS.blueLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  memberNoCard:     { fontSize: 12, color: IOS_COLORS.labelTertiary },
+
+  selectedMemberCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: IOS_COLORS.blueLight, borderRadius: 14,
+    padding: 14, marginBottom: 4,
+  },
+
+  searchHint: {
+    fontSize: 13, color: IOS_COLORS.labelTertiary,
+    paddingHorizontal: 14, paddingVertical: 14,
+    textAlign: 'center',
+  },
+  dropdownEmpty: {
+    backgroundColor: IOS_COLORS.card, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 18,
+    alignItems: 'center',
+  },
+  dropdownEmptyText: { fontSize: 13, color: IOS_COLORS.labelSecondary },
+  selAvatar:     { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  selAvatarText: { fontSize: 18, fontWeight: '700', color: IOS_COLORS.blue },
+  selName:       { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
+  selSub:        { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
+  selDiet:       { fontSize: 12, color: IOS_COLORS.orange, marginTop: 2 },
+  changeBtn:     { fontSize: 15, color: IOS_COLORS.blue },
+
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginVertical: 16 },
+
+  qtySection: { backgroundColor: IOS_COLORS.card, borderRadius: 14, overflow: 'hidden', marginBottom: 4 },
+  qtyRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
+  },
+  qtyLabel:        { fontSize: 15, color: IOS_COLORS.label, fontWeight: '500' },
+  qtyControls:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  qtyBtn:          { width: 36, height: 36, borderRadius: 18, backgroundColor: IOS_COLORS.blue, alignItems: 'center', justifyContent: 'center' },
+  qtyBtnDisabled:  { backgroundColor: IOS_COLORS.fillMedium },
+  qtyBtnText:      { fontSize: 20, color: '#fff', fontWeight: '500', lineHeight: 24 },
+  qtyValue:        { fontSize: 20, fontWeight: '700', color: IOS_COLORS.label, minWidth: 32, textAlign: 'center' },
+
+  notesBox: {
+    backgroundColor: IOS_COLORS.card, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 4, marginTop: 12,
+  },
+  notesInput: { fontSize: 15, color: IOS_COLORS.label, paddingVertical: 10, minHeight: 60 },
+
+  // 散餐专用
+  inlineCard: { backgroundColor: IOS_COLORS.card, borderRadius: 14, overflow: 'hidden' },
+  fieldRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 14,
+  },
+  fieldDivider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginLeft: 16 },
+  fieldLabel: { fontSize: 15, color: IOS_COLORS.label },
+  fieldInput: { fontSize: 15, color: IOS_COLORS.label, flex: 1, textAlign: 'right', paddingLeft: 8 },
+
+  toggleGroup: {
+    flexDirection: 'row',
+    backgroundColor: IOS_COLORS.fillMedium, borderRadius: 8, padding: 2,
+  },
+  toggleBtn:         { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 6 },
+  toggleBtnActive:   { backgroundColor: IOS_COLORS.card },
+  toggleText:        { fontSize: 14, color: IOS_COLORS.labelSecondary },
+  toggleTextActive:  { color: IOS_COLORS.label, fontWeight: '600' },
+
+  adhocTotal: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
+    backgroundColor: IOS_COLORS.blueLight, borderRadius: 14, marginTop: 10,
+  },
+  adhocTotalLabel: { fontSize: 15, color: IOS_COLORS.blue },
+  adhocTotalValue: { fontSize: 24, fontWeight: '700', color: IOS_COLORS.blue },
+
+  // —— 底部提交条（inline 录入）——
+  submitBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  submitMain: { fontSize: 15, fontWeight: '700', color: IOS_COLORS.label },
+  submitSub: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
+  submitHint: { fontSize: 13, color: IOS_COLORS.labelTertiary },
+  submitBtn: {
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderRadius: 12, backgroundColor: IOS_COLORS.blue,
+    alignItems: 'center', justifyContent: 'center', minWidth: 110,
+  },
+  submitBtnDisabled: { backgroundColor: IOS_COLORS.labelTertiary },
+  submitBtnText: { color: '#fff', fontSize: 15, fontWeight: '700', lineHeight: 15 },
+
+  toast: {
+    position: 'absolute', left: 16, right: 16, bottom: 80,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(52,199,89,0.94)',
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12,
+  },
+  toastText: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
+  toastLink: { color: '#fff', fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
+});
+
+// ============================================================
+// Styles — PrepView / DeliveryView
+// ============================================================
+const prepStyles = StyleSheet.create({
+  scroll: { paddingHorizontal: 12, paddingBottom: 32 },
+
+  summary: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  summaryTile: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 14,
+    gap: 2,
+  },
+  summaryLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+  summaryValue: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5, lineHeight: 32 },
+  summaryUnit:  { fontSize: 14, fontWeight: '500' },
+  summarySub:   { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
+
+  mealBlock: { marginBottom: 18 },
+  mealHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 4, paddingVertical: 8,
+  },
+  mealTitle: { fontSize: 13, fontWeight: '700', color: IOS_COLORS.labelSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
+  mealCount: { fontSize: 13, color: IOS_COLORS.labelSecondary },
+
+  card: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+    minHeight: 110,
+  },
+  cardBody: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingHorizontal: 16, paddingVertical: 16, gap: 14,
+    alignItems: 'flex-start',
+  },
+  cardContent: { flex: 1, gap: 6 },
+  cardAvatarLg: {
+    width: 56, height: 56, borderRadius: 28,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  cardAvatarTextLg: { fontSize: 24, fontWeight: '700', color: IOS_COLORS.blue },
+
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  cardName: { fontSize: 18, fontWeight: '700', color: IOS_COLORS.label },
+
+  metaRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  qtyBig: { fontSize: 24, fontWeight: '700', color: IOS_COLORS.label, letterSpacing: -0.5, lineHeight: 28 },
+  qtyUnit: { fontSize: 14, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+  cardMetaSep: { fontSize: 14, color: IOS_COLORS.labelTertiary, marginHorizontal: 4 },
+  cardMeta: { fontSize: 14, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+
+  tag: {
+    backgroundColor: IOS_COLORS.blueLight,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+  },
+  tagText: { fontSize: 12, fontWeight: '700', color: IOS_COLORS.blue },
+
+  noteBox: {
+    marginTop: 4,
+    backgroundColor: '#FFF8E6',
+    borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 7,
+    gap: 2,
+  },
+  noteText: { fontSize: 13, color: '#8A5A00', lineHeight: 18 },
+
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addressText: { flex: 1, fontSize: 15, color: IOS_COLORS.label, fontWeight: '600', lineHeight: 20 },
+
+  // 右侧确认按钮：纵向贯穿整张卡片高度
+  sideConfirm: {
+    width: 96,
+    backgroundColor: IOS_COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  sideConfirmText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+
+  empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: IOS_COLORS.label },
+  emptySub:   { fontSize: 13, color: IOS_COLORS.labelSecondary },
+});
+
+// ============================================================
+// Styles — StatusSheet
+// ============================================================
+const sStyles = StyleSheet.create({
+  overlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  sheet: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: IOS_COLORS.systemGrouped,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingBottom: 34,
+  },
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: IOS_COLORS.fillMedium,
+    alignSelf: 'center', marginTop: 10, marginBottom: 6,
+  },
+
+  orderInfo: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: IOS_COLORS.card, gap: 10,
+  },
+  orderInfoLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  orderAvatar: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  orderAvatarText: { fontSize: 16, fontWeight: '700', color: IOS_COLORS.blue },
+  orderName: { fontSize: 16, fontWeight: '600', color: IOS_COLORS.label },
+  orderSub:  { fontSize: 13, color: IOS_COLORS.labelSecondary, marginTop: 2 },
+  curStatusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  curStatusText:  { fontSize: 12, fontWeight: '600' },
+
+  notesRow: {
+    paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: IOS_COLORS.card,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: IOS_COLORS.separatorLight,
+  },
+  notesText: { fontSize: 13, color: IOS_COLORS.orange },
+
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginTop: 8 },
+  sectionLabel: {
+    fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary,
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10,
+    textTransform: 'uppercase', letterSpacing: 0.4,
+  },
+
+  statusGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10,
+    paddingHorizontal: 16, paddingBottom: 8,
+  },
+  statusBtn: {
+    flex: 1, minWidth: 130,
+    paddingVertical: 16, paddingHorizontal: 12,
+    borderRadius: 14, alignItems: 'center', gap: 4,
+    borderWidth: 2,
+  },
+  statusBtnCurrent: { borderWidth: 2 },
+  statusBtnIcon:    { marginBottom: 2 },
+  statusBtnLabel:   { fontSize: 14, fontWeight: '600' },
+  statusBtnCurDot:  { fontSize: 11, fontWeight: '500', opacity: 0.8 },
+
+  closeBtn: {
+    marginHorizontal: 16, marginTop: 10,
+    backgroundColor: IOS_COLORS.card, borderRadius: 14,
+    paddingVertical: 16, alignItems: 'center',
+  },
+  closeBtnText: { fontSize: 17, color: IOS_COLORS.label },
 });

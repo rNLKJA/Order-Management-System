@@ -6,13 +6,11 @@
  */
 
 import { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import {
   Text,
   TextInput,
   Button,
-  Divider,
-  useTheme,
   Chip,
   ActivityIndicator,
   Banner,
@@ -21,6 +19,8 @@ import {
 import { useRouter } from 'expo-router';
 import { api } from '../../../api/client';
 import { ordersApi } from '../../../api/orders';
+import { MeshBackground, AppHeader, GlassSurface } from '../../../components/ui';
+import { COLORS, SPACING, RADIUS } from '../../../theme/paperTheme';
 
 interface Member {
   id: number;
@@ -39,7 +39,6 @@ function todayDate(): string {
 }
 
 export default function QuickOrderScreen() {
-  const theme = useTheme();
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -123,67 +122,63 @@ export default function QuickOrderScreen() {
   };
 
   return (
-    <ScrollView
-      style={{ backgroundColor: theme.colors.background }}
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text variant="titleLarge" style={styles.title}>
-        快速录入
-      </Text>
-      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 16 }}>
-        用餐日期：{orderDate}（今天）
-      </Text>
+    <View style={{ flex: 1 }}>
+      <MeshBackground />
+      <SafeAreaView style={{ flex: 1 }}>
+        <AppHeader title="快速录入" subtitle={`用餐日期：${orderDate}（今天）`} onBack={() => router.back()} />
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
       {error && (
         <Banner
           visible
           actions={[{ label: '关闭', onPress: () => setError(null) }]}
           icon="alert"
+          style={{ backgroundColor: 'rgba(255,255,255,0.72)', borderRadius: RADIUS.md, marginBottom: SPACING.md }}
         >
           {error}
         </Banner>
       )}
 
-      {/* 会员搜索 */}
-      <TextInput
-        label="搜索会员"
-        value={searchQuery}
-        onChangeText={handleSearch}
-        mode="outlined"
-        style={styles.input}
-        right={searching ? <TextInput.Icon icon="loading" /> : undefined}
-        placeholder="输入姓名 / 昵称 / 手机"
-      />
+      <GlassSurface style={styles.card}>
+        <TextInput
+          label="搜索会员"
+          value={searchQuery}
+          onChangeText={handleSearch}
+          mode="outlined"
+          style={styles.input}
+          right={searching ? <TextInput.Icon icon="loading" /> : undefined}
+          placeholder="输入姓名 / 昵称 / 手机"
+        />
 
-      {searchResults.length > 0 && (
-        <View style={[styles.dropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outline }]}>
-          {searchResults.map((m) => (
-            <Button
-              key={m.id}
-              onPress={() => handleSelectMember(m)}
-              style={styles.dropdownItem}
-              contentStyle={{ justifyContent: 'flex-start' }}
-            >
-              {m.name}
-              {m.nickname ? `（${m.nickname}）` : ''}
-              {m.is_hospital ? ' 院内' : ''}
-            </Button>
-          ))}
-        </View>
-      )}
+        {searchResults.length > 0 && (
+          <View style={styles.dropdown}>
+            {searchResults.map((m) => (
+              <Button
+                key={m.id}
+                onPress={() => handleSelectMember(m)}
+                style={styles.dropdownItem}
+                contentStyle={{ justifyContent: 'flex-start' }}
+              >
+                {m.name}
+                {m.nickname ? `（${m.nickname}）` : ''}
+                {m.is_hospital ? ' 院内' : ''}
+              </Button>
+            ))}
+          </View>
+        )}
 
-      {selectedMember && (
-        <Chip
-          icon="account-check"
-          onClose={() => { setSelectedMember(null); setSearchQuery(''); }}
-          style={styles.memberChip}
-        >
-          {selectedMember.name} · {selectedMember.is_hospital ? '院内' : '院外'}
-        </Chip>
-      )}
+        {selectedMember && (
+          <Chip
+            icon="account-check"
+            onClose={() => { setSelectedMember(null); setSearchQuery(''); }}
+            style={styles.memberChip}
+          >
+            {selectedMember.name} · {selectedMember.is_hospital ? '院内' : '院外'}
+          </Chip>
+        )}
+      </GlassSurface>
 
-      <Divider style={styles.divider} />
+      <GlassSurface style={styles.card}>
 
       {/* 午餐份数 */}
       <View style={styles.qtyRow}>
@@ -221,17 +216,16 @@ export default function QuickOrderScreen() {
         </View>
       </View>
 
-      <TextInput
-        label="备注（可选）"
-        value={notes}
-        onChangeText={setNotes}
-        mode="outlined"
-        style={styles.input}
-        multiline
-        numberOfLines={2}
-      />
-
-      <Divider style={styles.divider} />
+        <TextInput
+          label="备注（可选）"
+          value={notes}
+          onChangeText={setNotes}
+          mode="outlined"
+          style={styles.input}
+          multiline
+          numberOfLines={2}
+        />
+      </GlassSurface>
 
       <Button
         mode="contained"
@@ -239,6 +233,7 @@ export default function QuickOrderScreen() {
         disabled={submitting || !selectedMember || lunchQty + dinnerQty === 0}
         style={styles.submitBtn}
         contentStyle={{ paddingVertical: 6 }}
+        buttonColor={COLORS.brand}
       >
         {submitting ? <ActivityIndicator size={20} color="white" /> : '确认录入'}
       </Button>
@@ -255,36 +250,37 @@ export default function QuickOrderScreen() {
       >
         {snackMsg ?? ''}
       </Snackbar>
-    </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
+    padding: SPACING.md,
     paddingBottom: 40,
   },
-  title: {
-    fontWeight: '700',
-    marginBottom: 4,
+  card: {
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
   },
   input: {
     marginBottom: 12,
+    backgroundColor: 'transparent',
   },
   dropdown: {
-    borderWidth: 1,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderRadius: RADIUS.sm,
     marginBottom: 8,
+    overflow: 'hidden',
   },
   dropdownItem: {
     justifyContent: 'flex-start',
   },
   memberChip: {
     alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  divider: {
-    marginVertical: 12,
+    marginTop: 4,
   },
   qtyRow: {
     flexDirection: 'row',

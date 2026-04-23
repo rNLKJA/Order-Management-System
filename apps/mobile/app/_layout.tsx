@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useMemo } from 'react';
 import { paperTheme } from '../theme/paperTheme';
+import { ConfirmHost } from '../components/ui';
 
 export default function RootLayout() {
   const queryClient = useMemo(
@@ -32,6 +33,8 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
           </Stack>
+          {/* 全局玻璃确认弹层宿主 —— 所有 confirm() / confirmAction() 都落在这里 */}
+          <ConfirmHost />
         </PaperProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

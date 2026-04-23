@@ -1,57 +1,189 @@
 /**
  * 会员详情页 — 含卡管理（开卡、升级、历史卡）
+ *
+ * 开卡 / 升级 统一走 components/CardFlowModal。
  */
 
-import { useState } from 'react';
-import {
-  View, Text, Pressable, StyleSheet, ScrollView, Modal,
-  TextInput, Alert,
-} from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Snackbar } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { IOS_COLORS } from '../../../theme/paperTheme';
-import { MOCK_MEMBERS, type MockCard } from '../../../constants/mockData';
-import { CARD_CATALOG, listCards, listUpgradeOptions, type CardSpec } from '@meal/shared';
+import { AppHeader, MeshBackground } from '../../../components/ui';
+import { CARD_RENEWAL_THRESHOLD_MEALS, type SubscriptionCardCode } from '@meal/shared';
+import {
+  MOCK_MEMBERS,
+  mockPurchaseCard,
+  mockRefundCard,
+  mockRenewCard,
+  mockUpgradeCard,
+  calcRefundAmount,
+  DEFAULT_COLLECTOR,
+  type MockCard,
+} from '../../../constants/mockData';
+import { CardFlowModal, type CardFlowSubmitPayload } from '../../../components/CardFlowModal';
+import { MemberEditModal } from '../../../components/MemberEditModal';
+import { confirmDestructive } from '../../../lib/confirm';
+
+function triggerSuccessHaptic() {
+  if (Platform.OS !== 'web') {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }
+}
 
 export default function MemberDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const member = MOCK_MEMBERS.find((m) => m.id === Number(id));
+  const memberId = Number(id);
+  const member = MOCK_MEMBERS.find((m) => m.id === memberId);
 
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [isHospital, setIsHospital] = useState(member?.is_hospital ?? false);
+  const [showRenewModal, setShowRenewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [tick, setTick] = useState(0); // 触发 re-render（mock 数据直接原地改）
+  const [toast, setToast] = useState<string | null>(null);
+
+  const refresh = useCallback(() => setTick((v) => v + 1), []);
+
+  const handlePurchase = useCallback(
+    async (p: CardFlowSubmitPayload) => {
+      if (!member) throw new Error('会员不存在');
+      const { card } = mockPurchaseCard({
+        memberId: member.id,
+        spec: p.spec,
+        isHospital: p.isHospital,
+        collector: p.collector,
+        recorder: p.recorder,
+        notes: p.notes,
+      });
+      setShowPurchaseModal(false);
+      refresh();
+      triggerSuccessHaptic();
+      setToast(`已为 ${member.nickname || member.name} 开通【${card.card_name}】，应收 ¥${card.paid_amount}`);
+    },
+    [member, refresh],
+  );
+
+  const handleUpgrade = useCallback(
+    async (p: CardFlowSubmitPayload) => {
+      if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
+      const fromName = member.active_card.card_name;
+      const { card, diff } = mockUpgradeCard({
+        memberId: member.id,
+        fromCardId: member.active_card.id,
+        spec: p.spec,
+        isHospital: p.isHospital,
+        collector: p.collector,
+        recorder: p.recorder,
+        notes: p.notes,
+      });
+      setShowUpgradeModal(false);
+      refresh();
+      triggerSuccessHaptic();
+      setToast(
+        `已升级：${fromName} → ${card.card_name}，补差价 ¥${diff}，剩 ${card.remaining_meals} 份`,
+      );
+    },
+    [member, refresh],
+  );
+
+  const handleRenew = useCallback(
+    async (p: CardFlowSubmitPayload) => {
+      if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
+      const { card, carriedMeals } = mockRenewCard({
+        memberId: member.id,
+        fromCardId: member.active_card.id,
+        collector: p.collector,
+        recorder: p.recorder,
+        notes: p.notes,
+      });
+      setShowRenewModal(false);
+      refresh();
+      triggerSuccessHaptic();
+      setToast(
+        `已续卡：${card.card_name}，应收 ¥${card.paid_amount}，结转 ${carriedMeals} 份，共剩 ${card.remaining_meals} 份`,
+      );
+    },
+    [member, refresh],
+  );
+
+  const handleEditSave = useCallback(() => {
+    setShowEditModal(false);
+    refresh();
+    triggerSuccessHaptic();
+    setToast('会员资料已更新');
+  }, [refresh]);
+
+  const handleRefund = useCallback(() => {
+    if (!member || !member.active_card) return;
+    const activeCard = member.active_card;
+    const refund = calcRefundAmount(activeCard);
+    const name = member.nickname || member.name;
+    confirmDestructive(
+      '确认退卡',
+      [
+        `卡片：${activeCard.card_name}`,
+        `剩餐：${activeCard.remaining_meals} / ${activeCard.total_meals} 份`,
+        `退款：¥${refund}（剩 ${activeCard.remaining_meals} × ¥${activeCard.unit_price}）`,
+        '退卡后该卡立即失效，不可再订餐；如需继续使用请重新开卡。退款将记入今日支出。',
+      ].join('\n'),
+      () => {
+        try {
+          const { refundAmount } = mockRefundCard({
+            memberId: member.id,
+            fromCardId: activeCard.id,
+            operator: DEFAULT_COLLECTOR,
+          });
+          refresh();
+          triggerSuccessHaptic();
+          setToast(`已退卡：${name} · ${activeCard.card_name}，退款 ¥${refundAmount} 已记入支出`);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : '退卡失败';
+          setToast(msg);
+        }
+      },
+      '确认退卡',
+    );
+  }, [member, refresh]);
 
   if (!member) {
     return (
-      <SafeAreaView style={styles.root} edges={['top']}>
-        <View style={styles.center}>
-          <Text style={styles.centerText}>会员不存在</Text>
-          <Pressable onPress={() => router.back()}>
-            <Text style={styles.link}>返回</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      <View style={styles.root}>
+        <MeshBackground />
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <AppHeader title="会员详情" />
+          <View style={styles.center}>
+            <Text style={styles.centerText}>会员不存在</Text>
+            <Pressable onPress={() => router.back()}>
+              <Text style={styles.link}>返回</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
 
   const card = member.active_card;
   const progressPct = card ? (card.remaining_meals / card.total_meals) * 100 : 0;
   const progressColor = progressPct > 50 ? '#34C759' : progressPct > 20 ? '#FF9500' : '#FF3B30';
-  const renewal = card && card.remaining_meals <= 2;
+  const renewal = card ? card.remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS : false;
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* 导航栏 */}
-        <View style={styles.nav}>
-          <Pressable onPress={() => router.back()}>
-            <Text style={styles.backText}>‹ 返回</Text>
-          </Pressable>
-          <Text style={styles.navTitle}>会员详情</Text>
-          <Pressable>
-            <Text style={styles.editBtn}>编辑</Text>
-          </Pressable>
-        </View>
+    <View style={styles.root}>
+      <MeshBackground />
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false} key={tick}>
+        <AppHeader
+          title="会员详情"
+          right={
+            <Pressable onPress={() => setShowEditModal(true)} hitSlop={8} style={{ paddingHorizontal: 6 }}>
+              <Text style={styles.editBtn}>编辑</Text>
+            </Pressable>
+          }
+        />
 
         {/* 头部信息卡 */}
         <View style={styles.profileSection}>
@@ -89,7 +221,9 @@ export default function MemberDetailScreen() {
           <View style={styles.cardSection}>
             {renewal && (
               <View style={styles.renewalBanner}>
-                <Text style={styles.renewalBannerText}>⚠️ 剩余 {card.remaining_meals} 餐，建议尽快续卡</Text>
+                <Text style={styles.renewalBannerText}>
+                  注意：剩余 {card.remaining_meals} 餐，建议尽快升级或续卡
+                </Text>
               </View>
             )}
             <View style={styles.activeCard}>
@@ -100,7 +234,7 @@ export default function MemberDetailScreen() {
                 </View>
               </View>
               <Text style={styles.cardType}>{card.is_hospital ? '院内价目' : '院外价目'} · ¥{card.unit_price}/份</Text>
-              
+
               {/* 进度条 */}
               <View style={styles.progressSection}>
                 <View style={styles.progressHeader}>
@@ -118,25 +252,74 @@ export default function MemberDetailScreen() {
                 <MetaItem label="支付" value={`¥${card.paid_amount}`} />
               </View>
               <Text style={styles.cardCollector}>
-                收款人：{card.collector} · {new Date(card.purchased_at).toLocaleDateString('zh-CN')}
+                收款人：{card.collector}
+                {card.recorder ? ` · 录入：${card.recorder}` : ''} ·{' '}
+                {new Date(card.purchased_at).toLocaleDateString('zh-CN')}
               </Text>
+              {card.notes ? (
+                <Text style={styles.cardNotes}>备注：{card.notes}</Text>
+              ) : null}
             </View>
 
-            {/* 升级按钮 */}
+            {/* 升级 / 续卡按钮：同一行并排，剩餐足够时只显示升级（占满） */}
+            <View style={styles.actionRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionBtn,
+                  styles.actionBtnFlex,
+                  styles.upgradeBtn,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => setShowUpgradeModal(true)}
+              >
+                <Text style={styles.upgradeBtnText}>升级卡片</Text>
+              </Pressable>
+              {renewal ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    styles.actionBtnFlex,
+                    styles.renewBtn,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={() => setShowRenewModal(true)}
+                >
+                  <Text style={styles.renewBtnText}>续卡</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {/* 退卡：破坏性操作，放次级位置避免误触 */}
             <Pressable
-              style={({ pressed }) => [styles.actionBtn, styles.upgradeBtn, pressed && { opacity: 0.8 }]}
-              onPress={() => setShowUpgradeModal(true)}
+              style={({ pressed }) => [styles.refundBtn, pressed && { opacity: 0.7 }]}
+              onPress={handleRefund}
+              hitSlop={6}
             >
-              <Text style={styles.upgradeBtnText}>升级卡片</Text>
+              <Ionicons name="close-circle-outline" size={16} color="#FF3B30" />
+              <Text style={styles.refundBtnText}>申请退卡</Text>
             </Pressable>
           </View>
         ) : (
           <View style={styles.noCardSection}>
-            <Text style={styles.noCardText}>暂无有效卡片</Text>
+            <View style={styles.noCardCard}>
+              <View style={styles.noCardIconWrap}>
+                <Ionicons name="card-outline" size={30} color={IOS_COLORS.blue} />
+              </View>
+              <Text style={styles.noCardTitle}>暂无有效卡片</Text>
+              <Text style={styles.noCardHint}>
+                该会员当前没有进行中的餐卡，可为其开通一张新卡。
+              </Text>
+            </View>
             <Pressable
-              style={({ pressed }) => [styles.actionBtn, styles.purchaseBtn, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                styles.purchaseBtn,
+                styles.purchaseBtnFull,
+                pressed && { opacity: 0.85 },
+              ]}
               onPress={() => setShowPurchaseModal(true)}
             >
+              <Ionicons name="add-circle-outline" size={20} color="#fff" />
               <Text style={styles.purchaseBtnText}>购买新卡</Text>
             </Pressable>
           </View>
@@ -164,27 +347,72 @@ export default function MemberDetailScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* 购卡 Modal */}
-      <PurchaseModal
+      {/* 购卡 / 升级 统一 Modal */}
+      <CardFlowModal
         visible={showPurchaseModal}
-        isHospital={isHospital}
-        onToggleHospital={setIsHospital}
-        onClose={() => setShowPurchaseModal(false)}
+        mode="purchase"
         memberName={member.nickname || member.name}
+        memberIsHospital={member.is_hospital}
+        onClose={() => setShowPurchaseModal(false)}
+        onSubmit={handlePurchase}
+      />
+      {card ? (
+        <CardFlowModal
+          visible={showUpgradeModal}
+          mode="upgrade"
+          memberName={member.nickname || member.name}
+          memberIsHospital={member.is_hospital}
+          currentCard={{
+            card_name: card.card_name,
+            card_code: card.card_code as SubscriptionCardCode,
+            is_hospital: card.is_hospital,
+            paid_amount: card.paid_amount,
+            used_meals: card.used_meals,
+            total_meals: card.total_meals,
+            remaining_meals: card.remaining_meals,
+          }}
+          onClose={() => setShowUpgradeModal(false)}
+          onSubmit={handleUpgrade}
+        />
+      ) : null}
+      {card ? (
+        <CardFlowModal
+          visible={showRenewModal}
+          mode="renew"
+          memberName={member.nickname || member.name}
+          memberIsHospital={member.is_hospital}
+          currentCard={{
+            card_name: card.card_name,
+            card_code: card.card_code as SubscriptionCardCode,
+            is_hospital: card.is_hospital,
+            paid_amount: card.paid_amount,
+            used_meals: card.used_meals,
+            total_meals: card.total_meals,
+            remaining_meals: card.remaining_meals,
+          }}
+          onClose={() => setShowRenewModal(false)}
+          onSubmit={handleRenew}
+        />
+      ) : null}
+
+      <MemberEditModal
+        visible={showEditModal}
+        member={member}
+        onClose={() => setShowEditModal(false)}
+        onSaved={handleEditSave}
       />
 
-      {/* 升级 Modal */}
-      {card && (
-        <UpgradeModal
-          visible={showUpgradeModal}
-          currentCard={card}
-          isHospital={isHospital}
-          onToggleHospital={setIsHospital}
-          onClose={() => setShowUpgradeModal(false)}
-          memberName={member.nickname || member.name}
-        />
-      )}
-    </SafeAreaView>
+      <Snackbar
+        visible={!!toast}
+        onDismiss={() => setToast(null)}
+        duration={3200}
+        style={styles.snackbar}
+        action={{ label: '知道了', onPress: () => setToast(null) }}
+      >
+        {toast}
+      </Snackbar>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -240,6 +468,7 @@ function HistoryCardRow({ card, isLast }: { card: MockCard; isLast: boolean }) {
     active: { label: '进行中', color: '#34C759', bg: '#E8F8ED' },
     upgraded: { label: '已升级', color: '#007AFF', bg: IOS_COLORS.blueLight },
     exhausted: { label: '已用完', color: IOS_COLORS.labelSecondary, bg: IOS_COLORS.fillLight },
+    refunded: { label: '已退卡', color: '#FF3B30', bg: '#FFE8E6' },
   };
   const s = statusMap[card.status];
   return (
@@ -253,198 +482,21 @@ function HistoryCardRow({ card, isLast }: { card: MockCard; isLast: boolean }) {
           </View>
         </View>
         {card.upgraded_from && (
-          <Text style={styles.historyUpgrade}>⬆ 由{card.upgraded_from}升级</Text>
+          <Text style={styles.historyUpgrade}>自「{card.upgraded_from}」升级</Text>
         )}
         <Text style={styles.historyMeta}>
           {card.used_meals}/{card.total_meals}份 · ¥{card.paid_amount} · {new Date(card.purchased_at).toLocaleDateString('zh-CN')}
         </Text>
+        {card.status === 'refunded' && card.refund_amount != null ? (
+          <Text style={styles.historyRefund}>
+            退卡退款 ¥{card.refund_amount}
+            {card.refunded_at ? ` · ${new Date(card.refunded_at).toLocaleDateString('zh-CN')}` : ''}
+            {card.refund_reason ? ` · ${card.refund_reason}` : ''}
+          </Text>
+        ) : null}
+        {card.notes ? <Text style={styles.historyNotes}>备注：{card.notes}</Text> : null}
       </View>
     </View>
-  );
-}
-
-// ========== 购卡 Modal ==========
-
-function PurchaseModal({
-  visible, isHospital, onToggleHospital, onClose, memberName,
-}: {
-  visible: boolean; isHospital: boolean; onToggleHospital: (v: boolean) => void;
-  onClose: () => void; memberName: string;
-}) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const cards = listCards(isHospital);
-  const selectedSpec = cards.find((c) => c.code === selected);
-
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="formSheet">
-      <SafeAreaView style={{ flex: 1, backgroundColor: IOS_COLORS.systemGrouped }} edges={['top', 'bottom']}>
-        {/* 标题栏 */}
-        <View style={mStyles.header}>
-          <Pressable onPress={onClose}><Text style={mStyles.cancel}>取消</Text></Pressable>
-          <Text style={mStyles.title}>购买新卡</Text>
-          <Pressable
-            disabled={!selected}
-            onPress={() => {
-              Alert.alert('购卡', `确认为 ${memberName} 购买 ${selectedSpec?.name}，应收 ¥${selectedSpec?.totalPrice}？`, [
-                { text: '取消' },
-                { text: '确认', onPress: onClose },
-              ]);
-            }}
-          >
-            <Text style={[mStyles.confirm, !selected && { opacity: 0.3 }]}>确认</Text>
-          </Pressable>
-        </View>
-
-        {/* 院内/院外切换 */}
-        <View style={mStyles.toggleRow}>
-          <Text style={mStyles.toggleLabel}>订阅类型</Text>
-          <View style={mStyles.toggleGroup}>
-            {([false, true] as const).map((v) => (
-              <Pressable
-                key={String(v)}
-                style={[mStyles.toggleBtn, isHospital === v && mStyles.toggleBtnActive]}
-                onPress={() => { onToggleHospital(v); setSelected(null); }}
-              >
-                <Text style={[mStyles.toggleText, isHospital === v && mStyles.toggleTextActive]}>
-                  {v ? '院内' : '院外'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-        {isHospital && (
-          <Text style={mStyles.hint}>勾选院内后，送餐默认由孙漫林负责。</Text>
-        )}
-
-        {/* 卡片选择 */}
-        <ScrollView contentContainerStyle={mStyles.cardGrid}>
-          {cards.map((card) => (
-            <Pressable
-              key={card.code}
-              style={[mStyles.cardOption, selected === card.code && mStyles.cardOptionSelected]}
-              onPress={() => setSelected(card.code)}
-            >
-              <Text style={mStyles.cardOptionName}>{card.name}</Text>
-              <Text style={mStyles.cardOptionMeals}>{card.meals} 份</Text>
-              <Text style={mStyles.cardOptionPrice}>¥{card.totalPrice}</Text>
-              <Text style={mStyles.cardOptionUnit}>¥{card.unitPrice}/份</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {/* 底部汇总 */}
-        {selectedSpec && (
-          <View style={mStyles.summary}>
-            <Text style={mStyles.summaryText}>
-              应收 <Text style={mStyles.summaryAmount}>¥{selectedSpec.totalPrice}</Text>
-            </Text>
-          </View>
-        )}
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-// ========== 升级 Modal ==========
-
-function UpgradeModal({
-  visible, currentCard, isHospital, onToggleHospital, onClose, memberName,
-}: {
-  visible: boolean; currentCard: MockCard; isHospital: boolean;
-  onToggleHospital: (v: boolean) => void;
-  onClose: () => void; memberName: string;
-}) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const options = listUpgradeOptions(isHospital, currentCard.paid_amount);
-  const allCards = listCards(isHospital);
-  const selectedSpec = options.find((c) => c.code === selected);
-  const diff = selectedSpec ? selectedSpec.totalPrice - currentCard.paid_amount : 0;
-  const newRemain = selectedSpec ? selectedSpec.meals - currentCard.used_meals : 0;
-
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="formSheet">
-      <SafeAreaView style={{ flex: 1, backgroundColor: IOS_COLORS.systemGrouped }} edges={['top', 'bottom']}>
-        <View style={mStyles.header}>
-          <Pressable onPress={onClose}><Text style={mStyles.cancel}>取消</Text></Pressable>
-          <Text style={mStyles.title}>升级卡片</Text>
-          <Pressable
-            disabled={!selected}
-            onPress={() => {
-              Alert.alert('升级确认', `${memberName} 补差价 ¥${diff}，升级后剩 ${newRemain} 份`, [
-                { text: '取消' },
-                { text: '确认升级', onPress: onClose },
-              ]);
-            }}
-          >
-            <Text style={[mStyles.confirm, !selected && { opacity: 0.3 }]}>确认</Text>
-          </Pressable>
-        </View>
-
-        {/* 当前卡 */}
-        <View style={mStyles.currentCard}>
-          <Text style={mStyles.currentCardLabel}>当前：{currentCard.card_name}</Text>
-          <Text style={mStyles.currentCardSub}>已支付 ¥{currentCard.paid_amount} · 已用 {currentCard.used_meals} 份</Text>
-        </View>
-
-        {/* 院内/院外切换 */}
-        <View style={mStyles.toggleRow}>
-          <Text style={mStyles.toggleLabel}>价目表</Text>
-          <View style={mStyles.toggleGroup}>
-            {([false, true] as const).map((v) => (
-              <Pressable
-                key={String(v)}
-                style={[mStyles.toggleBtn, isHospital === v && mStyles.toggleBtnActive]}
-                onPress={() => { onToggleHospital(v); setSelected(null); }}
-              >
-                <Text style={[mStyles.toggleText, isHospital === v && mStyles.toggleTextActive]}>
-                  {v ? '院内' : '院外'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        <ScrollView contentContainerStyle={mStyles.cardGrid}>
-          {allCards.map((card) => {
-            const canUpgrade = card.totalPrice > currentCard.paid_amount;
-            return (
-              <Pressable
-                key={card.code}
-                disabled={!canUpgrade}
-                style={[
-                  mStyles.cardOption,
-                  !canUpgrade && mStyles.cardOptionDisabled,
-                  selected === card.code && mStyles.cardOptionSelected,
-                ]}
-                onPress={() => canUpgrade && setSelected(card.code)}
-              >
-                <Text style={[mStyles.cardOptionName, !canUpgrade && { color: IOS_COLORS.labelTertiary }]}>
-                  {card.name}
-                </Text>
-                <Text style={[mStyles.cardOptionMeals, !canUpgrade && { color: IOS_COLORS.labelTertiary }]}>
-                  {card.meals} 份
-                </Text>
-                <Text style={[mStyles.cardOptionPrice, !canUpgrade && { color: IOS_COLORS.labelTertiary }]}>
-                  ¥{card.totalPrice}
-                </Text>
-                {!canUpgrade && (
-                  <Text style={mStyles.noUpgradeText}>不支持降级</Text>
-                )}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        {selectedSpec && (
-          <View style={mStyles.summary}>
-            <Text style={mStyles.summaryText}>
-              补差价 <Text style={mStyles.summaryAmount}>¥{diff}</Text>
-              {'  '}升级后剩 <Text style={[mStyles.summaryAmount, { color: '#34C759' }]}>{newRemain} 份</Text>
-            </Text>
-          </View>
-        )}
-      </SafeAreaView>
-    </Modal>
   );
 }
 
@@ -454,15 +506,7 @@ const styles = StyleSheet.create({
   centerText: { fontSize: 16, color: IOS_COLORS.labelSecondary },
   link: { fontSize: 16, color: IOS_COLORS.blue },
 
-  nav: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: IOS_COLORS.card,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
-  },
-  backText: { fontSize: 17, color: IOS_COLORS.blue, width: 60 },
-  navTitle: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
-  editBtn: { fontSize: 17, color: IOS_COLORS.blue, width: 60, textAlign: 'right' },
+  editBtn: { fontSize: 15, color: IOS_COLORS.blue, fontWeight: '500' },
 
   profileSection: {
     alignItems: 'center', backgroundColor: IOS_COLORS.card,
@@ -526,17 +570,72 @@ const styles = StyleSheet.create({
   metaValue: { fontSize: 16, fontWeight: '600', color: IOS_COLORS.label },
   metaLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
   cardCollector: { fontSize: 12, color: IOS_COLORS.labelTertiary },
+  cardNotes: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontStyle: 'italic' },
 
+  actionRow: {
+    flexDirection: 'row', gap: 10,
+  },
   actionBtn: {
     height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
   },
+  actionBtnFlex: { flex: 1 },
   upgradeBtn: { backgroundColor: IOS_COLORS.blue },
   upgradeBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  purchaseBtn: { backgroundColor: '#34C759' },
+  renewBtn: { backgroundColor: '#FF9500' },
+  renewBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  purchaseBtn: {
+    backgroundColor: '#34C759',
+    flexDirection: 'row',
+    gap: 6,
+    shadowColor: '#34C759',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  refundBtn: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  refundBtnText: { fontSize: 14, color: '#FF3B30', fontWeight: '500' },
+  purchaseBtnFull: { width: '100%' },
   purchaseBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
 
-  noCardSection: { paddingHorizontal: 20, marginBottom: 24, gap: 12, alignItems: 'center' },
-  noCardText: { fontSize: 15, color: IOS_COLORS.labelSecondary },
+  noCardSection: { paddingHorizontal: 20, marginBottom: 24, gap: 12 },
+  noCardCard: {
+    backgroundColor: IOS_COLORS.card,
+    borderRadius: 18,
+    paddingVertical: 24,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  noCardIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: IOS_COLORS.blueLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  noCardTitle: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
+  noCardHint: {
+    fontSize: 13,
+    color: IOS_COLORS.labelSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    paddingHorizontal: 12,
+  },
 
   statsRow: {
     flexDirection: 'row', gap: 10, paddingHorizontal: 4,
@@ -565,60 +664,8 @@ const styles = StyleSheet.create({
   historyStText: { fontSize: 11, fontWeight: '600' },
   historyUpgrade: { fontSize: 12, color: IOS_COLORS.blue },
   historyMeta: { fontSize: 12, color: IOS_COLORS.labelSecondary },
-});
+  historyRefund: { fontSize: 12, color: '#FF3B30' },
+  historyNotes: { fontSize: 12, color: IOS_COLORS.labelTertiary, fontStyle: 'italic' },
 
-const mStyles = StyleSheet.create({
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: IOS_COLORS.card,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
-  },
-  cancel: { fontSize: 17, color: IOS_COLORS.labelSecondary },
-  title: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
-  confirm: { fontSize: 17, color: IOS_COLORS.blue, fontWeight: '600' },
-  toggleRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
-    backgroundColor: IOS_COLORS.card,
-  },
-  toggleLabel: { fontSize: 16, color: IOS_COLORS.label },
-  toggleGroup: {
-    flexDirection: 'row',
-    backgroundColor: IOS_COLORS.fillMedium, borderRadius: 8, padding: 2,
-  },
-  toggleBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 6 },
-  toggleBtnActive: { backgroundColor: IOS_COLORS.card },
-  toggleText: { fontSize: 14, color: IOS_COLORS.labelSecondary },
-  toggleTextActive: { color: IOS_COLORS.label, fontWeight: '600' },
-  hint: { fontSize: 13, color: IOS_COLORS.labelSecondary, paddingHorizontal: 20, paddingBottom: 8, backgroundColor: IOS_COLORS.card },
-  cardGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', padding: 16, gap: 12,
-  },
-  cardOption: {
-    width: 'calc(50% - 6px)' as any, minWidth: 140,
-    backgroundColor: IOS_COLORS.card, borderRadius: 14, padding: 14, gap: 4,
-    borderWidth: 2, borderColor: 'transparent',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
-  },
-  cardOptionSelected: { borderColor: IOS_COLORS.blue },
-  cardOptionDisabled: { backgroundColor: IOS_COLORS.fillLight, opacity: 0.6 },
-  cardOptionName: { fontSize: 16, fontWeight: '700', color: IOS_COLORS.label },
-  cardOptionMeals: { fontSize: 13, color: IOS_COLORS.labelSecondary },
-  cardOptionPrice: { fontSize: 20, fontWeight: '700', color: IOS_COLORS.blue },
-  cardOptionUnit: { fontSize: 12, color: IOS_COLORS.labelSecondary },
-  noUpgradeText: { fontSize: 12, color: IOS_COLORS.red, marginTop: 2 },
-  currentCard: {
-    backgroundColor: IOS_COLORS.card, paddingHorizontal: 20, paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
-  },
-  currentCardLabel: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
-  currentCardSub: { fontSize: 13, color: IOS_COLORS.labelSecondary, marginTop: 2 },
-  summary: {
-    backgroundColor: IOS_COLORS.card, padding: 16, alignItems: 'center',
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: IOS_COLORS.separatorLight,
-  },
-  summaryText: { fontSize: 16, color: IOS_COLORS.label },
-  summaryAmount: { fontSize: 20, fontWeight: '700', color: IOS_COLORS.blue },
+  snackbar: { marginBottom: 24 },
 });

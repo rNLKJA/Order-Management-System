@@ -19,6 +19,7 @@ import { and, desc, eq, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   cardPurchaseSchema,
+  cardRenewSchema,
   cardUpgradeSchema,
   getCardSpec,
   type SubscriptionCardCode,
@@ -27,6 +28,7 @@ import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import { requireAuth, type AuthVariables } from '../middleware/jwt.js';
 import { computeUpgrade, UpgradeError } from '../services/upgrade.js';
+import { computeRenew, RenewError } from '../services/renew.js';
 import { createAutoSubscriptionIncome } from '../services/finance.js';
 
 export const cardsRouter = new Hono<{ Variables: AuthVariables }>();
@@ -253,6 +255,119 @@ cardsRouter.post(
         new_card: result.newCard,
         financeEntry: result.finance,
         diff: computed.diff,
+      },
+      201,
+    );
+  },
+);
+
+// ================== POST /api/cards/:id/renew ==================
+
+/**
+ * 续卡：同卡种、同价目表再买一张，剩餐结转到新卡，按新卡全价收款。
+ * 前提：旧卡 active 且 remaining_meals ≤ CARD_RENEWAL_THRESHOLD_MEALS（防滥用）。
+ * 旧卡 status → 'upgraded'，新卡 upgraded_from_id 指向旧卡；
+ * 通过 new.card_code === old.card_code 可与真正升级区分。
+ */
+cardsRouter.post(
+  '/:id/renew',
+  zValidator('param', paramSchema),
+  zValidator('json', cardRenewSchema),
+  async (c) => {
+    const { id: oldCardId } = c.req.valid('param');
+    const input = c.req.valid('json');
+    const authUser = c.get('authUser');
+    const db = requestDb(c);
+
+    const oldRows = await db
+      .select()
+      .from(schema.cards)
+      .where(eq(schema.cards.id, oldCardId))
+      .limit(1);
+    const oldCard = oldRows[0];
+    if (!oldCard) {
+      throw new HTTPException(404, { message: '待续的卡不存在' });
+    }
+
+    const spec = getCardSpec(oldCard.is_hospital, oldCard.card_code as SubscriptionCardCode);
+    if (!spec) {
+      // 理论上进不来：卡种被下架才会触发
+      throw new HTTPException(422, {
+        message: `当前卡种 ${oldCard.card_code} 已不在${oldCard.is_hospital ? '院内' : '院外'}价目表，无法续卡`,
+      });
+    }
+
+    let computed;
+    try {
+      computed = computeRenew({
+        oldStatus: oldCard.status,
+        oldRemainingMeals: oldCard.remaining_meals,
+        spec,
+      });
+    } catch (e) {
+      if (e instanceof RenewError) {
+        return c.json({ code: e.code, message: e.message }, 422);
+      }
+      throw e;
+    }
+
+    const collectorUserId = await resolveCollectorUserId(db, input.collector_user_id, authUser.id);
+    const createdByUserId = input.created_by_user_id ?? authUser.id;
+    const purchasedAt = new Date();
+
+    const result = await db.transaction(async (tx) => {
+      const newRows = await tx
+        .insert(schema.cards)
+        .values({
+          member_id: oldCard.member_id,
+          card_code: oldCard.card_code,
+          is_hospital: oldCard.is_hospital,
+          total_meals: computed.newTotalMeals,
+          used_meals: computed.newUsedMeals,
+          remaining_meals: computed.newRemainingMeals,
+          unit_price: computed.newUnitPrice,
+          paid_amount: computed.newPaidAmount,
+          status: 'active',
+          upgraded_from_id: oldCard.id,
+          collector_user_id: collectorUserId,
+          created_by_user_id: createdByUserId,
+          purchased_at: purchasedAt,
+          notes: input.notes ?? '',
+        })
+        .returning();
+      const newCard = newRows[0]!;
+
+      await tx
+        .update(schema.cards)
+        .set({ status: 'upgraded', updated_at: new Date() })
+        .where(eq(schema.cards.id, oldCard.id));
+
+      const finance = await createAutoSubscriptionIncome(tx, {
+        amount: computed.newPaidAmount,
+        is_hospital: oldCard.is_hospital,
+        ref_card_id: newCard.id,
+        collector_user_id: collectorUserId,
+        created_by_user_id: createdByUserId,
+        purchased_at: purchasedAt,
+        description: `续卡：${spec.name}（结转 ${computed.carriedMeals} 份）`,
+      });
+
+      const refreshedOld = await tx
+        .select()
+        .from(schema.cards)
+        .where(eq(schema.cards.id, oldCard.id))
+        .limit(1);
+
+      return { newCard, oldCard: refreshedOld[0]!, finance };
+    });
+
+    return c.json(
+      {
+        old_card: result.oldCard,
+        new_card: result.newCard,
+        financeEntry: result.finance,
+        carried_meals: computed.carriedMeals,
+        paid_amount: computed.newPaidAmount,
       },
       201,
     );

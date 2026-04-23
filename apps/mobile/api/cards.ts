@@ -58,6 +58,12 @@ export interface UpgradeInput {
   notes?: string;
 }
 
+export interface RenewInput {
+  collector_user_id?: number;
+  created_by_user_id?: number;
+  notes?: string;
+}
+
 export const cardsApi = {
   list: (memberId: number, status: CardStatus | 'all' = 'all') =>
     api.get<{ cards: Card[] }>(
@@ -77,4 +83,13 @@ export const cardsApi = {
       financeEntry: FinanceEntrySummary;
       diff: number;
     }>(`/api/cards/${cardId}/upgrade`, input),
+
+  renew: (cardId: number, input: RenewInput) =>
+    api.post<{
+      old_card: Card;
+      new_card: Card;
+      financeEntry: FinanceEntrySummary;
+      carried_meals: number;
+      paid_amount: number;
+    }>(`/api/cards/${cardId}/renew`, input),
 };
