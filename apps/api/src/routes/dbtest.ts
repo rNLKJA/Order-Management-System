@@ -51,18 +51,17 @@ dbtestRouter.get('/cmp', async (c) => {
   };
   try {
     const { getClient } = await import('../db/client.js');
-    const { sql } = await import('drizzle-orm');
-    const { getDb } = await import('../db/client.js');
     const client = getClient();
     out.clientProtocol = (client as any).protocol;
-    const db = getDb();
-    const res = await db.run(sql`SELECT 1 AS one`);
-    out.rawRunOk = true;
-    out.rawRunRows = res.rows?.length;
+    out.clientAuthTokenLen = ((client as any)._HttpClient__authToken ?? '').length;
+    // 尝试用 client 直接执行（绕过 drizzle）
+    const res = await client.execute('SELECT 1 AS one');
+    out.directExecuteOk = true;
+    out.directExecuteRows = res.rows?.length;
   } catch (err: any) {
-    out.rawRunOk = false;
-    out.rawRunError = err?.message;
-    out.rawRunCode = err?.code;
+    out.directExecuteOk = false;
+    out.directExecuteError = err?.message;
+    out.directExecuteCode = err?.code;
   }
   out.elapsedMs = Date.now() - t0;
   return c.json(out);
