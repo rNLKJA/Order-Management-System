@@ -31,6 +31,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { IOS_COLORS } from '../../../theme/paperTheme';
 import { type MockMember, type MockOrder } from '../../../constants/mockData';
 import { ordersApi } from '../../../api/orders';
@@ -41,6 +42,7 @@ import {
 } from '../../../hooks/useMembersView';
 import { dailyOrderToMockOrder, membersByIdFrom } from '../../../lib/order-view';
 import { AppHeader, MeshBackground } from '../../../components/ui';
+import { confirmDestructive } from '../../../lib/confirm';
 
 const STATUS_MAP = {
   pending:   { label: '待出餐', color: IOS_COLORS.orange,         bg: '#FFF4E5' },
@@ -188,6 +190,30 @@ export default function OrdersScreen() {
     [invalidateOrders, invalidateMembers, flashToast],
   );
 
+  /**
+   * 送达是终态。后端会把 delivered 的订单锁死，UI 层先弹一次二次确认，
+   * 让点击必须是"有意识的"动作，避免配送途中误触。
+   */
+  const handleMarkDelivered = useCallback(
+    (order: MockOrder) => {
+      const displayName = order.member_nickname || order.member_name;
+      const mealLabel = order.meal_type === 'lunch' ? '午餐' : '晚餐';
+      const zone = order.is_hospital ? '院内' : '院外';
+      const lines = [
+        `${displayName} · ${mealLabel} ${order.quantity} 份 · ${zone}`,
+        '确认送达后订单状态将被锁定，无法再回退或修改。',
+        '如需纠错只能走「取消」走冲销流程后重新建单。',
+      ].join('\n');
+      confirmDestructive(
+        '确认送达？',
+        lines,
+        () => void handleUpdateStatus(order.id, 'delivered'),
+        '已送达',
+      );
+    },
+    [handleUpdateStatus],
+  );
+
   const now = new Date();
 
   return (
@@ -197,6 +223,16 @@ export default function OrdersScreen() {
       <AppHeader
         title="每日订餐"
         subtitle={`今日 ${now.getMonth() + 1}月${now.getDate()}日`}
+        right={
+          <Pressable
+            onPress={() => router.push('/(app)/orders/stats' as never)}
+            hitSlop={8}
+            style={styles.headerStatsBtn}
+          >
+            <Ionicons name="bar-chart-outline" size={18} color={IOS_COLORS.blue} />
+            <Text style={styles.headerStatsText}>统计</Text>
+          </Pressable>
+        }
       />
 
       {/* 二级导航 */}
@@ -273,7 +309,7 @@ export default function OrdersScreen() {
         <DeliveryView
           orders={orders}
           membersById={membersById}
-          onMarkDelivered={(id) => handleUpdateStatus(id, 'delivered')}
+          onMarkDelivered={handleMarkDelivered}
           onOpenDetail={setActiveOrder}
         />
       )}
@@ -284,6 +320,7 @@ export default function OrdersScreen() {
           order={activeOrder}
           onClose={() => setActiveOrder(null)}
           onUpdate={handleUpdateStatus}
+          onMarkDelivered={handleMarkDelivered}
         />
       )}
 
@@ -517,7 +554,7 @@ function DeliveryView({
 }: {
   orders: MockOrder[];
   membersById: Record<number, MockMember>;
-  onMarkDelivered: (id: number) => void;
+  onMarkDelivered: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
 }) {
   const fulfilled = orders.filter((o) => o.status === 'fulfilled');
@@ -558,7 +595,7 @@ function DeliveryView({
               key={o.id}
               order={o}
               member={membersById[o.member_id]}
-              onConfirm={() => onMarkDelivered(o.id)}
+              onConfirm={() => onMarkDelivered(o)}
               onOpen={() => onOpenDetail(o)}
             />
           ))}
@@ -576,7 +613,7 @@ function DeliveryView({
               key={o.id}
               order={o}
               member={membersById[o.member_id]}
-              onConfirm={() => onMarkDelivered(o.id)}
+              onConfirm={() => onMarkDelivered(o)}
               onOpen={() => onOpenDetail(o)}
             />
           ))}
@@ -1199,11 +1236,13 @@ const STATUS_FLOW = [
 ];
 
 function StatusSheet({
-  order, onClose, onUpdate,
+  order, onClose, onUpdate, onMarkDelivered,
 }: {
   order: MockOrder;
   onClose: () => void;
   onUpdate: (id: number, status: MockOrder['status']) => void;
+  /** 点"已送达"时单独走确认流程，避免状态网格里误触锁死。 */
+  onMarkDelivered: (o: MockOrder) => void;
 }) {
   const isAdhoc = order.card_type === null;
   const cur = STATUS_MAP[order.status];
@@ -1289,7 +1328,15 @@ function StatusSheet({
                   disabled && !isCurrent && { opacity: 0.35 },
                   !disabled && pressed && { opacity: 0.75 },
                 ]}
-                onPress={() => onUpdate(order.id, s.key)}
+                onPress={() => {
+                  if (s.key === 'delivered') {
+                    // 先关弹层再弹确认，避免两个 Modal 叠在一起遮挡
+                    onClose();
+                    onMarkDelivered(order);
+                  } else {
+                    onUpdate(order.id, s.key);
+                  }
+                }}
               >
                 <Ionicons name={s.icon} size={20} color={s.color} style={sStyles.statusBtnIcon} />
                 <Text style={[sStyles.statusBtnLabel, { color: s.color }]}>{s.label}</Text>
@@ -1315,6 +1362,8 @@ const styles = StyleSheet.create({
 
   headerAction: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
   headerActionText: { fontSize: 15, color: IOS_COLORS.blue, fontWeight: '500' },
+  headerStatsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 4 },
+  headerStatsText: { fontSize: 15, color: IOS_COLORS.blue, fontWeight: '500' },
 
   // ======= 二级导航 Tab Bar =======
   tabBar: {
