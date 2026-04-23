@@ -17,14 +17,12 @@ export const debugRouter = new Hono();
 
 debugRouter.post('/mock-login', async (c) => {
   const t0 = Date.now();
-  const body = await c.req.json<{ username: string; password: string }>();
-  const { username, password } = body;
-  const db = requestDb(c);
-  const rows = await db.select().from(schema.users).where(eq(schema.users.username, username)).limit(1);
-  const user = rows[0];
-  if (!user) return c.json({ error: 'no user', totalMs: Date.now() - t0 }, 401);
-  const ok = await verifyPassword(password, user.password_hash);
-  return c.json({ ok, totalMs: Date.now() - t0 });
+  try {
+    const text = await c.req.text();
+    return c.json({ bodyLen: text.length, elapsedMs: Date.now() - t0, preview: text.slice(0, 100) });
+  } catch (err: any) {
+    return c.json({ err: err?.message, elapsedMs: Date.now() - t0 }, 500);
+  }
 });
 
 debugRouter.get('/select-user', async (c) => {
