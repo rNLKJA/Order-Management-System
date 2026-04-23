@@ -5,7 +5,7 @@
 
 import { StyleSheet, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { CARD_RENEWAL_THRESHOLD_MEALS } from '@meal/shared';
@@ -48,6 +48,7 @@ function todayISO(): string {
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const hour = new Date().getHours();
   const timeGreeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
 
@@ -120,12 +121,17 @@ export default function HomeScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
-        >
-          <View style={styles.container}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.scroll,
+          // 手动应用顶部安全区：状态栏 / 刘海屏 / 动态岛都让开
+          // 加 SPACING.sm 保证即使 insets.top = 0（如 Android 透明状态栏）也有呼吸
+          { paddingTop: Math.max(insets.top, 20) + SPACING.sm },
+          { paddingBottom: 48 + insets.bottom },
+        ]}
+      >
+        <View style={styles.container}>
             {/* 问候 */}
             <View style={styles.greeting}>
               <Text style={styles.greetingDate}>{formatDate()}</Text>
@@ -237,8 +243,7 @@ export default function HomeScreen() {
               </BentoGrid>
             </View>
           </View>
-        </ScrollView>
-      </SafeAreaView>
+      </ScrollView>
     </View>
   );
 }
@@ -251,7 +256,7 @@ function formatDate() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.systemGrouped },
-  scroll: { paddingBottom: 48, paddingTop: SPACING.sm },
+  scroll: { /* paddingTop/Bottom 由 useSafeAreaInsets 动态注入 */ },
   container: {
     width: '100%',
     maxWidth: SPACING.maxWidth,
