@@ -15,12 +15,6 @@ import { rateLimit } from '../middleware/rate-limit.js';
 
 export const debugRouter = new Hono();
 
-// 复刻 auth.ts 的 /login 结构，看 middleware 层哪里挂住
-debugRouter.use(
-  '/mock-login',
-  rateLimit({ windowMs: 60_000, max: 100, message: 'rl' }),
-);
-
 debugRouter.post('/mock-login', zValidator('json', loginSchema), async (c) => {
   const t0 = Date.now();
   const { username, password } = c.req.valid('json');
