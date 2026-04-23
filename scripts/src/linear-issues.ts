@@ -56,7 +56,7 @@ export const ISSUES: LinearIssueSpec[] = [
   },
   {
     title: 'chore: Linear Workspace 接入 GitHub + 批量同步 issue',
-    state: 'InProgress',
+    state: 'Done',
     priority: 2,
     labels: [PHASES.p0, 'infra'],
     body: `## 目标
@@ -65,14 +65,15 @@ Linear Workspace = meal-membership，Team = MEA，Project = MVP Sprint；GitHub 
 ## 验收标准
 - [x] Workspace / Team / Project 创建
 - [x] GitHub 集成开启（PR 自动关联、合并自动 Done）
-- [ ] 所有 plan §25 的 issue 通过 scripts/sync-linear.ts 创建
-- [ ] 本 issue（MEA-2）对应的 Linear 状态跟 Git 同步
+- [x] 所有 plan §25 的 issue 通过 scripts/sync-linear.ts 创建（23 条 MEA-5~MEA-27）
+- [x] CI/CD 修复并跑绿（commit b9fa21e）
 
 ## 技术方案
 scripts/src/sync-linear.ts 使用 Linear GraphQL API 幂等创建 issue。
 
 ## 关联
 - doc/LINEAR.md
+- scripts/src/sync-linear.ts
 `,
   },
 
