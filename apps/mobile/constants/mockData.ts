@@ -54,6 +54,8 @@ export interface MockMember {
   address: string;
   dietary_notes: string;
   is_hospital: boolean;
+  /** 散客标记：true 时在会员档案页应该过滤掉，只在散客目录可见 */
+  is_walkin?: boolean;
   active_card: MockCard | null;
   card_history: MockCard[];
   stats: {

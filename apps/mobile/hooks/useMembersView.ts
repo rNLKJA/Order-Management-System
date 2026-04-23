@@ -63,9 +63,12 @@ export function useMembersView(): UseMembersViewResult {
     queryKey: KEYS.membersList,
     enabled: !!usersQuery.data,
     queryFn: async (): Promise<MockMember[]> => {
+      // 拿全量（会员 + 散客），订餐页的送餐卡片需要拿到散客的 phone/address；
+      // 纯会员列表页消费侧会自己再过滤一次 is_walkin=false。
       const { items } = await membersApi.list({
         limit: 200,
         include_archived: false,
+        type: 'all',
       });
       const usersMap = usersQuery.data ?? {};
       const results = await Promise.all(

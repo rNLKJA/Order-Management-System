@@ -63,7 +63,8 @@ export default function HomeScreen() {
     refetchOnWindowFocus: true,
   });
 
-  const members = membersView.data ?? [];
+  // 首页"会员档案"统计只算正式会员，散客另入"散客目录"tile
+  const members = (membersView.data ?? []).filter((m) => !m.is_walkin);
   const renewalCount = members.filter(
     (m) => m.active_card && m.active_card.remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS,
   ).length;

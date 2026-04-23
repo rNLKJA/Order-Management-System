@@ -20,7 +20,8 @@ export default function MembersScreen() {
   const [filter, setFilter] = useState<MemberFilter>('all');
 
   const { data, isLoading, error, refetch } = useMembersView();
-  const members = data ?? [];
+  // 会员档案只显示正式会员，散客走 /walkins 独立目录
+  const members = (data ?? []).filter((m) => !m.is_walkin);
 
   const filtered = members.filter((m) => {
     const q = query.toLowerCase();
