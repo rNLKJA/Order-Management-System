@@ -1,5 +1,8 @@
 /**
- * 应用根 Layout — 精简版（去掉 useSegments 和 StatusBar，兼容 Web）
+ * 根 Layout：Providers 包裹 + Stack
+ * 规则：必须在每次 render 都输出 navigator（Stack/Tabs/Slot），
+ * 否则 Expo Router 会抛 "navigated before mounting" 错误。
+ * 认证逻辑移到 app/index.tsx（Redirect）和 (app)/_layout.tsx（useEffect）。
  */
 
 import { Stack } from 'expo-router';
@@ -14,11 +17,7 @@ export default function RootLayout() {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: {
-            retry: 1,
-            staleTime: 30_000,
-            refetchOnWindowFocus: false,
-          },
+          queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false },
         },
       }),
     [],
@@ -29,6 +28,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <PaperProvider theme={paperTheme}>
           <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
           </Stack>

@@ -1,51 +1,31 @@
 /**
- * 登录后的主 Layout。
- * 在这里检查认证状态：未登录 → 跳到 /(auth)/login。
+ * 登录后 Layout。
+ * 用 useEffect 做认证守卫（不在 render 里条件返回），保证 Stack 始终渲染。
  */
 
-import { Stack, Redirect } from 'expo-router';
-import { useTheme, ActivityIndicator } from 'react-native-paper';
-import { View } from 'react-native';
+import { Stack, router } from 'expo-router';
+import { useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function AppLayout() {
-  const theme = useTheme();
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: theme.colors.background,
-        }}
-      >
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/(auth)/login');
+    }
+  }, [user, loading]);
 
-  if (!user) {
-    return <Redirect href="/(auth)/login" />;
-  }
-
+  // 始终渲染 Stack，让 Expo Router 导航树保持挂载
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.surface },
-        headerTintColor: theme.colors.onSurface,
-        headerShadowVisible: false,
-        contentStyle: { backgroundColor: theme.colors.background },
-      }}
-    >
-      <Stack.Screen name="index" options={{ title: '面板' }} />
-      <Stack.Screen name="members/index" options={{ headerShown: false }} />
-      <Stack.Screen name="members/new" options={{ headerShown: false }} />
-      <Stack.Screen name="members/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="finance/index" options={{ title: '记账' }} />
-      <Stack.Screen name="orders/index" options={{ title: '每日订餐' }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="members/index" />
+      <Stack.Screen name="members/[id]" />
+      <Stack.Screen name="members/new" />
+      <Stack.Screen name="orders/index" />
+      <Stack.Screen name="finance/index" />
+      <Stack.Screen name="profile/index" />
     </Stack>
   );
 }

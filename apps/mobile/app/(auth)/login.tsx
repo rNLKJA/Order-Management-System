@@ -1,150 +1,191 @@
 /**
- * 登录页。
- *
- * MVP 设计：
- * - 居中卡片，标题"订餐会员管理"
- * - username + password 两个 TextInput
- * - 主按钮"登录"
- * - 错误消息在表单下方以柔和 rose 色 Banner 展示
+ * 登录页 — iOS 风格
  */
 
 import { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import {
-  Text,
-  TextInput,
-  Button,
-  HelperText,
-  Surface,
-  useTheme,
-} from 'react-native-paper';
+  View, Text, TextInput, Pressable, StyleSheet,
+  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
+} from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import { ApiError } from '../../api/client';
+import { IOS_COLORS } from '../../theme/paperTheme';
 
 export default function LoginScreen() {
-  const theme = useTheme();
   const { signIn } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const onSubmit = async () => {
-    Keyboard.dismiss();
-    setErrorMsg(null);
+  const handleLogin = async () => {
     if (!username.trim() || !password) {
-      setErrorMsg('请输入用户名和密码');
+      setError('请输入用户名和密码');
       return;
     }
-    setSubmitting(true);
+    setError('');
+    setLoading(true);
     try {
       await signIn(username.trim(), password);
-      // 登录成功后 root layout 会自动重定向
     } catch (e) {
-      if (e instanceof ApiError) setErrorMsg(e.message);
-      else setErrorMsg('登录失败，请稍后重试');
+      setError(e instanceof ApiError ? e.message : '登录失败，请稍后重试');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
     <KeyboardAvoidingView
+      style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.root, { backgroundColor: theme.colors.background }]}
     >
-      <Surface
-        style={[styles.card, { backgroundColor: theme.colors.surface }]}
-        elevation={1}
-      >
-        <Text variant="headlineSmall" style={styles.title}>
-          订餐会员管理
-        </Text>
-        <Text variant="bodyMedium" style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
-          请使用管理员分配的账号登录
-        </Text>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* Logo区 */}
+        <View style={styles.header}>
+          <View style={styles.logoCircle}>
+            <Text style={styles.logoEmoji}>🍱</Text>
+          </View>
+          <Text style={styles.appName}>订餐会员管理</Text>
+          <Text style={styles.appSubtitle}>健康漂亮餐 · 内部管理系统</Text>
+        </View>
 
-        <TextInput
-          label="用户名"
-          value={username}
-          onChangeText={setUsername}
-          mode="outlined"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="next"
-          style={styles.input}
-        />
+        {/* 表单卡片 */}
+        <View style={styles.card}>
+          <Text style={styles.formLabel}>用户名</Text>
+          <TextInput
+            style={styles.input}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="请输入用户名"
+            placeholderTextColor={IOS_COLORS.labelTertiary}
+            returnKeyType="next"
+          />
+          <View style={styles.divider} />
+          <Text style={styles.formLabel}>密码</Text>
+          <TextInput
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            placeholder="请输入密码"
+            placeholderTextColor={IOS_COLORS.labelTertiary}
+            returnKeyType="go"
+            onSubmitEditing={handleLogin}
+          />
+        </View>
 
-        <TextInput
-          label="密码"
-          value={password}
-          onChangeText={setPassword}
-          mode="outlined"
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="go"
-          onSubmitEditing={onSubmit}
-          style={styles.input}
-        />
-
-        {errorMsg ? (
-          <HelperText type="error" visible style={styles.errorText}>
-            {errorMsg}
-          </HelperText>
+        {/* 错误提示 */}
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
         ) : null}
 
-        <Button
-          mode="contained"
-          onPress={onSubmit}
-          loading={submitting}
-          disabled={submitting}
-          style={styles.submit}
-          contentStyle={{ paddingVertical: 6 }}
+        {/* 登录按钮 */}
+        <Pressable
+          style={({ pressed }) => [styles.loginBtn, pressed && styles.loginBtnPressed]}
+          onPress={handleLogin}
+          disabled={loading}
         >
-          登录
-        </Button>
+          {loading
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={styles.loginBtnText}>登录</Text>
+          }
+        </Pressable>
 
-        <Text variant="bodySmall" style={[styles.footer, { color: theme.colors.onSurfaceVariant }]}>
-          忘记密码请联系管理员重置
-        </Text>
-      </Surface>
+        <Text style={styles.footer}>密码由管理员生成，如需重置请联系管理员</Text>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
+  scroll: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 40,
   },
+  header: { alignItems: 'center', marginBottom: 32 },
+  logoCircle: {
+    width: 80, height: 80, borderRadius: 20,
+    backgroundColor: IOS_COLORS.blue,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: IOS_COLORS.blue,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  logoEmoji: { fontSize: 36 },
+  appName: { fontSize: 28, fontWeight: '700', color: IOS_COLORS.label, letterSpacing: -0.5 },
+  appSubtitle: { fontSize: 14, color: IOS_COLORS.labelSecondary, marginTop: 4 },
+
   card: {
     width: '100%',
     maxWidth: 400,
-    padding: 24,
+    backgroundColor: IOS_COLORS.card,
     borderRadius: 16,
-  },
-  title: {
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  subtitle: {
-    marginBottom: 20,
-  },
-  input: {
+    overflow: 'hidden',
     marginBottom: 12,
   },
-  errorText: {
-    marginBottom: 4,
+  formLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: IOS_COLORS.labelSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
   },
-  submit: {
-    marginTop: 12,
-    borderRadius: 10,
+  input: {
+    fontSize: 17,
+    color: IOS_COLORS.label,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 44,
   },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: IOS_COLORS.separator,
+    marginLeft: 16,
+  },
+
+  errorBox: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFF0F0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  errorText: { fontSize: 14, color: IOS_COLORS.red, textAlign: 'center' },
+
+  loginBtn: {
+    width: '100%',
+    maxWidth: 400,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: IOS_COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  loginBtnPressed: { opacity: 0.85 },
+  loginBtnText: { fontSize: 17, fontWeight: '600', color: '#fff' },
+
   footer: {
-    marginTop: 16,
+    fontSize: 13,
+    color: IOS_COLORS.labelSecondary,
+    marginTop: 20,
     textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });

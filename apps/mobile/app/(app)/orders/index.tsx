@@ -1,315 +1,271 @@
 /**
- * 每日订餐录入页 —— MEA-12。
- *
- * 功能：
- * - 今日 pending 订单列表（按 pending 状态过滤）
- * - 顶部日期选择器（默认今日；桌面场景默认明天）
- * - "快速录入"按钮 → OrderEntryModal
- * - 每条订单显示：会员名 / 餐别 Badge / 份数 / 状态
+ * 每日订餐 — 今日视图（午/晚分组）
  */
 
-import { useState, useCallback } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
-import {
-  Text,
-  Card,
-  Button,
-  Chip,
-  Divider,
-  useTheme,
-  ActivityIndicator,
-  FAB,
-} from 'react-native-paper';
-import { useFocusEffect } from 'expo-router';
-import { ordersApi, type DailyOrder } from '../../../api/orders';
-import { OrderEntryModal } from '../../../components/OrderEntryModal';
+import { useState } from 'react';
+import { View, Text, Pressable, StyleSheet, SectionList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { IOS_COLORS } from '../../../theme/paperTheme';
+import { MOCK_TODAY_ORDERS, type MockOrder } from '../../../constants/mockData';
 
-function todayDate(): string {
-  const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(now.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function tomorrowDate(): string {
-  const now = new Date(Date.now() + 8 * 60 * 60 * 1000 + 24 * 60 * 60 * 1000);
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(now.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: '待出餐',
-  fulfilled: '已出餐',
-  delivered: '已送达',
-  cancelled: '已取消',
+const STATUS_MAP = {
+  pending: { label: '待出餐', color: IOS_COLORS.orange, bg: '#FFF4E5' },
+  fulfilled: { label: '已出餐', color: IOS_COLORS.blue, bg: IOS_COLORS.blueLight },
+  delivered: { label: '已送达', color: '#34C759', bg: '#E8F8ED' },
+  cancelled: { label: '已取消', color: IOS_COLORS.labelSecondary, bg: IOS_COLORS.fillLight },
 };
-
-const MEAL_TYPE_LABELS: Record<string, string> = {
-  lunch: '午',
-  dinner: '晚',
-};
-
-function OrderCard({ order }: { order: DailyOrder }) {
-  const theme = useTheme();
-  const mealColor = order.meal_type === 'lunch' ? '#F59E0B' : '#6366F1';
-  const statusColor =
-    order.status === 'cancelled'
-      ? theme.colors.error
-      : order.status === 'delivered'
-      ? '#10B981'
-      : order.status === 'fulfilled'
-      ? '#0EA5E9'
-      : theme.colors.secondary;
-
-  return (
-    <Card mode="outlined" style={styles.orderCard}>
-      <Card.Content style={styles.orderContent}>
-        <View style={styles.orderRow}>
-          <Chip
-            compact
-            style={[styles.mealBadge, { backgroundColor: mealColor }]}
-            textStyle={{ color: 'white', fontWeight: '700' }}
-          >
-            {MEAL_TYPE_LABELS[order.meal_type]}
-          </Chip>
-          <Text variant="bodyLarge" style={{ flex: 1, marginLeft: 8 }}>
-            {order.quantity} 份
-          </Text>
-          <Chip
-            compact
-            style={[styles.statusBadge, { borderColor: statusColor }]}
-            textStyle={{ color: statusColor }}
-            mode="outlined"
-          >
-            {STATUS_LABELS[order.status] ?? order.status}
-          </Chip>
-        </View>
-        {order.notes ? (
-          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-            备注：{order.notes}
-          </Text>
-        ) : null}
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-          {order.card_id ? '订阅卡扣减' : `散餐 ¥${order.amount}`}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
-}
 
 export default function OrdersScreen() {
-  const theme = useTheme();
-  const [selectedDate, setSelectedDate] = useState(todayDate());
-  const [orders, setOrders] = useState<DailyOrder[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [date] = useState('2026-04-23');
+  const [mealFilter, setMealFilter] = useState<'all' | 'lunch' | 'dinner'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'fulfilled' | 'delivered' | 'cancelled'>('all');
 
-  const loadOrders = useCallback(async (date: string, isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    try {
-      const res = await ordersApi.list({ date, status: 'all' });
-      setOrders(res.orders);
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      setError(e.message ?? '加载失败');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const filtered = MOCK_TODAY_ORDERS.filter((o) => {
+    if (mealFilter !== 'all' && o.meal_type !== mealFilter) return false;
+    if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+    return true;
+  });
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadOrders(selectedDate);
-    }, [loadOrders, selectedDate]),
-  );
+  const lunch = filtered.filter((o) => o.meal_type === 'lunch');
+  const dinner = filtered.filter((o) => o.meal_type === 'dinner');
 
-  const handleDateChange = (offset: number) => {
-    const base = new Date(selectedDate + 'T00:00:00+08:00');
-    base.setDate(base.getDate() + offset);
-    const yyyy = base.getFullYear();
-    const mm = String(base.getMonth() + 1).padStart(2, '0');
-    const dd = String(base.getDate()).padStart(2, '0');
-    const newDate = `${yyyy}-${mm}-${dd}`;
-    setSelectedDate(newDate);
-    void loadOrders(newDate);
-  };
+  const sections = [
+    ...(lunch.length > 0 ? [{ title: '午餐', data: lunch }] : []),
+    ...(dinner.length > 0 ? [{ title: '晚餐', data: dinner }] : []),
+  ];
 
-  const pendingOrders = orders.filter((o) => o.status === 'pending');
-  const otherOrders = orders.filter((o) => o.status !== 'pending');
+  const pending = MOCK_TODAY_ORDERS.filter((o) => o.status === 'pending').length;
+  const totalLunch = MOCK_TODAY_ORDERS.filter((o) => o.meal_type === 'lunch')
+    .reduce((sum, o) => sum + o.quantity, 0);
+  const totalDinner = MOCK_TODAY_ORDERS.filter((o) => o.meal_type === 'dinner')
+    .reduce((sum, o) => sum + o.quantity, 0);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* 日期导航 */}
-      <View style={[styles.dateBar, { backgroundColor: theme.colors.surface }]}>
-        <Button compact onPress={() => handleDateChange(-1)}>
-          &lt;
-        </Button>
-        <View style={styles.dateCenter}>
-          <Text variant="titleMedium" style={{ fontWeight: '700' }}>
-            {selectedDate}
-          </Text>
-          <Button
-            compact
-            onPress={() => { setSelectedDate(todayDate()); void loadOrders(todayDate()); }}
-            style={{ marginTop: -4 }}
-          >
-            今天
-          </Button>
+    <SafeAreaView style={styles.root} edges={['top']}>
+      {/* 导航栏 */}
+      <View style={styles.nav}>
+        <Pressable onPress={() => router.back()}>
+          <Text style={styles.backText}>‹ 返回</Text>
+        </Pressable>
+        <View>
+          <Text style={styles.navTitle}>每日订餐</Text>
+          <Text style={styles.navDate}>今日 4月23日</Text>
         </View>
-        <Button compact onPress={() => handleDateChange(1)}>
-          &gt;
-        </Button>
+        <Pressable>
+          <Text style={styles.addBtn}>+ 录入</Text>
+        </Pressable>
       </View>
 
-      {/* 快捷按钮 */}
-      <View style={styles.quickRow}>
-        <Button
-          mode="outlined"
-          icon="calendar-today"
-          onPress={() => { setSelectedDate(todayDate()); void loadOrders(todayDate()); }}
-          compact
-        >
-          今天
-        </Button>
-        <Button
-          mode="outlined"
-          icon="calendar-arrow-right"
-          onPress={() => { setSelectedDate(tomorrowDate()); void loadOrders(tomorrowDate()); }}
-          compact
-        >
-          明天
-        </Button>
+      {/* 今日汇总条 */}
+      <View style={styles.summaryBar}>
+        <SummaryItem label="午餐" value={`${totalLunch}份`} color={IOS_COLORS.blue} />
+        <View style={styles.summaryDivider} />
+        <SummaryItem label="晚餐" value={`${totalDinner}份`} color="#AF52DE" />
+        <View style={styles.summaryDivider} />
+        <SummaryItem label="待出餐" value={`${pending}份`} color={IOS_COLORS.orange} />
+        <View style={styles.summaryDivider} />
+        <SummaryItem label="总计" value={`${totalLunch + totalDinner}份`} color={IOS_COLORS.label} />
       </View>
 
-      {error && (
-        <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
-      )}
-
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} />
-      ) : (
-        <FlatList
-          data={[...pendingOrders, ...otherOrders]}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={({ item, index }) => (
-            <>
-              {index === pendingOrders.length && otherOrders.length > 0 && index > 0 && (
-                <Divider style={{ marginVertical: 8 }} />
-              )}
-              <OrderCard order={item} />
-            </>
-          )}
-          ListHeaderComponent={
-            orders.length > 0 ? (
-              <Text variant="bodySmall" style={[styles.summary, { color: theme.colors.onSurfaceVariant }]}>
-                共 {orders.length} 条 · 待出餐 {pendingOrders.length} 条
+      {/* 筛选条 */}
+      <View style={styles.filterSection}>
+        <View style={styles.filterRow}>
+          {(['all', 'lunch', 'dinner'] as const).map((v) => (
+            <Pressable
+              key={v}
+              style={[styles.chip, mealFilter === v && styles.chipActive]}
+              onPress={() => setMealFilter(v)}
+            >
+              <Text style={[styles.chipText, mealFilter === v && styles.chipTextActive]}>
+                {v === 'all' ? '全部' : v === 'lunch' ? '午餐' : '晚餐'}
               </Text>
-            ) : null
-          }
-          ListEmptyComponent={
-            <Text style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>
-              {selectedDate} 暂无订单
+            </Pressable>
+          ))}
+          <View style={{ flex: 1 }} />
+          {(['all', 'pending', 'fulfilled', 'delivered'] as const).map((v) => (
+            <Pressable
+              key={v}
+              style={[styles.chip, statusFilter === v && styles.chipStatusActive]}
+              onPress={() => setStatusFilter(v)}
+            >
+              <Text style={[styles.chipText, statusFilter === v && styles.chipTextActive]}>
+                {v === 'all' ? '全部状态' : STATUS_MAP[v].label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* 订单列表 */}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => String(item.id)}
+        stickySectionHeadersEnabled
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderTitle}>
+              {section.title === '午餐' ? '🌤 午餐' : '🌙 晚餐'}
             </Text>
-          }
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => void loadOrders(selectedDate, true)}
-            />
-          }
-        />
-      )}
-
-      {/* 快速录入 FAB */}
-      <FAB
-        icon="plus"
-        label="快速录入"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => setShowModal(true)}
+            <Text style={styles.sectionCount}>
+              {section.data.reduce((s, o) => s + o.quantity, 0)} 份
+            </Text>
+          </View>
+        )}
+        renderItem={({ item, index, section }) => (
+          <OrderRow
+            order={item}
+            isLast={index === section.data.length - 1}
+          />
+        )}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyIcon}>📋</Text>
+            <Text style={styles.emptyText}>暂无订餐记录</Text>
+          </View>
+        }
+        contentContainerStyle={{ paddingBottom: 32 }}
       />
+    </SafeAreaView>
+  );
+}
 
-      <OrderEntryModal
-        visible={showModal}
-        onDismiss={() => setShowModal(false)}
-        defaultDate={selectedDate}
-        onSuccess={() => {
-          setShowModal(false);
-          void loadOrders(selectedDate);
-        }}
-      />
+function SummaryItem({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <View style={styles.summaryItem}>
+      <Text style={[styles.summaryValue, { color }]}>{value}</Text>
+      <Text style={styles.summaryLabel}>{label}</Text>
     </View>
   );
 }
 
+function OrderRow({ order, isLast }: { order: MockOrder; isLast: boolean }) {
+  const s = STATUS_MAP[order.status];
+  const isAdhoc = !order.card_type;
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.orderRow,
+        isLast && styles.orderRowLast,
+        pressed && { backgroundColor: IOS_COLORS.fillLight },
+      ]}
+    >
+      {/* 左侧：会员信息 */}
+      <View style={[styles.orderAvatar, { backgroundColor: order.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+        <Text style={styles.orderAvatarText}>
+          {order.member_nickname?.[0] ?? order.member_name[0]}
+        </Text>
+      </View>
+
+      <View style={styles.orderContent}>
+        <View style={styles.orderTop}>
+          <Text style={styles.orderName}>
+            {order.member_nickname || order.member_name}
+          </Text>
+          {order.is_hospital && (
+            <View style={styles.hospitalBadge}><Text style={styles.hospitalText}>院内</Text></View>
+          )}
+          <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
+            <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
+          </View>
+        </View>
+
+        {/* 卡/散餐类型 */}
+        <View style={styles.orderMeta}>
+          {isAdhoc ? (
+            <Text style={styles.adhocTag}>散餐 ¥{order.amount}</Text>
+          ) : (
+            <Text style={styles.cardTag}>{order.card_type}</Text>
+          )}
+          <Text style={styles.orderQty}>{order.quantity} 份</Text>
+        </View>
+
+        {/* 忌口 / 备注 */}
+        {order.dietary_notes ? (
+          <Text style={styles.orderNote}>忌：{order.dietary_notes}</Text>
+        ) : null}
+        {order.notes ? (
+          <Text style={styles.orderNote}>备注：{order.notes}</Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
+
+  nav: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 10,
+    backgroundColor: IOS_COLORS.card,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
   },
-  dateBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+  backText: { fontSize: 17, color: IOS_COLORS.blue, width: 60 },
+  navTitle: { fontSize: 16, fontWeight: '600', color: IOS_COLORS.label, textAlign: 'center' },
+  navDate: { fontSize: 12, color: IOS_COLORS.labelSecondary, textAlign: 'center' },
+  addBtn: { fontSize: 17, color: IOS_COLORS.blue, width: 60, textAlign: 'right' },
+
+  summaryBar: {
+    flexDirection: 'row', backgroundColor: IOS_COLORS.card,
+    paddingVertical: 14, paddingHorizontal: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
   },
-  dateCenter: {
-    flex: 1,
-    alignItems: 'center',
+  summaryItem: { flex: 1, alignItems: 'center', gap: 2 },
+  summaryValue: { fontSize: 18, fontWeight: '700' },
+  summaryLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
+  summaryDivider: { width: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginVertical: 4 },
+
+  filterSection: {
+    backgroundColor: IOS_COLORS.card,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
   },
-  quickRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  filterRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  chip: {
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 16,
+    backgroundColor: IOS_COLORS.fillLight,
   },
-  list: {
-    padding: 12,
-    paddingBottom: 100,
+  chipActive: { backgroundColor: IOS_COLORS.blue },
+  chipStatusActive: { backgroundColor: '#34C759' },
+  chipText: { fontSize: 13, color: IOS_COLORS.labelSecondary },
+  chipTextActive: { color: '#fff', fontWeight: '600' },
+
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 10,
+    backgroundColor: IOS_COLORS.systemGrouped,
   },
-  orderCard: {
-    marginBottom: 8,
-    borderRadius: 10,
-  },
-  orderContent: {
-    paddingVertical: 8,
-  },
+  sectionHeaderTitle: { fontSize: 16, fontWeight: '700', color: IOS_COLORS.label },
+  sectionCount: { fontSize: 14, color: IOS_COLORS.labelSecondary },
+
   orderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'flex-start',
+    backgroundColor: IOS_COLORS.card, paddingHorizontal: 16, paddingVertical: 14, gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
   },
-  mealBadge: {
-    height: 28,
-    borderRadius: 6,
+  orderRowLast: { borderBottomWidth: 0 },
+
+  orderAvatar: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  statusBadge: {
-    height: 28,
-    borderRadius: 6,
-  },
-  summary: {
-    marginBottom: 8,
-  },
-  empty: {
-    textAlign: 'center',
-    marginTop: 40,
-  },
-  errorText: {
-    padding: 16,
-    textAlign: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 24,
-    borderRadius: 16,
-  },
+  orderAvatarText: { fontSize: 18, fontWeight: '600', color: IOS_COLORS.blue },
+  orderContent: { flex: 1, gap: 4 },
+  orderTop: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  orderName: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
+  hospitalBadge: { backgroundColor: IOS_COLORS.blueLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  hospitalText: { fontSize: 11, color: IOS_COLORS.blue, fontWeight: '600' },
+  statusBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  statusText: { fontSize: 11, fontWeight: '600' },
+  orderMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardTag: { fontSize: 12, color: IOS_COLORS.labelSecondary, backgroundColor: IOS_COLORS.fillLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  adhocTag: { fontSize: 12, color: '#FF9500', backgroundColor: '#FFF4E5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  orderQty: { fontSize: 14, fontWeight: '600', color: IOS_COLORS.label },
+  orderNote: { fontSize: 13, color: IOS_COLORS.orange, lineHeight: 18 },
+
+  empty: { alignItems: 'center', paddingTop: 80, gap: 8 },
+  emptyIcon: { fontSize: 40 },
+  emptyText: { fontSize: 16, color: IOS_COLORS.labelSecondary },
 });
