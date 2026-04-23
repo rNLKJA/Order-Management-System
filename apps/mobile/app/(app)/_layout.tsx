@@ -23,6 +23,8 @@ export default function AppLayout() {
       <Stack.Screen name="members/new" options={{ headerShown: false }} />
       <Stack.Screen name="members/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="finance/index" options={{ title: '记账' }} />
+      <Stack.Screen name="orders/index" options={{ title: '每日订餐' }} />
+      <Stack.Screen name="orders/quick" options={{ title: '快速录入' }} />
     </Stack>
   );
 }

@@ -74,6 +74,15 @@ export default function HomeScreen() {
         财务记账
       </Button>
 
+      <Button
+        mode="contained"
+        icon="food"
+        onPress={() => router.push('/(app)/orders')}
+        style={styles.actionBtn}
+      >
+        每日订餐
+      </Button>
+
       <Button mode="outlined" onPress={signOut} style={styles.signOut}>
         退出登录
       </Button>
