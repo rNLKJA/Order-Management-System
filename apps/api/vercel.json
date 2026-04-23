@@ -4,5 +4,8 @@
   "crons": [
     { "path": "/api/cron/backup", "schedule": "0 19 * * *" },
     { "path": "/api/cron/tomorrow-summary", "schedule": "5 14 * * *" }
+  ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" }
   ]
 }
