@@ -72,6 +72,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@expo/metro-runtime':
+        specifier: ^3.2.3
+        version: 3.2.3(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))
       '@expo/vector-icons':
         specifier: ^14.0.4
         version: 14.1.0(expo-font@12.0.10(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0)))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0)
@@ -95,7 +98,7 @@ importers:
         version: 6.3.1(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))
       expo-router:
         specifier: ~3.5.23
-        version: 3.5.24(e51e9c46c41b8b81010cd0696249c4fe)
+        version: 3.5.24(7e9c78a356a2cc7044ab01920b075952)
       expo-secure-store:
         specifier: ~13.0.2
         version: 13.0.2(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))
@@ -146,8 +149,8 @@ importers:
         specifier: ~18.2.79
         version: 18.2.79
       typescript:
-        specifier: ^5.6.0
-        version: 5.9.3
+        specifier: ^5.3.3
+        version: 5.3.3
 
   packages/shared:
     dependencies:
@@ -5363,6 +5366,11 @@ packages:
     resolution: {integrity: sha512-q7QNVDGTdl702bVFiI5eY4l/HkgCM6at9KhcFbgUAzezHFbOVy4+0O/lCjsABEQwbZPravVfBIiBVGo89yzHFg==}
     engines: {node: '>= 0.4'}
 
+  typescript@5.3.3:
+    resolution: {integrity: sha512-pXWcraxM0uxAS+tN0AG/BF2TyqmHO014Z070UsJ+pFvYuRSq8KH8DmWpnbXe0pEPDHXZV3FcAbJkijJ5oNEnWw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
@@ -7236,9 +7244,9 @@ snapshots:
 
   '@expo/sdk-runtime-versions@1.0.0': {}
 
-  '@expo/server@0.4.4(typescript@5.9.3)':
+  '@expo/server@0.4.4(typescript@5.3.3)':
     dependencies:
-      '@remix-run/node': 2.17.4(typescript@5.9.3)
+      '@remix-run/node': 2.17.4(typescript@5.3.3)
       abort-controller: 3.0.0
       debug: 4.4.3
       source-map-support: 0.5.21
@@ -7892,9 +7900,9 @@ snapshots:
     dependencies:
       nanoid: 3.3.11
 
-  '@remix-run/node@2.17.4(typescript@5.9.3)':
+  '@remix-run/node@2.17.4(typescript@5.3.3)':
     dependencies:
-      '@remix-run/server-runtime': 2.17.4(typescript@5.9.3)
+      '@remix-run/server-runtime': 2.17.4(typescript@5.3.3)
       '@remix-run/web-fetch': 4.4.2
       '@web3-storage/multipart-parser': 1.0.0
       cookie-signature: 1.2.2
@@ -7902,11 +7910,11 @@ snapshots:
       stream-slice: 0.1.2
       undici: 6.25.0
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 5.3.3
 
   '@remix-run/router@1.23.2': {}
 
-  '@remix-run/server-runtime@2.17.4(typescript@5.9.3)':
+  '@remix-run/server-runtime@2.17.4(typescript@5.3.3)':
     dependencies:
       '@remix-run/router': 1.23.2
       '@types/cookie': 0.6.0
@@ -7916,7 +7924,7 @@ snapshots:
       source-map: 0.7.6
       turbo-stream: 2.4.1
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 5.3.3
 
   '@remix-run/web-blob@3.1.0':
     dependencies:
@@ -9184,10 +9192,10 @@ snapshots:
     dependencies:
       invariant: 2.2.4
 
-  expo-router@3.5.24(e51e9c46c41b8b81010cd0696249c4fe):
+  expo-router@3.5.24(7e9c78a356a2cc7044ab01920b075952):
     dependencies:
       '@expo/metro-runtime': 3.2.3(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))
-      '@expo/server': 0.4.4(typescript@5.9.3)
+      '@expo/server': 0.4.4(typescript@5.3.3)
       '@radix-ui/react-slot': 1.0.1(react@18.2.0)
       '@react-navigation/bottom-tabs': 6.5.20(@react-navigation/native@6.1.18(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))(react-native-safe-area-context@4.10.5(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))(react-native-screens@3.31.1(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0)
       '@react-navigation/native': 6.1.18(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0)
@@ -11570,6 +11578,8 @@ snapshots:
       math-intrinsics: 1.1.0
       typed-array-buffer: 1.0.3
       typed-array-byte-offset: 1.0.4
+
+  typescript@5.3.3: {}
 
   typescript@5.9.3: {}
 
