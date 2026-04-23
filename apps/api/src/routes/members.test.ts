@@ -395,8 +395,8 @@ describe('members routes - MEA-10', () => {
       name: '原名',
       phone: '13300000001',
     });
-    const before = created.member.updated_at;
-    await new Promise((r) => setTimeout(r, 5));
+    const before = new Date(created.member.updated_at).getTime();
+    await new Promise((r) => setTimeout(r, 10));
 
     const res = await app.fetch(
       new Request(`http://test.local/api/members/${created.member.id}`, {
@@ -409,7 +409,8 @@ describe('members routes - MEA-10', () => {
     const body = (await res.json()) as { member: MemberShape };
     expect(body.member.address).toBe('北京');
     expect(body.member.dietary_notes).toBe('不吃香菜');
-    expect(body.member.updated_at).toBeGreaterThanOrEqual(before);
+    const after = new Date(body.member.updated_at).getTime();
+    expect(after).toBeGreaterThanOrEqual(before);
   });
 
   it('PATCH 改名 / 昵称 / 手机 → uid 自动重算', async () => {

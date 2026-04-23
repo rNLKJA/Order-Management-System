@@ -16,6 +16,7 @@ import { HTTPException } from 'hono/http-exception';
 
 import { authRouter } from './routes/auth.js';
 import { healthRouter } from './routes/health.js';
+import { membersRouter } from './routes/members.js';
 import type { Db } from './db/client.js';
 
 export interface AppDeps {
@@ -54,6 +55,7 @@ export function createApp(deps: AppDeps = {}) {
   // 路由
   app.route('/api/health', healthRouter);
   app.route('/api/auth', authRouter);
+  app.route('/api/members', membersRouter);
 
   // 根路径
   app.get('/', (c) =>
