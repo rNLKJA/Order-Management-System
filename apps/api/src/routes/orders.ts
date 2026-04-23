@@ -408,19 +408,19 @@ ordersRouter.patch('/:id', zValidator('param', idParamSchema), zValidator('json'
 // ==================== PATCH /api/orders/:id/status ====================
 
 /**
- * 订单状态流转（pending → fulfilled → delivered，允许反向回退）。
+ * 订单状态流转（pending → fulfilled → delivered，送达后锁死）。
  *
  * 规则：
- *  - pending   → fulfilled / cancelled
- *  - fulfilled → delivered / pending（回退，清 fulfilled_at）
- *  - delivered → fulfilled（回退，清 delivered_at）
- *  - cancelled 是终态：不能由本路由回退（要走新建单流程）
+ *  - pending   → fulfilled（或走 /cancel 取消）
+ *  - fulfilled → delivered / pending（回退到待出餐，清 fulfilled_at）
+ *  - delivered → **终态，不可变更**（保留送达审计证据）。如果需要纠错，只能走 /cancel 冲销
+ *    重新建单；保证已交付餐品不会被静默篡改。
+ *  - cancelled → 终态：不能由本路由回退。
  *
  * 变更 fulfilled_at / delivered_at / fulfilled_by_user_id / delivered_by_user_id：
  *  - 进入 fulfilled：set fulfilled_at/by = now / authUser
  *  - 从 fulfilled 回退：clear fulfilled_at/by
  *  - 进入 delivered：set delivered_at/by
- *  - 从 delivered 回退到 fulfilled：clear delivered_at/by
  */
 
 const statusTransitionBodySchema = z.object({
@@ -430,7 +430,7 @@ const statusTransitionBodySchema = z.object({
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   pending: ['fulfilled'],
   fulfilled: ['pending', 'delivered'],
-  delivered: ['fulfilled'],
+  delivered: [], // 终态锁死
   cancelled: [],
 };
 
@@ -456,6 +456,26 @@ ordersRouter.patch(
 
     if (order.status === nextStatus) {
       return c.json({ order });
+    }
+
+    // 送达 / 取消 均为终态，明确拒绝
+    if (order.status === 'delivered') {
+      return c.json(
+        {
+          code: 'ORDER_LOCKED_DELIVERED',
+          message: '订单已送达，状态已锁定。如需纠错请走「取消」走冲销流程后重新建单。',
+        },
+        422,
+      );
+    }
+    if (order.status === 'cancelled') {
+      return c.json(
+        {
+          code: 'ORDER_LOCKED_CANCELLED',
+          message: '订单已取消，状态不可变更',
+        },
+        422,
+      );
     }
 
     const allowed = ALLOWED_TRANSITIONS[order.status] ?? [];
@@ -485,14 +505,10 @@ ordersRouter.patch(
       patch.fulfilled_by_user_id = null;
     }
 
-    // delivered_at / delivered_by
+    // delivered_at / delivered_by（只有 fulfilled → delivered 一条路径；delivered 是终态）
     if (nextStatus === 'delivered' && order.status === 'fulfilled') {
       patch.delivered_at = now;
       patch.delivered_by_user_id = authUser.id;
-    }
-    if (nextStatus === 'fulfilled' && order.status === 'delivered') {
-      patch.delivered_at = null;
-      patch.delivered_by_user_id = null;
     }
 
     await db

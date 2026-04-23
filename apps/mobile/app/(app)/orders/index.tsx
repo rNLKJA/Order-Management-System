@@ -244,6 +244,7 @@ export default function OrdersScreen() {
       {activeTab === 'delivery' && (
         <DeliveryView
           orders={orders}
+          membersById={membersById}
           onMarkDelivered={(id) => handleUpdateStatus(id, 'delivered')}
           onOpenDetail={setActiveOrder}
         />
@@ -257,6 +258,32 @@ export default function OrdersScreen() {
           onUpdate={handleUpdateStatus}
         />
       )}
+
+      {/* 顶部错误 / 加载指示（订单加载失败时挂在 tab bar 下） */}
+      {ordersQuery.error ? (
+        <View style={styles.errorToast}>
+          <Ionicons name="alert-circle-outline" size={14} color="#fff" />
+          <Text style={styles.errorToastText} numberOfLines={1}>
+            订单加载失败：{ordersQuery.error.message}
+          </Text>
+          <Pressable onPress={() => void ordersQuery.refetch()} hitSlop={8}>
+            <Text style={styles.errorToastLink}>重试</Text>
+          </Pressable>
+        </View>
+      ) : ordersQuery.isLoading && !ordersQuery.data ? (
+        <View style={styles.loadingToast}>
+          <ActivityIndicator color={IOS_COLORS.blue} size="small" />
+          <Text style={styles.loadingToastText}>加载订单...</Text>
+        </View>
+      ) : null}
+
+      {/* 全局 mutation 错误提示 */}
+      {toast ? (
+        <View style={styles.errorToast}>
+          <Ionicons name="information-circle-outline" size={14} color="#fff" />
+          <Text style={styles.errorToastText}>{toast}</Text>
+        </View>
+      ) : null}
       </SafeAreaView>
     </View>
   );
@@ -496,6 +523,7 @@ function DeliveryView({
             <DeliveryCard
               key={o.id}
               order={o}
+              member={membersById[o.member_id]}
               onConfirm={() => onMarkDelivered(o.id)}
               onOpen={() => onOpenDetail(o)}
             />
@@ -513,6 +541,7 @@ function DeliveryView({
             <DeliveryCard
               key={o.id}
               order={o}
+              member={membersById[o.member_id]}
               onConfirm={() => onMarkDelivered(o.id)}
               onOpen={() => onOpenDetail(o)}
             />
@@ -1096,6 +1125,16 @@ function StatusSheet({
 }) {
   const isAdhoc = order.card_type === null;
   const cur = STATUS_MAP[order.status];
+  // 送达 / 取消 是终态，所有按钮都禁用（后端同样会 422，这里先在 UI 阻止）
+  const locked = order.status === 'delivered' || order.status === 'cancelled';
+  // 合法流转图（与后端 ALLOWED_TRANSITIONS 对齐）
+  const ALLOWED: Record<MockOrder['status'], MockOrder['status'][]> = {
+    pending: ['fulfilled', 'cancelled'],
+    fulfilled: ['pending', 'delivered'],
+    delivered: [],
+    cancelled: [],
+  };
+  const allowedNext = new Set(ALLOWED[order.status]);
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -1138,19 +1177,29 @@ function StatusSheet({
         ) : null}
 
         <View style={sStyles.divider} />
-        <Text style={sStyles.sectionLabel}>更新出餐状态</Text>
+        <Text style={sStyles.sectionLabel}>
+          {locked
+            ? order.status === 'delivered'
+              ? '订单已送达，状态已锁定'
+              : '订单已取消，状态不可变更'
+            : '更新出餐状态'}
+        </Text>
 
         <View style={sStyles.statusGrid}>
           {STATUS_FLOW.map((s) => {
             const isCurrent = order.status === s.key;
+            const isAllowed = allowedNext.has(s.key);
+            const disabled = isCurrent || !isAllowed;
             return (
               <Pressable
                 key={s.key}
+                disabled={disabled}
                 style={({ pressed }) => [
                   sStyles.statusBtn,
                   { backgroundColor: s.bg, borderColor: isCurrent ? s.color : 'transparent' },
                   isCurrent && sStyles.statusBtnCurrent,
-                  pressed && { opacity: 0.75 },
+                  disabled && !isCurrent && { opacity: 0.35 },
+                  !disabled && pressed && { opacity: 0.75 },
                 ]}
                 onPress={() => onUpdate(order.id, s.key)}
               >
@@ -1293,6 +1342,26 @@ const styles = StyleSheet.create({
   empty:     { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyText: { fontSize: 16, color: IOS_COLORS.labelSecondary },
   emptyLink: { fontSize: 16, color: IOS_COLORS.blue },
+
+  errorToast: {
+    position: 'absolute', left: 16, right: 16, bottom: 24,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(255,59,48,0.94)',
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12,
+  },
+  errorToastText: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
+  errorToastLink: { color: '#fff', fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
+
+  loadingToast: {
+    position: 'absolute', left: 16, right: 16, bottom: 24,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.08)',
+  },
+  loadingToastText: { color: IOS_COLORS.labelSecondary, fontSize: 14 },
 });
 
 // ============================================================
