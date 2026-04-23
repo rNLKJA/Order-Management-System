@@ -1,11 +1,12 @@
 /**
- * 会员 API 封装 - MEA-10。
+ * 会员 API 封装 - MEA-10 / MEA-14。
  *
  * 和 `apps/api/src/routes/members.ts` 的契约严格一一对应。
  */
 
 import type { MemberCreateInput, MemberUpdateInput } from '@meal/shared';
 import { api } from './client';
+import type { Card } from './cards';
 
 export interface Member {
   id: number;
@@ -51,6 +52,34 @@ export interface MemberDetailResp {
   member: Member;
 }
 
+export interface DailyOrder {
+  id: number;
+  member_id: number;
+  card_id: number | null;
+  order_date: string;
+  meal_type: 'lunch' | 'dinner';
+  quantity: number;
+  amount: number;
+  status: 'pending' | 'fulfilled' | 'delivered' | 'cancelled';
+  notes: string;
+  created_by_user_id: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface MemberStatsResp {
+  member: Member;
+  active_card: Card | null;
+  card_history: Card[];
+  order_history: DailyOrder[];
+  stats: {
+    total_purchased_meals: number;
+    total_consumed_meals: number;
+    total_paid_amount: number;
+    order_count: number;
+  };
+}
+
 function buildQuery(params: MemberListParams): string {
   const q = new URLSearchParams();
   if (params.q) q.set('q', params.q);
@@ -79,4 +108,6 @@ export const membersApi = {
     api.patch<MemberDetailResp>(`/api/members/${id}/archive`),
 
   remove: (id: number) => api.delete<{ success: boolean }>(`/api/members/${id}`),
+
+  stats: (id: number) => api.get<MemberStatsResp>(`/api/members/${id}/stats`),
 };

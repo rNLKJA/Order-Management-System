@@ -1,15 +1,17 @@
 /**
- * 会员详情页 - MEA-10（plan §16 骨架）。
+ * 会员详情页 - MEA-14（完善）。
  *
- * 本期覆盖：
- * - 基本信息展示 + 编辑（staff/admin 都可改）
- * - 创建信息行（由 XXX 于 YYYY-MM-DD HH:mm 创建）
- * - admin 专属"归档"按钮
- * - 订阅记录 / 订餐记录：本期以"待 MEA-11/MEA-12 实现"占位
+ * 覆盖：
+ * - 基本信息：姓名 / 昵称 / 手机（点拨） / 微信号（点复制）/ 地址 / 忌口 / 院内外 / 创建信息
+ * - 当前卡面板：卡种 Badge + 剩餐进度条 + 购卡时间；无卡时显示"暂无有效卡"
+ * - 累计数据卡（StatsCards）
+ * - 订阅记录（CardHistoryCard）
+ * - 订餐记录（最近 90 天，空状态兜底）
+ * - 操作区（底部 FAB 区域）：无 active 卡 → 购买新卡；有 active 卡 → 升级 + 录入用餐
  */
 
 import { useState } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+import { View, ScrollView, StyleSheet, Linking, Clipboard } from 'react-native';
 import {
   Appbar,
   Card,
@@ -22,12 +24,19 @@ import {
   Portal,
   Snackbar,
   useTheme,
+  ProgressBar,
+  Badge,
 } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { formatDateTime } from '@meal/shared';
+import { formatDateTime, getCardSpec } from '@meal/shared';
 import { MemberForm } from '../../../components/MemberForm';
-import { membersApi, type Member } from '../../../api/members';
+import { CardPurchaseModal } from '../../../components/CardPurchaseModal';
+import { CardUpgradeModal } from '../../../components/CardUpgradeModal';
+import { StatsCards } from '../../../components/StatsCards';
+import { CardHistoryCard } from '../../../components/CardHistoryCard';
+import { membersApi, type Member, type DailyOrder } from '../../../api/members';
+import type { Card as CardModel } from '../../../api/cards';
 import { useAuth } from '../../../hooks/useAuth';
 import { ApiError } from '../../../api/client';
 
@@ -41,11 +50,21 @@ export default function MemberDetailScreen() {
 
   const [editing, setEditing] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
 
-  const query = useQuery({
+  // Fetch basic member detail (existing endpoint)
+  const memberQuery = useQuery({
     queryKey: ['members', memberId],
     queryFn: () => membersApi.detail(memberId),
+    enabled: Number.isFinite(memberId) && memberId > 0,
+  });
+
+  // Fetch aggregated stats (new endpoint)
+  const statsQuery = useQuery({
+    queryKey: ['members', memberId, 'stats'],
+    queryFn: () => membersApi.stats(memberId),
     enabled: Number.isFinite(memberId) && memberId > 0,
   });
 
@@ -77,8 +96,30 @@ export default function MemberDetailScreen() {
     },
   });
 
+  function invalidateStats() {
+    qc.invalidateQueries({ queryKey: ['members', memberId] });
+    qc.invalidateQueries({ queryKey: ['members', memberId, 'stats'] });
+  }
+
   const isAdmin = user?.role === 'admin';
-  const member: Member | undefined = query.data?.member;
+  const member: Member | undefined = memberQuery.data?.member;
+  const activeCard: CardModel | null = statsQuery.data?.active_card ?? null;
+  const cardHistory: CardModel[] = statsQuery.data?.card_history ?? [];
+  const orderHistory: DailyOrder[] = statsQuery.data?.order_history ?? [];
+  const stats = statsQuery.data?.stats;
+
+  function handleCall() {
+    if (member?.phone) {
+      Linking.openURL(`tel:${member.phone}`);
+    }
+  }
+
+  function handleCopyWechat() {
+    if (member?.wechat_id) {
+      Clipboard.setString(member.wechat_id);
+      setSnack('微信号已复制');
+    }
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
@@ -90,14 +131,14 @@ export default function MemberDetailScreen() {
         ) : null}
       </Appbar.Header>
 
-      {query.isLoading ? (
+      {memberQuery.isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" />
         </View>
-      ) : query.isError || !member ? (
+      ) : memberQuery.isError || !member ? (
         <View style={styles.center}>
           <Text variant="bodyMedium" style={{ color: theme.colors.error }}>
-            {query.isError ? (query.error as Error).message : '会员不存在'}
+            {memberQuery.isError ? (memberQuery.error as Error).message : '会员不存在'}
           </Text>
           <Button mode="outlined" onPress={() => router.back()} style={{ marginTop: 12 }}>
             返回列表
@@ -121,6 +162,7 @@ export default function MemberDetailScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
+          {/* 归档提示 */}
           {!member.is_active ? (
             <Chip
               icon="archive"
@@ -130,6 +172,7 @@ export default function MemberDetailScreen() {
             </Chip>
           ) : null}
 
+          {/* 基本信息 */}
           <Card mode="outlined" style={styles.card}>
             <Card.Content>
               <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -138,65 +181,133 @@ export default function MemberDetailScreen() {
               <InfoRow label="UID" value={member.uid} />
               <InfoRow label="姓名" value={member.name} />
               <InfoRow label="昵称" value={member.nickname || '—'} />
-              <InfoRow label="手机号" value={member.phone} />
-              <InfoRow label="微信号" value={member.wechat_id || '—'} />
-              <InfoRow label="地址" value={member.address || '—'} />
-              <InfoRow label="忌口" value={member.dietary_notes || '—'} />
               <InfoRow
-                label="医院订阅"
-                value={member.is_hospital ? '是（院内）' : '否（院外）'}
+                label="手机号"
+                value={member.phone}
+                onPress={handleCall}
+                pressHint="点击拨打"
               />
+              <InfoRow
+                label="微信号"
+                value={member.wechat_id || '—'}
+                onPress={member.wechat_id ? handleCopyWechat : undefined}
+                pressHint={member.wechat_id ? '点击复制' : undefined}
+              />
+              <InfoRow label="地址" value={member.address || '—'} />
+              <View style={styles.row}>
+                <Text
+                  variant="bodySmall"
+                  style={[styles.rowLabel, { color: theme.colors.onSurfaceVariant }]}
+                >
+                  忌口
+                </Text>
+                <View style={styles.rowValue}>
+                  {member.dietary_notes ? (
+                    <Chip compact icon="alert-circle-outline">
+                      {member.dietary_notes}
+                    </Chip>
+                  ) : (
+                    <Text variant="bodyMedium">—</Text>
+                  )}
+                </View>
+              </View>
+              <View style={styles.row}>
+                <Text
+                  variant="bodySmall"
+                  style={[styles.rowLabel, { color: theme.colors.onSurfaceVariant }]}
+                >
+                  订阅类型
+                </Text>
+                <Chip
+                  compact
+                  style={{
+                    backgroundColor: member.is_hospital
+                      ? theme.colors.primaryContainer
+                      : theme.colors.surfaceVariant,
+                  }}
+                  textStyle={{
+                    color: member.is_hospital
+                      ? theme.colors.onPrimaryContainer
+                      : theme.colors.onSurfaceVariant,
+                  }}
+                >
+                  {member.is_hospital ? '院内订阅' : '院外订阅'}
+                </Chip>
+              </View>
             </Card.Content>
           </Card>
 
+          {/* 创建信息 */}
           <Card mode="outlined" style={styles.card}>
             <Card.Content>
               <Text variant="titleMedium" style={styles.sectionTitle}>
                 创建信息
               </Text>
-              <InfoRow
-                label="创建时间"
-                value={formatDateTime(member.created_at)}
-              />
+              <InfoRow label="创建时间" value={formatDateTime(member.created_at)} />
               <InfoRow label="创建人 ID" value={String(member.created_by_user_id)} />
-              <InfoRow
-                label="最后修改"
-                value={formatDateTime(member.updated_at)}
-              />
+              <InfoRow label="最后修改" value={formatDateTime(member.updated_at)} />
             </Card.Content>
           </Card>
 
-          <Card mode="outlined" style={styles.card}>
-            <Card.Content>
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                订阅记录
-              </Text>
-              <Text
-                variant="bodyMedium"
-                style={{ color: theme.colors.onSurfaceVariant }}
+          {/* 当前卡面板 */}
+          <CurrentCardPanel
+            activeCard={activeCard}
+            loading={statsQuery.isLoading}
+            onBuyCard={() => setPurchaseOpen(true)}
+          />
+
+          {/* 累计数据 */}
+          {stats ? (
+            <StatsCards
+              totalPurchasedMeals={stats.total_purchased_meals}
+              totalConsumedMeals={stats.total_consumed_meals}
+              totalPaidAmount={stats.total_paid_amount}
+            />
+          ) : null}
+
+          {/* 订阅记录 */}
+          <CardHistoryCard cards={cardHistory} />
+
+          {/* 订餐记录 */}
+          <OrderHistorySection orders={orderHistory} loading={statsQuery.isLoading} />
+
+          {/* 操作区 */}
+          <View style={styles.actions}>
+            {activeCard ? (
+              <>
+                <Button
+                  mode="contained-tonal"
+                  icon="arrow-up-circle"
+                  onPress={() => setUpgradeOpen(true)}
+                  style={styles.actionBtn}
+                >
+                  升级卡种
+                </Button>
+                <Button
+                  mode="contained"
+                  icon="silverware-fork-knife"
+                  onPress={() => router.push('/orders/quick' as any)}
+                  style={styles.actionBtn}
+                >
+                  录入用餐
+                </Button>
+              </>
+            ) : (
+              <Button
+                mode="contained"
+                icon="credit-card-plus"
+                onPress={() => setPurchaseOpen(true)}
+                style={styles.actionBtn}
               >
-                本期（MEA-10）还未实现；MEA-11 上线后会显示当前卡、历史卡列表和购卡按钮。
-              </Text>
-            </Card.Content>
-          </Card>
+                购买新卡
+              </Button>
+            )}
+          </View>
 
-          <Card mode="outlined" style={styles.card}>
-            <Card.Content>
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                订餐记录（最近 90 天）
-              </Text>
-              <Text
-                variant="bodyMedium"
-                style={{ color: theme.colors.onSurfaceVariant }}
-              >
-                本期（MEA-10）还未实现；MEA-12 上线后会显示订单明细 + 状态徽章。
-              </Text>
-            </Card.Content>
-          </Card>
-
+          {/* 归档操作（admin） */}
           {isAdmin && member.is_active ? (
             <>
-              <Divider style={{ marginVertical: 16 }} />
+              <Divider style={{ marginVertical: 8 }} />
               <Button
                 mode="outlined"
                 icon="archive-arrow-down"
@@ -217,12 +328,41 @@ export default function MemberDetailScreen() {
         </ScrollView>
       )}
 
+      {/* 购卡 Modal */}
+      {member ? (
+        <CardPurchaseModal
+          visible={purchaseOpen}
+          memberId={member.id}
+          memberIsHospital={member.is_hospital}
+          onDismiss={() => setPurchaseOpen(false)}
+          onSuccess={() => {
+            setPurchaseOpen(false);
+            invalidateStats();
+            setSnack('购卡成功');
+          }}
+        />
+      ) : null}
+
+      {/* 升级 Modal */}
+      {activeCard ? (
+        <CardUpgradeModal
+          visible={upgradeOpen}
+          currentCard={activeCard}
+          onDismiss={() => setUpgradeOpen(false)}
+          onSuccess={() => {
+            setUpgradeOpen(false);
+            invalidateStats();
+            setSnack('升级成功');
+          }}
+        />
+      ) : null}
+
       <Portal>
         <Dialog visible={archiveOpen} onDismiss={() => setArchiveOpen(false)}>
           <Dialog.Title>确认归档？</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodyMedium">
-              归档后该会员将从默认列表隐藏，已有的卡 / 订单 / 财务记录不受影响。之后可以重新打开详情解档（后续版本支持）。
+              归档后该会员将从默认列表隐藏，已有的卡 / 订单 / 财务记录不受影响。
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
@@ -245,7 +385,234 @@ export default function MemberDetailScreen() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+// =========== 当前卡面板 ===========
+
+function CurrentCardPanel({
+  activeCard,
+  loading,
+  onBuyCard,
+}: {
+  activeCard: CardModel | null;
+  loading: boolean;
+  onBuyCard: () => void;
+}) {
+  const theme = useTheme();
+
+  if (loading) {
+    return (
+      <Card mode="outlined" style={styles.card}>
+        <Card.Content>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            当前有效卡
+          </Text>
+          <ActivityIndicator size="small" />
+        </Card.Content>
+      </Card>
+    );
+  }
+
+  if (!activeCard) {
+    return (
+      <Card mode="outlined" style={styles.card}>
+        <Card.Content>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            当前有效卡
+          </Text>
+          <Text
+            variant="bodyMedium"
+            style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}
+          >
+            暂无有效卡
+          </Text>
+          <Button mode="contained-tonal" icon="credit-card-plus" onPress={onBuyCard}>
+            购买新卡
+          </Button>
+        </Card.Content>
+      </Card>
+    );
+  }
+
+  const spec = getCardSpec(activeCard.is_hospital, activeCard.card_code);
+  const cardName = spec?.name ?? activeCard.card_code;
+  const progress =
+    activeCard.total_meals > 0 ? activeCard.used_meals / activeCard.total_meals : 0;
+
+  return (
+    <Card mode="outlined" style={styles.card}>
+      <Card.Content>
+        <View style={styles.cardPanelHeader}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            当前有效卡
+          </Text>
+          <Chip
+            compact
+            style={{ backgroundColor: theme.colors.primaryContainer }}
+            textStyle={{ color: theme.colors.onPrimaryContainer, fontSize: 12 }}
+          >
+            {cardName}
+          </Chip>
+        </View>
+
+        <View style={styles.mealsRow}>
+          <Text variant="headlineMedium" style={{ color: theme.colors.primary, fontWeight: '700' }}>
+            {activeCard.remaining_meals}
+          </Text>
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+            {' '}/ {activeCard.total_meals} 餐
+          </Text>
+        </View>
+
+        <ProgressBar
+          progress={progress}
+          color={theme.colors.primary}
+          style={styles.cardProgress}
+        />
+
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+          已用 {activeCard.used_meals} 餐 · 购卡 {formatDateTime(new Date(activeCard.purchased_at))}
+        </Text>
+      </Card.Content>
+    </Card>
+  );
+}
+
+// =========== 订餐记录区块 ===========
+
+const MEAL_TYPE_LABEL: Record<string, string> = {
+  lunch: '午餐',
+  dinner: '晚餐',
+};
+
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  pending: '等待出餐',
+  fulfilled: '已出餐',
+  delivered: '已送达',
+  cancelled: '已取消',
+};
+
+function OrderHistorySection({
+  orders,
+  loading,
+}: {
+  orders: DailyOrder[];
+  loading: boolean;
+}) {
+  const theme = useTheme();
+
+  return (
+    <Card mode="outlined" style={styles.card}>
+      <Card.Content>
+        <Text variant="titleMedium" style={styles.sectionTitle}>
+          订餐记录（最近 90 天）
+        </Text>
+
+        {loading ? (
+          <ActivityIndicator size="small" />
+        ) : orders.length === 0 ? (
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+            暂无订餐记录
+          </Text>
+        ) : (
+          orders.map((order, index) => (
+            <OrderRow
+              key={order.id}
+              order={order}
+              isLast={index === orders.length - 1}
+            />
+          ))
+        )}
+      </Card.Content>
+    </Card>
+  );
+}
+
+function OrderRow({ order, isLast }: { order: DailyOrder; isLast: boolean }) {
+  const theme = useTheme();
+  const mealLabel = MEAL_TYPE_LABEL[order.meal_type] ?? order.meal_type;
+  const statusLabel = ORDER_STATUS_LABEL[order.status] ?? order.status;
+  const isCancelled = order.status === 'cancelled';
+  const isDelivered = order.status === 'delivered';
+
+  const statusColor = isCancelled
+    ? theme.colors.error
+    : isDelivered
+      ? theme.colors.primary
+      : theme.colors.secondary;
+
+  return (
+    <View
+      style={[
+        styles.orderRow,
+        !isLast && styles.itemBorder,
+        isCancelled && { opacity: 0.55 },
+      ]}
+    >
+      <View style={styles.orderRowLeft}>
+        <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+          {order.order_date}
+        </Text>
+        <View style={styles.orderChips}>
+          <Chip
+            compact
+            style={[
+              styles.mealChip,
+              {
+                backgroundColor:
+                  order.meal_type === 'lunch'
+                    ? theme.colors.primaryContainer
+                    : theme.colors.secondaryContainer,
+              },
+            ]}
+            textStyle={{
+              color:
+                order.meal_type === 'lunch'
+                  ? theme.colors.onPrimaryContainer
+                  : theme.colors.onSecondaryContainer,
+              fontSize: 11,
+            }}
+          >
+            {mealLabel}
+          </Chip>
+          <Chip
+            compact
+            style={[styles.mealChip, { backgroundColor: `${statusColor}20` }]}
+            textStyle={{ color: statusColor, fontSize: 11 }}
+          >
+            {statusLabel}
+          </Chip>
+        </View>
+      </View>
+      <View style={styles.orderRowRight}>
+        <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+          {order.quantity} 份
+        </Text>
+        {order.card_id ? (
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            扣卡
+          </Text>
+        ) : (
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            散餐
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// =========== 基础行组件 ===========
+
+function InfoRow({
+  label,
+  value,
+  onPress,
+  pressHint,
+}: {
+  label: string;
+  value: string;
+  onPress?: () => void;
+  pressHint?: string;
+}) {
   const theme = useTheme();
   return (
     <View style={styles.row}>
@@ -255,9 +622,20 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       >
         {label}
       </Text>
-      <Text variant="bodyMedium" style={styles.rowValue}>
-        {value}
-      </Text>
+      <View style={styles.rowValue}>
+        <Text
+          variant="bodyMedium"
+          style={onPress ? { color: theme.colors.primary } : undefined}
+          onPress={onPress}
+        >
+          {value}
+        </Text>
+        {pressHint && onPress ? (
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            {pressHint}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -272,7 +650,7 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     gap: 12,
-    paddingBottom: 48,
+    paddingBottom: 64,
   },
   card: { borderRadius: 12 },
   sectionTitle: { fontWeight: '600', marginBottom: 8 },
@@ -280,14 +658,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 6,
     gap: 12,
+    alignItems: 'center',
   },
-  rowLabel: { width: 96 },
-  rowValue: { flex: 1 },
-  archivedBadge: {
-    alignSelf: 'flex-start',
+  rowLabel: { width: 80 },
+  rowValue: { flex: 1, gap: 2 },
+  archivedBadge: { alignSelf: 'flex-start' },
+  dangerButton: { marginTop: 8, borderRadius: 10 },
+  cardPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  dangerButton: {
-    marginTop: 8,
-    borderRadius: 10,
+  mealsRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 4,
   },
+  cardProgress: { height: 8, borderRadius: 4, marginBottom: 6 },
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  actionBtn: { flex: 1, borderRadius: 10 },
+  orderRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  itemBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  orderRowLeft: { gap: 4 },
+  orderRowRight: { alignItems: 'flex-end', gap: 2 },
+  orderChips: { flexDirection: 'row', gap: 4 },
+  mealChip: {},
 });

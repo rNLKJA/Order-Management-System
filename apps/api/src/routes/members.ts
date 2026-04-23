@@ -27,6 +27,7 @@ import { requireAuth, requireRole, type AuthVariables } from '../middleware/jwt.
 import {
   countMemberReferences,
   findDuplicatePhone,
+  getMemberStats,
   recomputeUid,
 } from '../services/members.js';
 
@@ -293,6 +294,18 @@ membersRouter.patch(
     return c.json({ member });
   },
 );
+
+// =========== 会员详情聚合（卡历史 + 近 90 天订单 + 累计统计） ===========
+
+membersRouter.get('/:id{[0-9]+}/stats', async (c) => {
+  const id = Number(c.req.param('id'));
+  const db = requestDb(c);
+  const result = await getMemberStats(db, id);
+  if (!result) {
+    throw new HTTPException(404, { message: '会员不存在' });
+  }
+  return c.json(result);
+});
 
 // =========== 硬删除（仅 admin，无引用才允许） ===========
 

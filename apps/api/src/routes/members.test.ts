@@ -19,7 +19,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import type { drizzle } from 'drizzle-orm/libsql';
 import { and, eq } from 'drizzle-orm';
 import { createApp } from '../app.js';
-import { setupTestDb, seedUser } from '../test-helpers.js';
+import { setupTestDb, seedUser, seedMember, seedCard } from '../test-helpers.js';
 import * as schema from '../db/schema.js';
 import type { LoginResponse } from '@meal/shared';
 
@@ -594,3 +594,266 @@ function eqAudit(entity: 'member', entityId: number) {
     eq(schema.audit_logs.entity_id, entityId),
   );
 }
+
+// =========== GET /api/members/:id/stats - MEA-14 ===========
+
+interface StatsResp {
+  member: MemberShape;
+  active_card: {
+    id: number;
+    card_code: string;
+    status: string;
+    total_meals: number;
+    used_meals: number;
+    remaining_meals: number;
+    paid_amount: number;
+  } | null;
+  card_history: Array<{
+    id: number;
+    card_code: string;
+    status: string;
+    total_meals: number;
+    used_meals: number;
+    paid_amount: number;
+  }>;
+  order_history: Array<{
+    id: number;
+    order_date: string;
+    meal_type: string;
+    quantity: number;
+    status: string;
+  }>;
+  stats: {
+    total_purchased_meals: number;
+    total_consumed_meals: number;
+    total_paid_amount: number;
+    order_count: number;
+  };
+}
+
+describe('GET /api/members/:id/stats - MEA-14', () => {
+  let db: TestDb;
+  let app: ReturnType<typeof createApp>;
+  let staffToken: string;
+  let staffUserId: number;
+
+  beforeEach(async () => {
+    const setup = await setupTestDb();
+    db = setup.db;
+    app = createApp({ db });
+
+    const staff = await seedUser(db, {
+      username: 'staff_stats',
+      full_name: '员工统计',
+      role: 'staff',
+      password: 'StaffStat1!',
+    });
+    staffUserId = staff.id;
+
+    const fakeIp = `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+    const res = await app.fetch(
+      new Request('http://test.local/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': fakeIp },
+        body: JSON.stringify({ username: 'staff_stats', password: 'StaffStat1!' }),
+      }),
+    );
+    staffToken = ((await res.json()) as LoginResponse).token;
+  });
+
+  function authHdr(token: string) {
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  async function getStats(memberId: number): Promise<{ status: number; body: StatsResp }> {
+    const res = await app.fetch(
+      new Request(`http://test.local/api/members/${memberId}/stats`, {
+        headers: authHdr(staffToken),
+      }),
+    );
+    return { status: res.status, body: (await res.json()) as StatsResp };
+  }
+
+  it('会员不存在时返回 404', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/members/99999/stats', {
+        headers: authHdr(staffToken),
+      }),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('无卡会员：active_card=null，card_history=[]，stats 全 0', async () => {
+    const { id } = await seedMember(db, { created_by_user_id: staffUserId });
+    const { status, body } = await getStats(id);
+    expect(status).toBe(200);
+    expect(body.active_card).toBeNull();
+    expect(body.card_history).toHaveLength(0);
+    expect(body.order_history).toHaveLength(0);
+    expect(body.stats.total_purchased_meals).toBe(0);
+    expect(body.stats.total_consumed_meals).toBe(0);
+    expect(body.stats.total_paid_amount).toBe(0);
+    expect(body.stats.order_count).toBe(0);
+    expect(body.member.id).toBe(id);
+  });
+
+  it('有单张 active 卡的会员：stats 聚合正确', async () => {
+    const { id } = await seedMember(db, { created_by_user_id: staffUserId });
+    await seedCard(db, {
+      member_id: id,
+      created_by_user_id: staffUserId,
+      collector_user_id: staffUserId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      used_meals: 3,
+      unit_price: 35,
+      paid_amount: 350,
+      status: 'active',
+    });
+
+    const { status, body } = await getStats(id);
+    expect(status).toBe(200);
+    expect(body.active_card).not.toBeNull();
+    expect(body.active_card?.status).toBe('active');
+    expect(body.card_history).toHaveLength(1);
+    expect(body.stats.total_purchased_meals).toBe(10);
+    expect(body.stats.total_consumed_meals).toBe(3);
+    expect(body.stats.total_paid_amount).toBe(350);
+  });
+
+  it('多张历史卡（purchased + upgraded + exhausted）：card_history 倒序，stats 正确累计', async () => {
+    const { id } = await seedMember(db, { created_by_user_id: staffUserId });
+
+    // 第一张：已升级（旧卡）
+    const card1 = await seedCard(db, {
+      member_id: id,
+      created_by_user_id: staffUserId,
+      collector_user_id: staffUserId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      used_meals: 10,
+      unit_price: 35,
+      paid_amount: 350,
+      status: 'upgraded',
+    });
+
+    // 短暂延迟确保 created_at / purchased_at 不同
+    await new Promise((r) => setTimeout(r, 5));
+
+    // 第二张：已用完
+    await seedCard(db, {
+      member_id: id,
+      created_by_user_id: staffUserId,
+      collector_user_id: staffUserId,
+      card_code: 'biweek',
+      is_hospital: false,
+      total_meals: 20,
+      used_meals: 20,
+      unit_price: 30,
+      paid_amount: 600,
+      status: 'exhausted',
+    });
+
+    await new Promise((r) => setTimeout(r, 5));
+
+    // 第三张：当前 active
+    await seedCard(db, {
+      member_id: id,
+      created_by_user_id: staffUserId,
+      collector_user_id: staffUserId,
+      card_code: 'month',
+      is_hospital: false,
+      total_meals: 30,
+      used_meals: 5,
+      unit_price: 28,
+      paid_amount: 840,
+      status: 'active',
+    });
+
+    const { status, body } = await getStats(id);
+    expect(status).toBe(200);
+    expect(body.active_card?.status).toBe('active');
+    expect(body.card_history).toHaveLength(3);
+    // 倒序：最新的（active）应排在第一
+    expect(body.card_history[0]!.status).toBe('active');
+    // 第一张升级卡应在最后
+    expect(body.card_history[2]!.id).toBe(card1.id);
+    // 累计统计
+    expect(body.stats.total_purchased_meals).toBe(60); // 10+20+30
+    expect(body.stats.total_consumed_meals).toBe(35); // 10+20+5
+    expect(body.stats.total_paid_amount).toBeCloseTo(1790); // 350+600+840
+  });
+
+  it('order_history 为空时正常返回 []，order_count=0', async () => {
+    const { id } = await seedMember(db, { created_by_user_id: staffUserId });
+    await seedCard(db, {
+      member_id: id,
+      created_by_user_id: staffUserId,
+      collector_user_id: staffUserId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      used_meals: 0,
+      unit_price: 35,
+      paid_amount: 350,
+      status: 'active',
+    });
+
+    const { status, body } = await getStats(id);
+    expect(status).toBe(200);
+    expect(body.order_history).toEqual([]);
+    expect(body.stats.order_count).toBe(0);
+  });
+
+  it('未登录访问 stats 返回 401', async () => {
+    const { id } = await seedMember(db, { created_by_user_id: staffUserId });
+    const res = await app.fetch(
+      new Request(`http://test.local/api/members/${id}/stats`),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('有订单时 order_count 排除 cancelled 状态', async () => {
+    const { id } = await seedMember(db, { created_by_user_id: staffUserId });
+
+    // 插入 2 条有效订单 + 1 条取消订单
+    await db.insert(schema.daily_orders).values([
+      {
+        member_id: id,
+        order_date: '2026-04-20',
+        meal_type: 'lunch',
+        quantity: 1,
+        amount: 35,
+        status: 'pending',
+        created_by_user_id: staffUserId,
+      },
+      {
+        member_id: id,
+        order_date: '2026-04-21',
+        meal_type: 'dinner',
+        quantity: 2,
+        amount: 70,
+        status: 'delivered',
+        created_by_user_id: staffUserId,
+      },
+      {
+        member_id: id,
+        order_date: '2026-04-22',
+        meal_type: 'lunch',
+        quantity: 1,
+        amount: 35,
+        status: 'cancelled',
+        created_by_user_id: staffUserId,
+      },
+    ]);
+
+    const { status, body } = await getStats(id);
+    expect(status).toBe(200);
+    // 近 90 天内的 3 条记录都在 order_history
+    expect(body.order_history.length).toBeGreaterThanOrEqual(2);
+    // order_count 只算非 cancelled（2 条）
+    expect(body.stats.order_count).toBe(2);
+  });
+});
