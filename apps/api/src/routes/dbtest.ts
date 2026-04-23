@@ -50,11 +50,10 @@ dbtestRouter.get('/cmp', async (c) => {
       (env.TURSO_AUTH_TOKEN ?? '') === (process.env.TURSO_AUTH_TOKEN ?? ''),
   };
   try {
-    const { getClient } = await import('../db/client.js');
+    const { resetDbForTesting, getClient } = await import('../db/client.js');
+    resetDbForTesting();
     const client = getClient();
     out.clientProtocol = (client as any).protocol;
-    out.clientAuthTokenLen = ((client as any)._HttpClient__authToken ?? '').length;
-    // 尝试用 client 直接执行（绕过 drizzle）
     const res = await client.execute('SELECT 1 AS one');
     out.directExecuteOk = true;
     out.directExecuteRows = res.rows?.length;
