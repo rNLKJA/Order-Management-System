@@ -154,4 +154,78 @@ export async function login(
   return (await res.json()) as LoginResponse;
 }
 
+/**
+ * 建一个会员，返回 id。
+ */
+export async function seedMember(
+  db: ReturnType<typeof drizzle<typeof schema>>,
+  opts: {
+    created_by_user_id: number;
+    name?: string;
+    nickname?: string;
+    phone?: string;
+    wechat_id?: string;
+    address?: string;
+    dietary_notes?: string;
+    is_hospital?: boolean;
+    is_active?: boolean;
+  },
+): Promise<{ id: number }> {
+  const rand = Math.random().toString(36).slice(2, 8);
+  const rows = await db
+    .insert(schema.members)
+    .values({
+      uid: `M${Date.now().toString(36)}${rand}`,
+      name: opts.name ?? `会员${rand}`,
+      nickname: opts.nickname ?? '',
+      phone: opts.phone ?? `139${rand.padStart(8, '0').slice(0, 8)}`,
+      wechat_id: opts.wechat_id ?? '',
+      address: opts.address ?? '',
+      dietary_notes: opts.dietary_notes ?? '',
+      is_hospital: opts.is_hospital ?? false,
+      is_active: opts.is_active ?? true,
+      created_by_user_id: opts.created_by_user_id,
+    })
+    .returning({ id: schema.members.id });
+  return { id: rows[0]!.id };
+}
+
+/**
+ * 直接插一条卡（跳过业务校验，只为给 active/exhausted/upgraded 场景拉起初态）。
+ */
+export async function seedCard(
+  db: ReturnType<typeof drizzle<typeof schema>>,
+  opts: {
+    member_id: number;
+    created_by_user_id: number;
+    collector_user_id: number;
+    card_code: string;
+    is_hospital: boolean;
+    total_meals: number;
+    used_meals?: number;
+    unit_price: number;
+    paid_amount: number;
+    status?: 'active' | 'upgraded' | 'exhausted';
+  },
+): Promise<{ id: number }> {
+  const used = opts.used_meals ?? 0;
+  const rows = await db
+    .insert(schema.cards)
+    .values({
+      member_id: opts.member_id,
+      card_code: opts.card_code,
+      is_hospital: opts.is_hospital,
+      total_meals: opts.total_meals,
+      used_meals: used,
+      remaining_meals: opts.total_meals - used,
+      unit_price: opts.unit_price,
+      paid_amount: opts.paid_amount,
+      status: opts.status ?? 'active',
+      collector_user_id: opts.collector_user_id,
+      created_by_user_id: opts.created_by_user_id,
+    })
+    .returning({ id: schema.cards.id });
+  return { id: rows[0]!.id };
+}
+
 export { createApp, schema };
