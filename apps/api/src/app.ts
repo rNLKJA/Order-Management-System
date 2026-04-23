@@ -3,6 +3,9 @@
  *
  * server.ts 本地跑时引用它，vercel.ts 部署到 Vercel 时也引用它，
  * 实现"一套代码，本地/云端都能跑"。
+ *
+ * createApp 接受可选的 deps（用于测试注入）：
+ * - deps.db：强制用传入的 Drizzle 实例，跳过全局单例
  */
 
 import { Hono } from 'hono';
@@ -13,9 +16,26 @@ import { HTTPException } from 'hono/http-exception';
 
 import { authRouter } from './routes/auth.js';
 import { healthRouter } from './routes/health.js';
+import type { Db } from './db/client.js';
 
-export function createApp() {
-  const app = new Hono();
+export interface AppDeps {
+  db?: Db;
+}
+
+export type AppVariables = {
+  dbOverride?: Db;
+};
+
+export function createApp(deps: AppDeps = {}) {
+  const app = new Hono<{ Variables: AppVariables }>();
+
+  // 注入 deps.db 到 c.var（仅测试用）
+  if (deps.db) {
+    app.use('*', async (c, next) => {
+      c.set('dbOverride', deps.db);
+      await next();
+    });
+  }
 
   // 全局中间件
   app.use('*', logger());

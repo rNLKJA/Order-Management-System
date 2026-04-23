@@ -15,7 +15,8 @@ import { HTTPException } from 'hono/http-exception';
 import { zValidator } from '@hono/zod-validator';
 import { eq } from 'drizzle-orm';
 import { loginSchema, type LoginResponse } from '@meal/shared';
-import { getDb, schema } from '../db/client.js';
+import { schema } from '../db/client.js';
+import { requestDb } from '../db/request-db.js';
 import { verifyPassword } from '../services/password.js';
 import { signToken } from '../services/jwt.js';
 import { requireAuth, type AuthVariables } from '../middleware/jwt.js';
@@ -36,7 +37,7 @@ authRouter.use(
 authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
   const { username, password } = c.req.valid('json');
 
-  const db = getDb();
+  const db = requestDb(c);
   const rows = await db
     .select()
     .from(schema.users)

@@ -11,7 +11,8 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { eq } from 'drizzle-orm';
 import { verifyToken } from '../services/jwt.js';
-import { getDb, schema } from '../db/client.js';
+import { schema } from '../db/client.js';
+import { requestDb } from '../db/request-db.js';
 import type { AuthTokenPayload, UserRole } from '@meal/shared';
 
 export interface AuthUserCtx {
@@ -36,7 +37,9 @@ function extractToken(c: Context): string | null {
   return null;
 }
 
-export function requireAuth(): MiddlewareHandler<{ Variables: AuthVariables }> {
+export function requireAuth(): MiddlewareHandler<{
+  Variables: AuthVariables;
+}> {
   return async (c, next) => {
     const token = extractToken(c);
     if (!token) {
@@ -50,7 +53,7 @@ export function requireAuth(): MiddlewareHandler<{ Variables: AuthVariables }> {
       throw new HTTPException(401, { message: '登录已过期，请重新登录' });
     }
 
-    const db = getDb();
+    const db = requestDb(c);
     const rows = await db
       .select({
         id: schema.users.id,
