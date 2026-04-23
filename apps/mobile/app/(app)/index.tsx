@@ -1,7 +1,7 @@
 /**
- * 面板占位页（Phase 1 收尾）。
+ * 面板占位页（Phase 2 合并后：作为各功能入口）。
  *
- * Phase 2 会把这个页面换成真实的指标卡 + 续卡提醒表 + 7 日趋势图。
+ * Phase 4 会把这个页面换成真实的指标卡 + 续卡提醒表 + 7 日趋势图。
  */
 
 import { View, StyleSheet, ScrollView } from 'react-native';
@@ -36,7 +36,7 @@ export default function HomeScreen() {
       <Card mode="outlined" style={styles.card}>
         <Card.Content>
           <Text variant="titleMedium" style={{ fontWeight: '600' }}>
-            Phase 1 完成度
+            已就绪
           </Text>
           <Text variant="bodyMedium" style={styles.listItem}>
             · Turborepo + pnpm workspace
@@ -48,10 +48,10 @@ export default function HomeScreen() {
             · 认证（argon2id + HS256 JWT）
           </Text>
           <Text variant="bodyMedium" style={styles.listItem}>
-            · Expo + React Native Paper 主题
+            · 会员管理 / 购卡 / 升级 / 财务
           </Text>
           <Text variant="bodyMedium" style={[styles.listItem, { color: theme.colors.onSurfaceVariant }]}>
-            · 下一阶段（Phase 2）：会员 / 卡 / 订餐 / 财务
+            · 下一阶段（Phase 2.5+）：每日订餐 + 出餐视图
           </Text>
         </Card.Content>
       </Card>
@@ -60,9 +60,18 @@ export default function HomeScreen() {
         mode="contained"
         icon="account-group"
         onPress={() => router.push('/(app)/members')}
-        style={styles.primaryAction}
+        style={styles.actionBtn}
       >
         会员管理
+      </Button>
+
+      <Button
+        mode="contained"
+        icon="cash-multiple"
+        onPress={() => router.push('/(app)/finance')}
+        style={styles.actionBtn}
+      >
+        财务记账
       </Button>
 
       <Button mode="outlined" onPress={signOut} style={styles.signOut}>
@@ -83,12 +92,12 @@ const styles = StyleSheet.create({
   listItem: {
     marginTop: 6,
   },
-  primaryAction: {
-    marginTop: 8,
+  actionBtn: {
+    marginTop: 4,
     borderRadius: 10,
   },
   signOut: {
-    marginTop: 8,
+    marginTop: 16,
     alignSelf: 'flex-start',
     borderRadius: 10,
   },
