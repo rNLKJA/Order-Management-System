@@ -22,6 +22,7 @@ import { healthRouter } from './routes/health.js';
 import { membersRouter } from './routes/members.js';
 import { ordersRouter } from './routes/orders.js';
 import { usersRouter } from './routes/users.js';
+import { walkinsRouter } from './routes/walkins.js';
 import type { Db } from './db/client.js';
 
 export interface AppDeps {
@@ -61,6 +62,7 @@ export function createApp(deps: AppDeps = {}) {
   app.route('/api/health', healthRouter);
   app.route('/api/auth', authRouter);
   app.route('/api/members', membersRouter);
+  app.route('/api/walkins', walkinsRouter);
   app.route('/api/cards', cardsRouter);
   app.route('/api/finance', financeRouter);
   app.route('/api/orders', ordersRouter);

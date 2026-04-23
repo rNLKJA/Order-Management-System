@@ -49,6 +49,13 @@ const listQuerySchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => v === 'true'),
+  /**
+   * 会员 / 散客 / 全部过滤：
+   *  - 'member'（默认）：只返回正式会员（is_walkin=false）
+   *  - 'walkin'：只返回散客目录（is_walkin=true）
+   *  - 'all'：两者都返回
+   */
+  type: z.enum(['member', 'walkin', 'all']).optional().default('member'),
   limit: z
     .string()
     .optional()
@@ -68,11 +75,18 @@ const listQuerySchema = z.object({
 // =========== 列表 ===========
 
 membersRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
-  const { q, is_hospital, is_active, include_archived, limit, offset } =
+  const { q, is_hospital, is_active, include_archived, type, limit, offset } =
     c.req.valid('query');
   const db = requestDb(c);
 
   const conds: SQL[] = [];
+
+  // 散客 / 会员 过滤
+  if (type === 'member') {
+    conds.push(eq(schema.members.is_walkin, false));
+  } else if (type === 'walkin') {
+    conds.push(eq(schema.members.is_walkin, true));
+  }
 
   // 活跃筛选：显式传 is_active 覆盖 include_archived；
   // 否则默认只返回 is_active=true，除非 include_archived=true

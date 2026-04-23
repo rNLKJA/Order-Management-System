@@ -924,4 +924,123 @@ describe('Orders API /api/orders', () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it('POST 散客同名复用：两次同名 walk-in → 同一 is_walkin member_id', async () => {
+    const post = (name: string) =>
+      app.fetch(
+        new Request('http://test.local/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${staffToken}`,
+          },
+          body: JSON.stringify({
+            order_date: '2026-04-24',
+            lunch_qty: 1,
+            customer_name: name,
+          }),
+        }),
+      );
+
+    const r1 = await post('李四');
+    expect(r1.status).toBe(201);
+    const b1 = (await r1.json()) as { orders: schema.DailyOrder[] };
+
+    const r2 = await post('李四');
+    expect(r2.status).toBe(201);
+    const b2 = (await r2.json()) as { orders: schema.DailyOrder[] };
+
+    expect(b1.orders[0]!.member_id).toBe(b2.orders[0]!.member_id);
+
+    // 这个 member 应该是 is_walkin=true
+    const members = await db
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.id, b1.orders[0]!.member_id));
+    expect(members[0]!.is_walkin).toBe(true);
+    expect(members[0]!.uid).toBe('__WALKIN__李四');
+  });
+
+  it('GET /api/walkins 返回聚合统计，/api/members 默认不返回散客', async () => {
+    // 建一个会员订单
+    const memberOrderRes = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({
+          member_id: memberId,
+          order_date: '2026-04-24',
+          lunch_qty: 1,
+        }),
+      }),
+    );
+    expect(memberOrderRes.status).toBe(201);
+
+    // 建两条散客 walk-in 订单
+    for (const name of ['赵六', '王七']) {
+      await app.fetch(
+        new Request('http://test.local/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${staffToken}`,
+          },
+          body: JSON.stringify({
+            order_date: '2026-04-24',
+            lunch_qty: 2,
+            customer_name: name,
+            adhoc_unit_price: 35,
+          }),
+        }),
+      );
+    }
+
+    // /api/walkins → 2 位，每人 1 单 2 份 ¥70
+    const walkinRes = await app.fetch(
+      new Request('http://test.local/api/walkins', {
+        headers: { Authorization: `Bearer ${staffToken}` },
+      }),
+    );
+    expect(walkinRes.status).toBe(200);
+    const walkinBody = (await walkinRes.json()) as {
+      items: Array<{
+        name: string;
+        is_walkin: boolean;
+        stats: { total_meals: number; total_spent: number };
+      }>;
+      total: number;
+    };
+    expect(walkinBody.total).toBe(2);
+    expect(walkinBody.items.every((w) => w.is_walkin === true)).toBe(true);
+    expect(walkinBody.items.every((w) => w.stats.total_meals === 2)).toBe(true);
+    expect(walkinBody.items.every((w) => w.stats.total_spent === 70)).toBe(true);
+
+    // /api/members 默认 type=member，应该只返回正式会员（散客 is_walkin=true 不在此）
+    const memberListRes = await app.fetch(
+      new Request('http://test.local/api/members', {
+        headers: { Authorization: `Bearer ${staffToken}` },
+      }),
+    );
+    expect(memberListRes.status).toBe(200);
+    const memberListBody = (await memberListRes.json()) as {
+      items: Array<{ is_walkin: boolean }>;
+    };
+    expect(memberListBody.items.every((m) => m.is_walkin === false)).toBe(true);
+
+    // type=walkin 只返回散客
+    const walkinTypeRes = await app.fetch(
+      new Request('http://test.local/api/members?type=walkin', {
+        headers: { Authorization: `Bearer ${staffToken}` },
+      }),
+    );
+    expect(walkinTypeRes.status).toBe(200);
+    const walkinTypeBody = (await walkinTypeRes.json()) as {
+      items: Array<{ is_walkin: boolean }>;
+    };
+    expect(walkinTypeBody.items).toHaveLength(2);
+    expect(walkinTypeBody.items.every((m) => m.is_walkin === true)).toBe(true);
+  });
 });

@@ -91,6 +91,8 @@ cardsRouter.post('/', zValidator('json', cardPurchaseSchema), async (c) => {
   if (!member.is_active) {
     throw new HTTPException(422, { message: '会员已归档，不能购卡' });
   }
+  // 散客首次开卡 → 把该 member 正式升为会员
+  const wasWalkin = member.is_walkin;
 
   const existingActive = await db
     .select({ id: schema.cards.id })
@@ -130,6 +132,15 @@ cardsRouter.post('/', zValidator('json', cardPurchaseSchema), async (c) => {
       .returning();
     const card = cardRows[0]!;
 
+    // 散客升级：把 is_walkin 翻成 false，后续下单会按正式会员处理。
+    // uid 先保留 `__WALKIN__{name}` 不动，等补完手机号时在 PATCH /members 里重算。
+    if (wasWalkin) {
+      await tx
+        .update(schema.members)
+        .set({ is_walkin: false, updated_at: new Date() })
+        .where(eq(schema.members.id, input.member_id));
+    }
+
     const finance = await createAutoSubscriptionIncome(tx, {
       amount: spec.totalPrice,
       is_hospital: input.is_hospital,
@@ -140,10 +151,17 @@ cardsRouter.post('/', zValidator('json', cardPurchaseSchema), async (c) => {
       description: `购卡：${spec.name}`,
     });
 
-    return { card, finance };
+    return { card, finance, promoted: wasWalkin };
   });
 
-  return c.json({ card: result.card, financeEntry: result.finance }, 201);
+  return c.json(
+    {
+      card: result.card,
+      financeEntry: result.finance,
+      ...(result.promoted ? { promoted_from_walkin: true } : {}),
+    },
+    201,
+  );
 });
 
 // ================== POST /api/cards/:id/upgrade ==================

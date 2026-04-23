@@ -18,6 +18,8 @@ export interface Member {
   dietary_notes: string;
   is_hospital: boolean;
   is_active: boolean;
+  /** 散客标记：true = 出现在散客目录；开卡后自动翻 false */
+  is_walkin: boolean;
   created_by_user_id: number;
   created_at: string;
   updated_at: string;
@@ -28,6 +30,8 @@ export interface MemberListParams {
   is_hospital?: boolean;
   is_active?: boolean;
   include_archived?: boolean;
+  /** 'member'（默认，只正式会员）/ 'walkin'（只散客）/ 'all' */
+  type?: 'member' | 'walkin' | 'all';
   limit?: number;
   offset?: number;
 }
@@ -57,6 +61,7 @@ function buildQuery(params: MemberListParams): string {
   if (params.is_hospital !== undefined) q.set('is_hospital', String(params.is_hospital));
   if (params.is_active !== undefined) q.set('is_active', String(params.is_active));
   if (params.include_archived) q.set('include_archived', 'true');
+  if (params.type) q.set('type', params.type);
   if (params.limit !== undefined) q.set('limit', String(params.limit));
   if (params.offset !== undefined) q.set('offset', String(params.offset));
   const str = q.toString();

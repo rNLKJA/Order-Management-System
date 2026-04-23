@@ -63,6 +63,12 @@ export const members = sqliteTable(
     dietary_notes: text('dietary_notes').notNull().default(''),
     is_hospital: integer('is_hospital', { mode: 'boolean' }).notNull().default(false),
     is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    /**
+     * 散客标记。散客是"有过订单但没开卡的人"，由 POST /api/orders 的 customer_name
+     * 自动创建。uid 统一以 `__WALKIN__{name}` 规则存放，便于定位和去重。
+     * 一旦为散客开了第一张卡，此字段翻成 false，该人正式成为会员。
+     */
+    is_walkin: integer('is_walkin', { mode: 'boolean' }).notNull().default(false),
     created_by_user_id: integer('created_by_user_id')
       .notNull()
       .references(() => users.id),
@@ -78,6 +84,7 @@ export const members = sqliteTable(
     phoneIdx: index('members_phone_idx').on(t.phone),
     wechatIdx: index('members_wechat_idx').on(t.wechat_id),
     activeIdx: index('members_active_idx').on(t.is_active),
+    walkinIdx: index('members_walkin_idx').on(t.is_walkin),
   }),
 );
 

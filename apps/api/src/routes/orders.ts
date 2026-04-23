@@ -30,7 +30,7 @@ import {
   OrderNotFoundError,
 } from '../services/orders.js';
 import { toShanghaiDate } from '../services/finance.js';
-import { getOrCreateWalkinMemberId } from '../services/walkin.js';
+import { getOrCreateWalkinMember } from '../services/walkin.js';
 
 export const ordersRouter = new Hono<{ Variables: AuthVariables }>();
 
@@ -251,9 +251,9 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
 
   const runTransaction = async () => {
     return db.transaction(async (tx) => {
-    // 散客模式：挂到 __WALKIN__ 哨兵会员下
+    // 散客模式：按姓名找/建一个 is_walkin=true 的 member
     const memberId = isWalkin
-      ? await getOrCreateWalkinMemberId(tx, createdByUserId)
+      ? (await getOrCreateWalkinMember(tx, customerName, createdByUserId)).id
       : input.member_id!;
 
     // 读 ad_hoc_price（散客模式优先 body.adhoc_unit_price）

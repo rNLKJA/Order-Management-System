@@ -8,10 +8,12 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { CARD_RENEWAL_THRESHOLD_MEALS } from '@meal/shared';
 import { useAuth } from '../../hooks/useAuth';
 import { useFinanceToday, useMembersView } from '../../hooks/useMembersView';
 import { useOrdersToday } from '../../hooks/useOrdersToday';
+import { walkinsApi } from '../../api/walkins';
 import {
   COLORS,
   SPACING,
@@ -55,6 +57,11 @@ export default function HomeScreen() {
   const membersView = useMembersView();
   const financeToday = useFinanceToday(todayISO());
   const ordersToday = useOrdersToday();
+  const walkinsQuery = useQuery({
+    queryKey: ['walkins', 'list'],
+    queryFn: async () => (await walkinsApi.list()).items,
+    refetchOnWindowFocus: true,
+  });
 
   const members = membersView.data ?? [];
   const renewalCount = members.filter(
@@ -71,6 +78,7 @@ export default function HomeScreen() {
     .filter((o) => o.status === 'pending')
     .reduce((sum, o) => sum + o.quantity, 0);
 
+  const walkinCount = walkinsQuery.data?.length ?? 0;
   const entries: EntryDef[] = [
     {
       key: 'members',
@@ -82,6 +90,19 @@ export default function HomeScreen() {
       color: COLORS.brand,
       bg: COLORS.brandSoft,
       route: '/(app)/members',
+    },
+    {
+      key: 'walkins',
+      title: '散客目录',
+      subtitle: walkinsQuery.isLoading
+        ? '加载中...'
+        : walkinCount === 0
+          ? '还没有散客记录 · 可从每日订餐录入'
+          : `${walkinCount} 位散客 · 点开可为 TA 开卡`,
+      icon: 'walk-outline',
+      color: COLORS.warning,
+      bg: COLORS.warningSoft,
+      route: '/(app)/walkins',
     },
     {
       key: 'orders',

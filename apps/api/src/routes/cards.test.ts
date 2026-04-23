@@ -336,6 +336,45 @@ describe('POST /api/cards (新购)', () => {
     const body = (await res.json()) as { card: { collector_user_id: number } };
     expect(body.card.collector_user_id).toBe(other.id);
   });
+
+  it('为散客开卡 → 卡建成 + is_walkin 翻 false + 返回 promoted_from_walkin=true', async () => {
+    // 先插一个散客 member（模拟 walk-in 订单路径先建好的 is_walkin=true 行）
+    const insertedWalkin = await ctx.db
+      .insert(schema.members)
+      .values({
+        uid: '__WALKIN__赵大爷',
+        name: '赵大爷',
+        nickname: '',
+        phone: '',
+        is_hospital: false,
+        is_active: true,
+        is_walkin: true,
+        created_by_user_id: ctx.userId,
+      })
+      .returning({ id: schema.members.id });
+    const walkinId = insertedWalkin[0]!.id;
+
+    const res = await authedFetch(ctx.app, ctx.token, '/api/cards', {
+      method: 'POST',
+      body: JSON.stringify({
+        member_id: walkinId,
+        card_code: 'week',
+        is_hospital: false,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      card: { member_id: number };
+      promoted_from_walkin?: boolean;
+    };
+    expect(body.promoted_from_walkin).toBe(true);
+
+    const memberRows = await ctx.db
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.id, walkinId));
+    expect(memberRows[0]!.is_walkin).toBe(false);
+  });
 });
 
 describe('POST /api/cards/:id/upgrade', () => {
