@@ -188,11 +188,16 @@ function MemberRow({ member }: { member: MockMember }) {
         {/* 卡片进度 / 过期状态 */}
         {card ? (
           <View style={styles.cardBar}>
-            <Text style={styles.cardLabel}>{card.card_name}</Text>
+            <Text style={styles.cardLabel} numberOfLines={1}>
+              {card.card_name}
+            </Text>
             <View style={styles.progress}>
               <View style={[styles.progressFill, { width: `${progressPct}%` as any, backgroundColor: progressColor }]} />
             </View>
-            <Text style={[styles.cardRemain, { color: progressColor }]}>
+            <Text
+              style={[styles.cardRemain, { color: progressColor }]}
+              numberOfLines={1}
+            >
               剩 {card.remaining_meals} 餐
             </Text>
           </View>
@@ -274,10 +279,21 @@ const styles = StyleSheet.create({
   expiredText: { fontSize: 11, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
   memberSub: { fontSize: 13, color: IOS_COLORS.labelSecondary },
   cardBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  cardLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary, width: 32 },
+  cardLabel: {
+    fontSize: 12,
+    color: IOS_COLORS.labelSecondary,
+    flexShrink: 0,
+    maxWidth: 80,
+  },
   progress: { flex: 1, height: 4, backgroundColor: IOS_COLORS.fillMedium, borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: 4, borderRadius: 2 },
-  cardRemain: { fontSize: 12, fontWeight: '600', width: 42, textAlign: 'right' },
+  cardRemain: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'right',
+    flexShrink: 0,
+    minWidth: 52,
+  },
   noCard: { fontSize: 13, color: IOS_COLORS.labelTertiary },
   rowArrow: { marginLeft: 2 },
 
