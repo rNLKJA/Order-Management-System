@@ -15,9 +15,10 @@ import { rateLimit } from '../middleware/rate-limit.js';
 
 export const debugRouter = new Hono();
 
-debugRouter.post('/mock-login', zValidator('json', loginSchema), async (c) => {
+debugRouter.post('/mock-login', async (c) => {
   const t0 = Date.now();
-  const { username, password } = c.req.valid('json');
+  const body = await c.req.json<{ username: string; password: string }>();
+  const { username, password } = body;
   const db = requestDb(c);
   const rows = await db.select().from(schema.users).where(eq(schema.users.username, username)).limit(1);
   const user = rows[0];
