@@ -56,10 +56,15 @@ function currentUrl(): string {
 export function getClient(): Client {
   const url = currentUrl();
   if (_client && _cachedUrl === url) return _client;
-  _client = createClient({
+  const authToken = process.env.TURSO_AUTH_TOKEN ?? env.TURSO_AUTH_TOKEN;
+  // eslint-disable-next-line no-console
+  console.log('[db] creating libsql client', {
     url,
-    authToken: process.env.TURSO_AUTH_TOKEN ?? env.TURSO_AUTH_TOKEN,
+    tokenLen: authToken?.length ?? 0,
+    tokenPrefix: authToken?.slice(0, 20),
+    tokenSuffix: authToken?.slice(-20),
   });
+  _client = createClient({ url, authToken });
   _cachedUrl = url;
   _db = null;
   return _client;
