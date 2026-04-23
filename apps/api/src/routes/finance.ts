@@ -250,26 +250,31 @@ financeRouter.patch(
 
     const entry = updated[0]!;
 
+    const diffPayload: Record<string, unknown> = {
+      before: {
+        entry_date: current.entry_date,
+        amount: current.amount,
+        description: current.description,
+        category: current.category,
+      },
+      after: {
+        entry_date: entry.entry_date,
+        amount: entry.amount,
+        description: entry.description,
+        category: entry.category,
+      },
+      source_was: current.source,
+    };
+    if (current.source === 'auto') {
+      diffPayload._note = 'auto entry modified by staff';
+    }
+
     await db.insert(schema.audit_logs).values({
       user_id: me.id,
       action: 'update',
       entity: 'finance_entry',
       entity_id: entry.id,
-      diff_json: JSON.stringify({
-        before: {
-          entry_date: current.entry_date,
-          amount: current.amount,
-          description: current.description,
-          category: current.category,
-        },
-        after: {
-          entry_date: entry.entry_date,
-          amount: entry.amount,
-          description: entry.description,
-          category: entry.category,
-        },
-        source_was: current.source,
-      }),
+      diff_json: JSON.stringify(diffPayload),
     });
 
     return c.json({ entry });

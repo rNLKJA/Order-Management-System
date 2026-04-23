@@ -15,6 +15,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { HTTPException } from 'hono/http-exception';
 
 import { authRouter } from './routes/auth.js';
+import { auditRouter } from './routes/audit.js';
 import { cardsRouter } from './routes/cards.js';
 import { financeRouter } from './routes/finance.js';
 import { healthRouter } from './routes/health.js';
@@ -62,6 +63,7 @@ export function createApp(deps: AppDeps = {}) {
   app.route('/api/cards', cardsRouter);
   app.route('/api/finance', financeRouter);
   app.route('/api/orders', ordersRouter);
+  app.route('/api/audit-logs', auditRouter);
 
   // 根路径
   app.get('/', (c) =>

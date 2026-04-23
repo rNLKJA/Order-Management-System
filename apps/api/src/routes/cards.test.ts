@@ -557,3 +557,204 @@ describe('POST /api/cards/:id/upgrade', () => {
     expect(list.cards[0]!.card_code).toBe('week');
   });
 });
+
+// ============================================================
+// PATCH /api/cards/:id  (MEA-17)
+// ============================================================
+
+describe('PATCH /api/cards/:id', () => {
+  let ctx: Ctx;
+
+  beforeEach(async () => {
+    ctx = await buildCtx();
+  });
+
+  it('未登录 401', async () => {
+    const res = await ctx.app.fetch(
+      new Request('http://test.local/api/cards/1', { method: 'PATCH', body: '{}' }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('改 notes 成功，并写入 audit_log', async () => {
+    const { id: memberId } = await seedMember(ctx.db, { created_by_user_id: ctx.userId });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'month',
+      is_hospital: false,
+      total_meals: 40,
+      unit_price: 25,
+      paid_amount: 1000,
+      status: 'active',
+    });
+
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes: '客户偏好无辣' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { card: { notes: string } };
+    expect(body.card.notes).toBe('客户偏好无辣');
+
+    const audits = await ctx.db
+      .select()
+      .from(schema.audit_logs)
+      .where(eq(schema.audit_logs.entity_id, cardId));
+    const updateAudit = audits.find((a) => a.action === 'update' && a.entity === 'card');
+    expect(updateAudit).toBeDefined();
+    expect(updateAudit!.user_id).toBe(ctx.userId);
+    const diff = JSON.parse(updateAudit!.diff_json) as Record<string, unknown>;
+    expect(diff).toHaveProperty('notes');
+  });
+
+  it('改 collector_user_id 成功', async () => {
+    const collector = await seedUser(ctx.db, { username: 'newcollector', password: 'Pw!12345' });
+    const { id: memberId } = await seedMember(ctx.db, { created_by_user_id: ctx.userId });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      unit_price: 28,
+      paid_amount: 280,
+    });
+
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ collector_user_id: collector.id }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { card: { collector_user_id: number } };
+    expect(body.card.collector_user_id).toBe(collector.id);
+  });
+
+  it('改 purchased_at 为有效时间（无订单冲突）→ 成功', async () => {
+    const { id: memberId } = await seedMember(ctx.db, { created_by_user_id: ctx.userId });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'month',
+      is_hospital: false,
+      total_meals: 40,
+      unit_price: 25,
+      paid_amount: 1000,
+    });
+
+    const newPurchasedAt = '2026-01-01T08:00:00+08:00';
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ purchased_at: newPurchasedAt }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { card: { purchased_at: string | number } };
+    expect(body.card.purchased_at).toBeDefined();
+  });
+
+  it('改 purchased_at 与现有订单冲突 → 422 PURCHASED_AT_CONFLICT', async () => {
+    const { id: memberId } = await seedMember(ctx.db, { created_by_user_id: ctx.userId });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'month',
+      is_hospital: false,
+      total_meals: 40,
+      unit_price: 25,
+      paid_amount: 1000,
+    });
+
+    // 插入一条 order_date = 2026-03-10 的订单（早于新 purchased_at 2026-04-01）
+    await ctx.db.insert(schema.daily_orders).values({
+      member_id: memberId,
+      card_id: cardId,
+      order_date: '2026-03-10',
+      meal_type: 'lunch',
+      quantity: 1,
+      amount: 0,
+      status: 'pending',
+      created_by_user_id: ctx.userId,
+    });
+
+    // 新的 purchased_at 是 2026-04-01，而订单是 2026-03-10，冲突
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ purchased_at: '2026-04-01T00:00:00+00:00' }),
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe('PURCHASED_AT_CONFLICT');
+  });
+
+  it('尝试改 card_code → 422（不允许）', async () => {
+    const { id: memberId } = await seedMember(ctx.db, { created_by_user_id: ctx.userId });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      unit_price: 28,
+      paid_amount: 280,
+    });
+
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ card_code: 'month' }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('尝试改 paid_amount → 422（不允许）', async () => {
+    const { id: memberId } = await seedMember(ctx.db, { created_by_user_id: ctx.userId });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      unit_price: 28,
+      paid_amount: 280,
+    });
+
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ paid_amount: 500 }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('卡不存在 → 404', async () => {
+    const res = await authedFetch(ctx.app, ctx.token, '/api/cards/99999', {
+      method: 'PATCH',
+      body: JSON.stringify({ notes: '测试' }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('空 body（无更改字段）→ 200 幂等', async () => {
+    const { id: memberId } = await seedMember(ctx.db, { created_by_user_id: ctx.userId });
+    const { id: cardId } = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      unit_price: 28,
+      paid_amount: 280,
+    });
+
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${cardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+  });
+});
