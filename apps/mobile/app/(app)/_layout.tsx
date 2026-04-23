@@ -1,14 +1,36 @@
 /**
  * 登录后的主 Layout。
- *
- * MVP 阶段（Phase 1）暂时只放 Stack，下一步（Phase 2）再加响应式 Tab / Drawer 切换。
+ * 在这里检查认证状态：未登录 → 跳到 /(auth)/login。
  */
 
-import { Stack } from 'expo-router';
-import { useTheme } from 'react-native-paper';
+import { Stack, Redirect } from 'expo-router';
+import { useTheme, ActivityIndicator } from 'react-native-paper';
+import { View } from 'react-native';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function AppLayout() {
   const theme = useTheme();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: theme.colors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   return (
     <Stack
       screenOptions={{
@@ -19,12 +41,11 @@ export default function AppLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: '面板' }} />
-<Stack.Screen name="members/index" options={{ headerShown: false }} />
+      <Stack.Screen name="members/index" options={{ headerShown: false }} />
       <Stack.Screen name="members/new" options={{ headerShown: false }} />
       <Stack.Screen name="members/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="finance/index" options={{ title: '记账' }} />
       <Stack.Screen name="orders/index" options={{ title: '每日订餐' }} />
-      <Stack.Screen name="orders/quick" options={{ title: '快速录入' }} />
     </Stack>
   );
 }

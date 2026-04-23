@@ -10,20 +10,16 @@
  * roundness = 10（几何化，禁胶囊）
  */
 
-import { MD3LightTheme, configureFonts } from 'react-native-paper';
+import { MD3LightTheme } from 'react-native-paper';
 import { Platform } from 'react-native';
 
-const fontFamily = Platform.select({
+// configureFonts 在某些 pnpm/Metro 配置下会抛（undefined fontFamily），
+// 这里直接用 MD3LightTheme.fonts 默认值，开发时看字体差别不大。
+const _fontFamily = Platform.select({
   ios: 'PingFang SC',
   android: 'sans-serif',
   default: 'system-ui',
-});
-
-const fonts = configureFonts({
-  config: {
-    fontFamily,
-  },
-});
+}) ?? 'system-ui';
 
 export const paperTheme = {
   ...MD3LightTheme,
@@ -68,7 +64,6 @@ export const paperTheme = {
       level5: '#94A3B8',
     },
   },
-  fonts,
 };
 
 export type AppTheme = typeof paperTheme;

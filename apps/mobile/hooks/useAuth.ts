@@ -11,9 +11,16 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 import type { AuthUser, LoginResponse } from '@meal/shared';
 import { api } from '../api/client';
+
+// SecureStore 只在 native 上可用；Web 用 localStorage
+// 用动态 require 避免 Web bundle 里直接 import 导致崩溃
+let SecureStore: typeof import('expo-secure-store') | null = null;
+if (Platform.OS !== 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  SecureStore = require('expo-secure-store') as typeof import('expo-secure-store');
+}
 
 const TOKEN_KEY = 'meal.auth.token';
 const USER_KEY = 'meal.auth.user';
@@ -25,7 +32,7 @@ async function readRaw(key: string): Promise<string | null> {
     if (typeof window === 'undefined') return null;
     return window.localStorage.getItem(key);
   }
-  return SecureStore.getItemAsync(key);
+  return SecureStore!.getItemAsync(key);
 }
 async function writeRaw(key: string, value: string): Promise<void> {
   if (isWeb) {
@@ -33,7 +40,7 @@ async function writeRaw(key: string, value: string): Promise<void> {
     window.localStorage.setItem(key, value);
     return;
   }
-  await SecureStore.setItemAsync(key, value);
+  await SecureStore!.setItemAsync(key, value);
 }
 async function deleteRaw(key: string): Promise<void> {
   if (isWeb) {
@@ -41,7 +48,7 @@ async function deleteRaw(key: string): Promise<void> {
     window.localStorage.removeItem(key);
     return;
   }
-  await SecureStore.deleteItemAsync(key);
+  await SecureStore!.deleteItemAsync(key);
 }
 
 export async function getToken(): Promise<string | null> {
