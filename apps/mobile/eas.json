@@ -22,14 +22,14 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://meal-api.vercel.app"
+        "EXPO_PUBLIC_API_BASE_URL": "https://meal-api-nu.vercel.app"
       }
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://meal-api.vercel.app"
+        "EXPO_PUBLIC_API_BASE_URL": "https://meal-api-nu.vercel.app"
       }
     }
   },
