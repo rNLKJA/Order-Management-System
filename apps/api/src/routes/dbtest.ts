@@ -62,13 +62,15 @@ dbtestRouter.get('/cmp', async (c) => {
     out.aLibsqlUrlError = err?.message;
   }
 
-  // 测试 B：inline 构造 http client，url=https://（手动转换）
+  // 测试 B：inline 构造 http client，url=https://，带包装 fetch（理论上和默认行为等价）
   try {
     const { createClient } = await import('@libsql/client/http');
     const httpsUrl = env.TURSO_DATABASE_URL.replace(/^libsql:\/\//, 'https://');
+    const wrappedFetch: typeof fetch = (input, init) => fetch(input as any, init);
     const client = createClient({
       url: httpsUrl,
       authToken: env.TURSO_AUTH_TOKEN,
+      fetch: wrappedFetch,
     });
     const res = await client.execute('SELECT 1 AS ok');
     out.bHttpsUrlOk = true;
