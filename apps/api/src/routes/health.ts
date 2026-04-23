@@ -15,5 +15,6 @@ healthRouter.get('/', (c) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    build: 'fetch-fix-v3',
   });
 });

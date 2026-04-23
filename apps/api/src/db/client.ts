@@ -31,7 +31,7 @@ function toHttpUrl(url: string): string {
  */
 const fetchGlobal: typeof fetch = async (input, init) => {
   const req = input instanceof Request ? input : new Request(input, init);
-  return fetch(req);
+  return globalThis.fetch(req);
 };
 
 function createClient(config: { url: string; authToken?: string }): Client {
