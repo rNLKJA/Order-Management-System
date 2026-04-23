@@ -5,12 +5,32 @@
  * - POST /api/debug/argon        → 纯 argon2 verify benchmark
  */
 import { Hono } from 'hono';
+import { zValidator } from '@hono/zod-validator';
 import { eq } from 'drizzle-orm';
+import { loginSchema } from '@meal/shared';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import { verifyPassword } from '../services/password.js';
+import { rateLimit } from '../middleware/rate-limit.js';
 
 export const debugRouter = new Hono();
+
+// 复刻 auth.ts 的 /login 结构，看 middleware 层哪里挂住
+debugRouter.use(
+  '/mock-login',
+  rateLimit({ windowMs: 60_000, max: 100, message: 'rl' }),
+);
+
+debugRouter.post('/mock-login', zValidator('json', loginSchema), async (c) => {
+  const t0 = Date.now();
+  const { username, password } = c.req.valid('json');
+  const db = requestDb(c);
+  const rows = await db.select().from(schema.users).where(eq(schema.users.username, username)).limit(1);
+  const user = rows[0];
+  if (!user) return c.json({ error: 'no user', totalMs: Date.now() - t0 }, 401);
+  const ok = await verifyPassword(password, user.password_hash);
+  return c.json({ ok, totalMs: Date.now() - t0 });
+});
 
 debugRouter.get('/select-user', async (c) => {
   const t0 = Date.now();
