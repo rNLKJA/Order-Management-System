@@ -884,6 +884,7 @@ describe('Orders API /api/orders', () => {
           order_date: '2026-04-24',
           lunch_qty: 2,
           customer_name: '张叔叔',
+          customer_phone: '13800001111',
           adhoc_unit_price: 40,
           notes: '不要辣',
         }),
@@ -925,6 +926,43 @@ describe('Orders API /api/orders', () => {
     expect(res.status).toBe(400);
   });
 
+  it('POST 散客 walk-in 缺手机号 → 400', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({
+          order_date: '2026-04-24',
+          lunch_qty: 1,
+          customer_name: '没填手机',
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('POST 散客 walk-in 手机号格式不对 → 400', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({
+          order_date: '2026-04-24',
+          lunch_qty: 1,
+          customer_name: '格式错',
+          customer_phone: '1234',
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('POST 散客附带手机+地址：写回 walk-in member，下次留空不被洗掉', async () => {
     const post = (body: Record<string, unknown>) =>
       app.fetch(
@@ -958,11 +996,12 @@ describe('Orders API /api/orders', () => {
     expect(rows[0]!.address).toBe('江北区测试路 1 号');
     expect(rows[0]!.is_walkin).toBe(true);
 
-    // 第二次：同名再录，但不传手机+地址 → 不应该洗掉
+    // 第二次：同名再录，仍要带手机（系统强制必填，避免数据缺失）；不传地址 → 不应该洗掉
     const r2 = await post({
       order_date: '2026-04-25',
       dinner_qty: 1,
       customer_name: '刘大爷',
+      customer_phone: '13800008888',
     });
     expect(r2.status).toBe(201);
     rows = await db
@@ -977,6 +1016,7 @@ describe('Orders API /api/orders', () => {
       order_date: '2026-04-26',
       lunch_qty: 1,
       customer_name: '刘大爷',
+      customer_phone: '13800008888',
       customer_address: '新地址 88 号',
     });
     expect(r3.status).toBe(201);
@@ -1001,6 +1041,7 @@ describe('Orders API /api/orders', () => {
             order_date: '2026-04-24',
             lunch_qty: 1,
             customer_name: name,
+            customer_phone: '13900002222',
           }),
         }),
       );
@@ -1043,7 +1084,9 @@ describe('Orders API /api/orders', () => {
     expect(memberOrderRes.status).toBe(201);
 
     // 建两条散客 walk-in 订单
+    let phoneIdx = 0;
     for (const name of ['赵六', '王七']) {
+      const phones = ['13900003333', '13900004444'];
       await app.fetch(
         new Request('http://test.local/api/orders', {
           method: 'POST',
@@ -1055,6 +1098,7 @@ describe('Orders API /api/orders', () => {
             order_date: '2026-04-24',
             lunch_qty: 2,
             customer_name: name,
+            customer_phone: phones[phoneIdx++]!,
             adhoc_unit_price: 35,
           }),
         }),

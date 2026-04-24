@@ -190,7 +190,7 @@ const createOrderSchema = z
     notes: z.string().optional().default(''),
     /** 散客姓名；填了就是 walk-in，不关联任何会员卡 */
     customer_name: z.string().max(64).optional().default(''),
-    /** 散客联系方式（可选）；第一次录单时把这些写到 walk-in member 上，送餐卡片就能看到 */
+    /** 散客联系方式；第一次录单时把这些写到 walk-in member 上，送餐卡片就能看到 */
     customer_phone: z.string().max(32).optional().default(''),
     customer_address: z.string().max(256).optional().default(''),
     customer_is_hospital: z.boolean().optional(),
@@ -204,6 +204,17 @@ const createOrderSchema = z
   .refine(
     (d) => (d.member_id ?? 0) > 0 || (d.customer_name ?? '').trim().length > 0,
     { message: '请选择会员或填写散客姓名' },
+  )
+  .refine(
+    (d) => {
+      const isWalkin = !d.member_id && (d.customer_name ?? '').trim().length > 0;
+      if (!isWalkin) return true;
+      return /^1[3-9]\d{9}$/.test((d.customer_phone ?? '').trim());
+    },
+    {
+      message: '散客手机号必填，11 位且以 1 开头',
+      path: ['customer_phone'],
+    },
   );
 
 ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {

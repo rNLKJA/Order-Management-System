@@ -1005,13 +1005,22 @@ function EntryPanel({
 
   const handleSubmitAdhoc = async () => {
     const name = adhocName.trim();
+    const phone = adhocPhone.trim();
     const price = parseFloat(adhocPrice);
-    if (!name || adhocQty < 1 || !Number.isFinite(price) || price < 0) return;
+    if (!name) {
+      flashToast('请填写姓名');
+      return;
+    }
+    if (!/^1[3-9]\d{9}$/.test(phone)) {
+      flashToast('请填写正确的 11 位手机号');
+      return;
+    }
+    if (adhocQty < 1 || !Number.isFinite(price) || price < 0) return;
     setSubmitting(true);
     try {
       await onAddWalkinOrder({
         customerName: name,
-        customerPhone: adhocPhone.trim() || undefined,
+        customerPhone: phone,
         customerAddress: adhocAddress.trim() || undefined,
         customerIsHospital: adhocHospital,
         orderDate: todayStr(),
@@ -1182,7 +1191,9 @@ function EntryPanel({
                 <Text style={eStyles.sectionLabel}>顾客信息</Text>
                 <View style={eStyles.inlineCard}>
                   <View style={eStyles.fieldRow}>
-                    <Text style={eStyles.fieldLabel}>姓名 / 称呼</Text>
+                    <Text style={eStyles.fieldLabel}>
+                      姓名 / 称呼 <Text style={eStyles.fieldRequired}>*</Text>
+                    </Text>
                     <TextInput
                       style={eStyles.fieldInput}
                       placeholder="必填"
@@ -1193,14 +1204,17 @@ function EntryPanel({
                   </View>
                   <View style={eStyles.fieldDivider} />
                   <View style={eStyles.fieldRow}>
-                    <Text style={eStyles.fieldLabel}>手机号</Text>
+                    <Text style={eStyles.fieldLabel}>
+                      手机号 <Text style={eStyles.fieldRequired}>*</Text>
+                    </Text>
                     <TextInput
                       style={eStyles.fieldInput}
-                      placeholder="选填，用于送餐联系"
+                      placeholder="11 位手机号，必填"
                       placeholderTextColor={IOS_COLORS.labelTertiary}
                       value={adhocPhone}
                       onChangeText={setAdhocPhone}
                       keyboardType="phone-pad"
+                      maxLength={11}
                     />
                   </View>
                   <View style={eStyles.fieldDivider} />
@@ -1235,7 +1249,7 @@ function EntryPanel({
                   </View>
                 </View>
                 <Text style={eStyles.hintUnderCard}>
-                  同名散客再次录单时，新填的手机/地址会更新档案；留空则保留上次的。
+                  手机号必填（每次录单都要带），同名散客的手机/地址会自动合并到档案。
                 </Text>
 
                 <Text style={[eStyles.sectionLabel, { marginTop: 20 }]}>餐次与数量</Text>
@@ -1784,6 +1798,7 @@ const eStyles = StyleSheet.create({
   },
   fieldDivider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginLeft: 16 },
   fieldLabel: { fontSize: 15, color: IOS_COLORS.label },
+  fieldRequired: { color: IOS_COLORS.red, fontWeight: '700' },
   fieldInput: { fontSize: 15, color: IOS_COLORS.label, flex: 1, textAlign: 'right', paddingLeft: 8 },
   fieldInputMulti: {
     textAlign: 'right',

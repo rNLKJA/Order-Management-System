@@ -46,7 +46,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "https://meal-api-nu.vercel.app",
+      "apiBaseUrl": "https://api.anshun-healthy-food.com",
       "router": {
         "origin": false
       },

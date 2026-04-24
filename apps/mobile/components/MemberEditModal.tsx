@@ -138,6 +138,7 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
           <View style={styles.card}>
             <Field
               label="姓名"
+              required
               value={name}
               onChangeText={setName}
               placeholder="真实姓名"
@@ -157,9 +158,10 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
           <View style={styles.card}>
             <Field
               label="手机号"
+              required
               value={phone}
               onChangeText={setPhone}
-              placeholder="11 位手机号"
+              placeholder="11 位手机号，必填"
               keyboardType="phone-pad"
               error={errors.phone}
             />
@@ -241,7 +243,7 @@ function SectionLabel({ text }: { text: string }) {
 
 function Field({
   label, value, onChangeText, placeholder, error,
-  isLast, keyboardType, autoCapitalize, multiline,
+  isLast, keyboardType, autoCapitalize, multiline, required,
 }: {
   label: string;
   value: string;
@@ -252,10 +254,14 @@ function Field({
   keyboardType?: 'default' | 'phone-pad';
   autoCapitalize?: 'none' | 'sentences';
   multiline?: boolean;
+  required?: boolean;
 }) {
   return (
     <View style={[styles.field, isLast && styles.fieldLast]}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldLabel}>
+        {label}
+        {required ? <Text style={styles.fieldRequired}> *</Text> : null}
+      </Text>
       <TextInput
         style={[styles.fieldInput, multiline && styles.fieldInputMulti]}
         value={value}
@@ -304,6 +310,7 @@ const styles = StyleSheet.create({
   },
   fieldLast: { borderBottomWidth: 0 },
   fieldLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginBottom: 2 },
+  fieldRequired: { color: IOS_COLORS.red, fontWeight: '700' },
   fieldInput: { fontSize: 16, color: IOS_COLORS.label, paddingVertical: 4 },
   fieldInputMulti: { minHeight: 56, textAlignVertical: 'top' },
   fieldError: { fontSize: 12, color: IOS_COLORS.red, marginTop: 4 },

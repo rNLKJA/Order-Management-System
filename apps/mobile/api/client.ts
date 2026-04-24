@@ -3,17 +3,23 @@
  *
  * ─────────────────────────────────────────────────────────────
  * baseUrl 解析优先级（从高到低）：
- *   1. EXPO_PUBLIC_API_BASE_URL  —— 构建期注入（根目录 .env / CI / `EXPO_PUBLIC_API_BASE_URL=... pnpm mobile`）。
- *      适合本地开发与不同环境切换（preview / staging），不需要改 app.json。
- *   2. app.json 的 extra.apiBaseUrl —— 随 native 二进制一起发布。
- *      适合生产/TestFlight 发版的兜底值，保证没有 .env 的裸装包也能连上生产 API。
- *   3. DEFAULT_BASE_URL = http://localhost:3000 —— 最后兜底。
+ *   1. EXPO_PUBLIC_API_BASE_URL  —— 构建期注入。来源有三：
+ *        a) 根目录 .env（开发机，例如 http://192.168.x.x:3000）
+ *        b) CI 显式 export
+ *        c) apps/mobile/eas.json 的 build.<profile>.env.EXPO_PUBLIC_API_BASE_URL
+ *           （本项目当前 development / preview / production 三个 profile 都显式写死，
+ *            发版走的就是这条）
+ *   2. app.json 的 extra.apiBaseUrl —— 随 native 二进制一起发布的兜底，
+ *      仅当 1 缺失时生效。Expo Go 里没法读 EAS env，靠的就是这条。
+ *   3. DEFAULT_BASE_URL = http://localhost:3000 —— 最终兜底。
  *
- * 使用建议：
- *   • 开发机：在项目根 .env 设 EXPO_PUBLIC_API_BASE_URL=http://<LAN-IP>:3000（真机调试时别用 localhost）。
- *   • EAS / 应用商店构建：只依赖 app.json 的 extra.apiBaseUrl，不要在 build profile 里再塞 EXPO_PUBLIC_*，
- *     否则两处不一致时排查很痛苦。
- *   • 任何变更请同步更新根目录 .env.example 的说明段落。
+ * 配置守则：
+ *   • 改正式 API 域名时三处一起改，避免漂移：
+ *       - apps/mobile/app.json   → expo.extra.apiBaseUrl
+ *       - apps/mobile/eas.json   → build.preview.env / build.production.env
+ *       - .env.example           → 顶部说明段
+ *   • 真机调试 LAN 调用：在根 .env 改 EXPO_PUBLIC_API_BASE_URL，别用 localhost（手机的 localhost 是它自己）。
+ *   • 国内访问：不要用 *.vercel.app，绑自定义域名（DNS 不污染）。
  */
 
 import Constants from 'expo-constants';

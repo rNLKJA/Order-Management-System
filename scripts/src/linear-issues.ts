@@ -271,8 +271,8 @@ apps/api/src/routes/members.ts + apps/mobile/app/(app)/members/\*\*
 API 部署到 Vercel（sin1 区域）；Web 用 expo export 部署 Vercel；环境变量填入 Vercel Env；Expo Go 扫码手机真机连云端；MVP 上线。
 
 ## 验收标准
-- [x] vercel --prod 成功；/api/health 能访问（生产地址 meal-api-nu.vercel.app，见 apps/mobile/app.json extra.apiBaseUrl）
-- [ ] 自有域名 .com 挂 Cloudflare（留给 MEA-25）
+- [x] vercel --prod 成功；/api/health 能访问（生产地址 https://api.anshun-healthy-food.com，见 apps/mobile/app.json extra.apiBaseUrl）
+- [x] 自有域名 anshun-healthy-food.com，子域名 api. CNAME 到 cname.vercel-dns.com，绕开 *.vercel.app 在国内的 DNS 污染
 - [x] 手机 Expo Go / EAS build 登录能连云端（EAS project 7a9ccfc7，见 apps/mobile/eas.json）
 - [ ] 4 员工 + admin 密码分发（见 .secrets/accounts.md）
 
@@ -429,8 +429,8 @@ scripts/import-excel.ts 读 doc/xxx.xlsm 的 5 张表，调 API 批量入库；m
 
 ## 当前状态
 - [x] EAS project 7a9ccfc7 已接入（commit bebf318，apps/mobile/eas.json 三环境配置齐）
-- [x] production API baseUrl 指向 meal-api-nu.vercel.app（commit 47a1a16）
-- [ ] 自有 .com 域名 + Cloudflare DNS
+- [x] production API baseUrl 指向 https://api.anshun-healthy-food.com（绕开国内对 *.vercel.app 的 DNS 污染）
+- [x] 自有 .com 域名 anshun-healthy-food.com 已上线；api 子域名 CNAME 到 Vercel
 - [ ] iOS TestFlight 发布
 - [ ] Android .apk 分发
 
