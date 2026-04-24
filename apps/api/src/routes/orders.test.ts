@@ -39,6 +39,15 @@ describe('Orders API /api/orders', () => {
   let staffId: number;
   let staffToken: string;
   let memberId: number;
+  let defaultCardId: number;
+
+  /** 把默认卡标成 exhausted，给"需要自己定制卡"的用例用 */
+  async function deactivateDefaultCard() {
+    await db
+      .update(schema.cards)
+      .set({ status: 'exhausted' })
+      .where(eq(schema.cards.id, defaultCardId));
+  }
 
   beforeEach(async () => {
     const res = await setupTestDb();
@@ -60,6 +69,22 @@ describe('Orders API /api/orders', () => {
       name: '测试会员',
     });
     memberId = memberRes.id;
+
+    // 默认给每个会员开一张够用的 active 卡（1000 餐），避免每个用例都要手动 seed。
+    // 需要测"无卡"、"余额不足"、"卡扣到 0"等场景的用例可以调 deactivateDefaultCard() 把它挪开。
+    const defaultCard = await seedCard(db, {
+      member_id: memberId,
+      created_by_user_id: staffId,
+      collector_user_id: staffId,
+      card_code: 'year',
+      is_hospital: false,
+      total_meals: 1000,
+      used_meals: 0,
+      unit_price: 20,
+      paid_amount: 20000,
+      status: 'active',
+    });
+    defaultCardId = defaultCard.id;
   });
 
   // ====== 登录保护 ======
@@ -105,7 +130,8 @@ describe('Orders API /api/orders', () => {
     expect(body.orders[0]!.meal_type).toBe('lunch');
     expect(body.orders[0]!.quantity).toBe(1);
     expect(body.orders[0]!.status).toBe('pending');
-    expect(body.orders[0]!.card_id).toBeNull();
+    // 会员订单一定扣到默认卡上，card_id 非空
+    expect(body.orders[0]!.card_id).toBe(defaultCardId);
   });
 
   it('POST 晚餐单独（dinner_qty=2）- 创建 1 条订单', async () => {
@@ -154,6 +180,7 @@ describe('Orders API /api/orders', () => {
   });
 
   it('POST 有 active 卡 → 扣减正确', async () => {
+    await deactivateDefaultCard();
     await seedCard(db, {
       member_id: memberId,
       created_by_user_id: staffId,
@@ -201,6 +228,7 @@ describe('Orders API /api/orders', () => {
   });
 
   it('POST 有 active 卡 扣到 0 → exhausted + card_exhausted=true', async () => {
+    await deactivateDefaultCard();
     await seedCard(db, {
       member_id: memberId,
       created_by_user_id: staffId,
@@ -241,6 +269,7 @@ describe('Orders API /api/orders', () => {
   });
 
   it('POST 余额不足 → 422 INSUFFICIENT_MEAL_BALANCE', async () => {
+    await deactivateDefaultCard();
     await seedCard(db, {
       member_id: memberId,
       created_by_user_id: staffId,
@@ -274,10 +303,10 @@ describe('Orders API /api/orders', () => {
     expect(body.code).toBe('INSUFFICIENT_MEAL_BALANCE');
   });
 
-  it('POST 散餐（无卡）→ 自动写 FinanceEntry income ad_hoc', async () => {
-    // 先写 ad_hoc_price 设置
-    await db.insert(schema.settings).values({ key: 'ad_hoc_price', value: '35' });
-
+  it('POST 会员无 active 卡 → 422，提示先开卡或走散客录单', async () => {
+    await deactivateDefaultCard();
+    // 这个 memberId 现在没有任何 active 卡。会员模式下必须有卡才能下单，
+    // 想做无卡订单只能走 customer_name 散客分支。
     const res = await app.fetch(
       new Request('http://test.local/api/orders', {
         method: 'POST',
@@ -292,22 +321,9 @@ describe('Orders API /api/orders', () => {
         }),
       }),
     );
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { orders: schema.DailyOrder[] };
-    expect(body.orders[0]!.amount).toBe(35);
-
-    // 验证 FinanceEntry 写入
-    const orderId = body.orders[0]!.id;
-    const entries = await db
-      .select()
-      .from(schema.finance_entries)
-      .where(eq(schema.finance_entries.ref_order_id, orderId));
-    expect(entries).toHaveLength(1);
-    expect(entries[0]!.type).toBe('income');
-    expect(entries[0]!.category).toBe('ad_hoc');
-    expect(entries[0]!.amount).toBe(35);
-    expect(entries[0]!.source).toBe('auto');
-    expect(entries[0]!.voided).toBe(false);
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { message: string };
+    expect(body.message).toContain('先开卡');
   });
 
   it('POST 会员不存在 → 404', async () => {
@@ -661,6 +677,7 @@ describe('Orders API /api/orders', () => {
   // ====== PATCH /:id/cancel ======
 
   it('CANCEL 卡订单 → 卡 remaining 恢复', async () => {
+    await deactivateDefaultCard();
     const cardRes = await seedCard(db, {
       member_id: memberId,
       created_by_user_id: staffId,
@@ -709,6 +726,7 @@ describe('Orders API /api/orders', () => {
   });
 
   it('CANCEL exhausted 卡 → 恢复后回 active', async () => {
+    await deactivateDefaultCard();
     const cardRes = await seedCard(db, {
       member_id: memberId,
       created_by_user_id: staffId,

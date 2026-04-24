@@ -292,6 +292,12 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
         totalQty,
         createdByUserId,
       });
+      // 会员必须有进行中的卡才能下单；没有的话上层应改走散客录单或者先开卡
+      if (deductResult === null) {
+        throw new HTTPException(422, {
+          message: '该会员暂无进行中的卡，请先开卡或走散客录单',
+        });
+      }
     }
 
     const hasCard = deductResult !== null;

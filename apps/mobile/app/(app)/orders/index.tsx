@@ -1043,7 +1043,16 @@ function EntryPanel({
     }
   };
 
-  const canSubmitMember = !!selectedMember && lunchQty + dinnerQty > 0 && !submitting;
+  const memberHasCard = !!selectedMember?.active_card;
+  const memberCardEnough = memberHasCard
+    ? (selectedMember!.active_card!.remaining_meals >= lunchQty + dinnerQty)
+    : false;
+  const canSubmitMember =
+    !!selectedMember &&
+    memberHasCard &&
+    memberCardEnough &&
+    lunchQty + dinnerQty > 0 &&
+    !submitting;
   const canSubmitAdhoc  = adhocName.trim().length > 0 && adhocTotalQty >= 1 && !submitting;
   const canSubmit       = mode === 'member' ? canSubmitMember : canSubmitAdhoc;
 
@@ -1097,31 +1106,63 @@ function EntryPanel({
 
                 {/* 已选会员卡片 */}
                 {selectedMember ? (
-                  <View style={eStyles.selectedMemberCard}>
-                    <View style={[eStyles.selAvatar, { backgroundColor: selectedMember.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
-                      <Text style={eStyles.selAvatarText}>
-                        {(selectedMember.nickname || selectedMember.name)[0]}
-                      </Text>
+                  <>
+                    <View style={eStyles.selectedMemberCard}>
+                      <View style={[eStyles.selAvatar, { backgroundColor: selectedMember.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+                        <Text style={eStyles.selAvatarText}>
+                          {(selectedMember.nickname || selectedMember.name)[0]}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={eStyles.selName}>
+                          {selectedMember.name}「{selectedMember.nickname}」
+                        </Text>
+                        <Text style={eStyles.selSub}>
+                          {selectedMember.is_hospital ? '院内' : '院外'} ·{' '}
+                          {selectedMember.active_card?.card_name ?? '无有效卡'} · 剩{' '}
+                          {selectedMember.active_card?.remaining_meals ?? 0} 份
+                        </Text>
+                        {selectedMember.dietary_notes ? (
+                          <Text style={eStyles.selDiet}>忌：{selectedMember.dietary_notes}</Text>
+                        ) : null}
+                      </View>
+                      <Pressable
+                        onPress={() => { setSelectedMember(null); setMemberQuery(''); }}
+                      >
+                        <Text style={eStyles.changeBtn}>更换</Text>
+                      </Pressable>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={eStyles.selName}>
-                        {selectedMember.name}「{selectedMember.nickname}」
-                      </Text>
-                      <Text style={eStyles.selSub}>
-                        {selectedMember.is_hospital ? '院内' : '院外'} ·{' '}
-                        {selectedMember.active_card?.card_name ?? '无有效卡'} · 剩{' '}
-                        {selectedMember.active_card?.remaining_meals ?? 0} 份
-                      </Text>
-                      {selectedMember.dietary_notes ? (
-                        <Text style={eStyles.selDiet}>忌：{selectedMember.dietary_notes}</Text>
-                      ) : null}
-                    </View>
-                    <Pressable
-                      onPress={() => { setSelectedMember(null); setMemberQuery(''); }}
-                    >
-                      <Text style={eStyles.changeBtn}>更换</Text>
-                    </Pressable>
-                  </View>
+                    {!memberHasCard ? (
+                      <View style={eStyles.warnBanner}>
+                        <Ionicons name="alert-circle" size={18} color={IOS_COLORS.red} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={eStyles.warnTitle}>该会员暂无进行中的卡</Text>
+                          <Text style={eStyles.warnHint}>
+                            会员订餐必须扣卡，请先去会员详情开卡，或在"散餐"标签下做一次性散客录单。
+                          </Text>
+                        </View>
+                        <Pressable
+                          onPress={() => {
+                            const id = selectedMember.id;
+                            router.push({
+                              pathname: '/(app)/members/[id]',
+                              params: { id: String(id) },
+                            });
+                          }}
+                          style={eStyles.warnCta}
+                        >
+                          <Text style={eStyles.warnCtaText}>去开卡</Text>
+                        </Pressable>
+                      </View>
+                    ) : memberHasCard && lunchQty + dinnerQty > 0 && !memberCardEnough ? (
+                      <View style={eStyles.warnBanner}>
+                        <Ionicons name="alert-circle" size={18} color={IOS_COLORS.red} />
+                        <Text style={[eStyles.warnTitle, { flex: 1 }]}>
+                          剩 {selectedMember.active_card!.remaining_meals} 份，不够扣 {lunchQty + dinnerQty} 份。请先续卡或减少份数。
+                        </Text>
+                      </View>
+                    ) : null}
+                  </>
                 ) : dropdownOpen ? (
                   /* 搜索结果下拉 */
                   filteredMembers.length > 0 ? (
@@ -1153,7 +1194,7 @@ function EntryPanel({
                               {m.active_card.card_name} 剩{m.active_card.remaining_meals}份
                             </Text>
                           ) : (
-                            <Text style={eStyles.memberNoCard}>无卡</Text>
+                            <Text style={eStyles.memberNoCard}>无卡 · 需先开卡</Text>
                           )}
                         </Pressable>
                       ))}
@@ -1308,8 +1349,15 @@ function EntryPanel({
               <Text style={eStyles.submitMain}>
                 {selectedMember.nickname || selectedMember.name}
               </Text>
-              <Text style={eStyles.submitSub}>
-                午 {lunchQty} · 晚 {dinnerQty} · 共 {lunchQty + dinnerQty} 份
+              <Text
+                style={[
+                  eStyles.submitSub,
+                  !memberHasCard && { color: IOS_COLORS.red, fontWeight: '600' },
+                ]}
+              >
+                {!memberHasCard
+                  ? '该会员无卡，请先开卡'
+                  : `午 ${lunchQty} · 晚 ${dinnerQty} · 共 ${lunchQty + dinnerQty} 份`}
               </Text>
             </>
           ) : mode === 'adhoc' && adhocName.trim() ? (
@@ -1728,7 +1776,21 @@ const eStyles = StyleSheet.create({
   memberName:       { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
   memberNick:       { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 1 },
   memberCardBadge:  { fontSize: 12, color: IOS_COLORS.blue, backgroundColor: IOS_COLORS.blueLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  memberNoCard:     { fontSize: 12, color: IOS_COLORS.labelTertiary },
+  memberNoCard:     { fontSize: 11, color: IOS_COLORS.red, backgroundColor: '#FFE5E5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, fontWeight: '600' },
+
+  warnBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#FFF0F0', borderColor: '#FFD2D2', borderWidth: 1,
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    marginTop: 10,
+  },
+  warnTitle: { fontSize: 14, fontWeight: '700', color: IOS_COLORS.red },
+  warnHint:  { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2, lineHeight: 16 },
+  warnCta:   {
+    backgroundColor: IOS_COLORS.red, paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 8,
+  },
+  warnCtaText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   selectedMemberCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
