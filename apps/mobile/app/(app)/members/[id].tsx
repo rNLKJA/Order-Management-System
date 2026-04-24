@@ -74,6 +74,9 @@ export default function MemberDetailScreen() {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [recordTab, setRecordTab] = useState<'orders' | 'cards'>('orders');
+  const [expandedOrderDates, setExpandedOrderDates] = useState<Record<string, boolean>>({});
+  const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
 
   const handlePurchase = useCallback(
     async (p: CardFlowSubmitPayload) => {
@@ -331,15 +334,6 @@ export default function MemberDetailScreen() {
               ) : null}
             </View>
 
-            {/* 退卡：破坏性操作，放次级位置避免误触 */}
-            <Pressable
-              style={({ pressed }) => [styles.refundBtn, pressed && { opacity: 0.7 }]}
-              onPress={() => setShowRefundModal(true)}
-              hitSlop={6}
-            >
-              <Ionicons name="close-circle-outline" size={16} color="#FF3B30" />
-              <Text style={styles.refundBtnText}>申请退卡</Text>
-            </Pressable>
           </View>
         ) : (
           <View style={styles.noCardSection}>
@@ -376,21 +370,58 @@ export default function MemberDetailScreen() {
           </View>
         </Section>
 
-        {/* 出餐记录 */}
+        {/* 流水：Tab + Accordion */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>出餐记录</Text>
+          <Text style={styles.sectionTitle}>流水记录</Text>
         </View>
-        <MemberOrderHistory ordersQuery={ordersQuery} usersById={usersQuery.data ?? {}} />
+        <View style={styles.recordTabs}>
+          <Pressable
+            style={[styles.recordTabBtn, recordTab === 'orders' && styles.recordTabBtnActive]}
+            onPress={() => setRecordTab('orders')}
+          >
+            <Text style={[styles.recordTabText, recordTab === 'orders' && styles.recordTabTextActive]}>
+              出餐记录
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.recordTabBtn, recordTab === 'cards' && styles.recordTabBtnActive]}
+            onPress={() => setRecordTab('cards')}
+          >
+            <Text style={[styles.recordTabText, recordTab === 'cards' && styles.recordTabTextActive]}>
+              开卡记录
+            </Text>
+          </Pressable>
+        </View>
+        {recordTab === 'orders' ? (
+          <MemberOrderHistory
+            ordersQuery={ordersQuery}
+            usersById={usersQuery.data ?? {}}
+            expandedDates={expandedOrderDates}
+            onToggleDate={(date) =>
+              setExpandedOrderDates((prev) => ({ ...prev, [date]: !prev[date] }))
+            }
+          />
+        ) : (
+          <CardHistoryAccordion
+            cards={member.card_history}
+            expandedCards={expandedCards}
+            onToggleCard={(cardId) =>
+              setExpandedCards((prev) => ({ ...prev, [cardId]: !prev[cardId] }))
+            }
+          />
+        )}
 
-        {/* 开卡记录（含进行中 / 已升级 / 已用完 / 已退卡） */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>开卡记录</Text>
-        </View>
-        <View style={styles.historyCards}>
-          {member.card_history.map((c, i) => (
-            <HistoryCardRow key={c.id} card={c} isLast={i === member.card_history.length - 1} />
-          ))}
-        </View>
+        {/* 退卡放最底端，避免误触 */}
+        {card ? (
+          <Pressable
+            style={({ pressed }) => [styles.refundBottomBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => setShowRefundModal(true)}
+            hitSlop={6}
+          >
+            <Ionicons name="close-circle-outline" size={16} color="#FF3B30" />
+            <Text style={styles.refundBtnText}>申请退卡</Text>
+          </Pressable>
+        ) : null}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -540,9 +571,13 @@ function Tag({ label, color }: { label: string; color: string }) {
 function MemberOrderHistory({
   ordersQuery,
   usersById,
+  expandedDates,
+  onToggleDate,
 }: {
   ordersQuery: UseQueryResult<DailyOrder[], Error>;
   usersById: Record<number, ApiUser>;
+  expandedDates: Record<string, boolean>;
+  onToggleDate: (date: string) => void;
 }) {
   const byDate = useMemo(() => {
     const list = ordersQuery.data ?? [];
@@ -583,17 +618,29 @@ function MemberOrderHistory({
 
   return (
     <View style={styles.orderHistoryWrap}>
-      {byDate.map(([date, dayOrders]) => (
-        <View key={date} style={styles.dayBlock}>
-          <Text style={styles.dayHeader}>
-            {date}
-            <Text style={styles.dayCount}> · {dayOrders.length} 条</Text>
-          </Text>
-          {dayOrders.map((o) => (
-            <MemberOrderRow key={o.id} order={o} usersById={usersById} />
-          ))}
-        </View>
-      ))}
+      {byDate.map(([date, dayOrders]) => {
+        const open = expandedDates[date] ?? true;
+        return (
+          <View key={date} style={styles.dayBlock}>
+            <Pressable style={styles.accordionHead} onPress={() => onToggleDate(date)}>
+              <Text style={styles.dayHeader}>
+                {date}
+                <Text style={styles.dayCount}> · {dayOrders.length} 条</Text>
+              </Text>
+              <Ionicons
+                name={open ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={IOS_COLORS.labelSecondary}
+              />
+            </Pressable>
+            {open
+              ? dayOrders.map((o) => (
+                  <MemberOrderRow key={o.id} order={o} usersById={usersById} />
+                ))
+              : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -648,7 +695,48 @@ function MemberOrderRow({
   );
 }
 
-function HistoryCardRow({ card, isLast }: { card: MockCard; isLast: boolean }) {
+function CardHistoryAccordion({
+  cards,
+  expandedCards,
+  onToggleCard,
+}: {
+  cards: MockCard[];
+  expandedCards: Record<number, boolean>;
+  onToggleCard: (cardId: number) => void;
+}) {
+  if (cards.length === 0) {
+    return (
+      <View style={styles.orderHistoryWrap}>
+        <Text style={styles.orderHistoryEmpty}>暂无开卡记录</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.historyCards}>
+      {cards.map((card, i) => (
+        <HistoryCardRow
+          key={card.id}
+          card={card}
+          isLast={i === cards.length - 1}
+          expanded={expandedCards[card.id] ?? i === 0}
+          onToggle={() => onToggleCard(card.id)}
+        />
+      ))}
+    </View>
+  );
+}
+
+function HistoryCardRow({
+  card,
+  isLast,
+  expanded,
+  onToggle,
+}: {
+  card: MockCard;
+  isLast: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   const statusMap = {
     active: { label: '进行中', color: '#34C759', bg: '#E8F8ED' },
     upgraded: { label: '已升级', color: '#007AFF', bg: IOS_COLORS.blueLight },
@@ -658,7 +746,7 @@ function HistoryCardRow({ card, isLast }: { card: MockCard; isLast: boolean }) {
   const s = statusMap[card.status];
   return (
     <View style={[styles.historyRow, isLast && styles.historyRowLast]}>
-      <View style={styles.historyLeft}>
+      <Pressable style={styles.accordionHead} onPress={onToggle}>
         <View style={styles.historyTopRow}>
           <Text style={styles.historyName}>{card.card_name}</Text>
           <Text style={styles.historyType}>{card.is_hospital ? '院内' : '院外'}</Text>
@@ -666,21 +754,31 @@ function HistoryCardRow({ card, isLast }: { card: MockCard; isLast: boolean }) {
             <Text style={[styles.historyStText, { color: s.color }]}>{s.label}</Text>
           </View>
         </View>
-        {card.upgraded_from && (
-          <Text style={styles.historyUpgrade}>自「{card.upgraded_from}」升级</Text>
-        )}
-        <Text style={styles.historyMeta}>
-          {card.used_meals}/{card.total_meals}份 · ¥{card.paid_amount} · {new Date(card.purchased_at).toLocaleDateString('zh-CN')}
-        </Text>
-        {card.status === 'refunded' && card.refund_amount != null ? (
-          <Text style={styles.historyRefund}>
-            退卡退款 ¥{card.refund_amount}
-            {card.refunded_at ? ` · ${new Date(card.refunded_at).toLocaleDateString('zh-CN')}` : ''}
-            {card.refund_reason ? ` · ${card.refund_reason}` : ''}
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={16}
+          color={IOS_COLORS.labelSecondary}
+        />
+      </Pressable>
+      {expanded ? (
+        <View style={styles.historyLeft}>
+          {card.upgraded_from ? (
+            <Text style={styles.historyUpgrade}>自「{card.upgraded_from}」升级</Text>
+          ) : null}
+          <Text style={styles.historyMeta}>
+            {card.used_meals}/{card.total_meals}份 · ¥{card.paid_amount} ·{' '}
+            {new Date(card.purchased_at).toLocaleDateString('zh-CN')}
           </Text>
-        ) : null}
-        {card.notes ? <Text style={styles.historyNotes}>备注：{card.notes}</Text> : null}
-      </View>
+          {card.status === 'refunded' && card.refund_amount != null ? (
+            <Text style={styles.historyRefund}>
+              退卡退款 ¥{card.refund_amount}
+              {card.refunded_at ? ` · ${new Date(card.refunded_at).toLocaleDateString('zh-CN')}` : ''}
+              {card.refund_reason ? ` · ${card.refund_reason}` : ''}
+            </Text>
+          ) : null}
+          {card.notes ? <Text style={styles.historyNotes}>备注：{card.notes}</Text> : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -727,6 +825,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, paddingTop: 4, paddingBottom: 8,
   },
   sectionTitle: { fontSize: 20, fontWeight: '700', color: IOS_COLORS.label, letterSpacing: -0.3 },
+  recordTabs: {
+    marginHorizontal: 20,
+    marginBottom: 10,
+    flexDirection: 'row',
+    backgroundColor: IOS_COLORS.fillLight,
+    borderRadius: 10,
+    padding: 3,
+    gap: 4,
+  },
+  recordTabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    paddingVertical: 8,
+  },
+  recordTabBtnActive: { backgroundColor: IOS_COLORS.card },
+  recordTabText: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
+  recordTabTextActive: { color: IOS_COLORS.label },
 
   cardSection: { paddingHorizontal: 20, marginBottom: 24, gap: 10 },
   renewalBanner: {
@@ -787,6 +904,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   refundBtnText: { fontSize: 14, color: '#FF3B30', fontWeight: '500' },
+  refundBottomBtn: {
+    marginHorizontal: 20,
+    marginTop: 6,
+    marginBottom: 20,
+    backgroundColor: '#FFF1F0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFDAD7',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+  },
   purchaseBtnFull: { width: '100%' },
   purchaseBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
 
@@ -842,7 +973,7 @@ const styles = StyleSheet.create({
   },
   historyRowLast: { borderBottomWidth: 0 },
   historyLeft: { gap: 3 },
-  historyTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  historyTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 },
   historyName: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
   historyType: { fontSize: 12, color: IOS_COLORS.labelSecondary },
   historySt: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
@@ -871,12 +1002,20 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   dayBlock: { marginBottom: 12 },
+  accordionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: IOS_COLORS.card,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   dayHeader: {
     fontSize: 13,
     fontWeight: '700',
     color: IOS_COLORS.label,
-    paddingVertical: 6,
-    paddingLeft: 2,
+    paddingVertical: 2,
   },
   dayCount: { fontWeight: '400', color: IOS_COLORS.labelSecondary },
   memberOrderRow: {

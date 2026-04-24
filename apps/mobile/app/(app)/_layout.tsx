@@ -25,6 +25,11 @@ export default function AppLayout() {
       <Stack.Screen name="members/new" />
       <Stack.Screen name="orders/index" />
       <Stack.Screen name="orders/stats" />
+      <Stack.Screen name="walkins/index" />
+      <Stack.Screen name="walkins/[id]" />
+      <Stack.Screen name="users/index" />
+      <Stack.Screen name="users/[id]" />
+      <Stack.Screen name="admin/index" />
       <Stack.Screen name="finance/index" />
       <Stack.Screen name="reminders/index" />
       <Stack.Screen name="profile/index" />

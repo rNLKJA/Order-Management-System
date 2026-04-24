@@ -12,7 +12,7 @@
  * 写接口只写"自己"，禁止改别人。admin 管理其他用户 Phase 4 再来。
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
@@ -20,11 +20,55 @@ import { zValidator } from '@hono/zod-validator';
 import { userAvatarUpdateSchema } from '@meal/shared';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
-import { requireAuth, type AuthVariables } from '../middleware/jwt.js';
+import {
+  DEFAULT_DATA_OPERATORS,
+  isDataOperatorEnforced,
+  requireAuth,
+  requireRole,
+  type AuthVariables,
+} from '../middleware/jwt.js';
 
 export const usersRouter = new Hono<{ Variables: AuthVariables }>();
 
 usersRouter.use('*', requireAuth());
+
+function parseOperatorUsernames(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+async function readDataOperatorUsernames(c: Context<{ Variables: AuthVariables }>): Promise<string[]> {
+  const db = requestDb(c);
+  const rows = await db
+    .select({ value: schema.settings.value })
+    .from(schema.settings)
+    .where(eq(schema.settings.key, 'data_operator_usernames'))
+    .limit(1);
+  const raw = rows[0]?.value?.trim() ?? '';
+  if (!raw) return DEFAULT_DATA_OPERATORS();
+  return parseOperatorUsernames(raw);
+}
+
+async function writeDataOperatorUsernames(c: Context<{ Variables: AuthVariables }>, usernames: string[]) {
+  const db = requestDb(c);
+  const value = usernames.join(',');
+  await db
+    .insert(schema.settings)
+    .values({
+      key: 'data_operator_usernames',
+      value,
+      updated_at: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: schema.settings.key,
+      set: {
+        value,
+        updated_at: new Date(),
+      },
+    });
+}
 
 usersRouter.get('/', async (c) => {
   const db = requestDb(c);
@@ -42,6 +86,103 @@ usersRouter.get('/', async (c) => {
 
   return c.json({ users: rows });
 });
+
+const updateUserAccessSchema = z
+  .object({
+    role: z.enum(['admin', 'staff']).optional(),
+    is_active: z.boolean().optional(),
+    can_data_write: z.boolean().optional(),
+  })
+  .refine((d) => d.role !== undefined || d.is_active !== undefined || d.can_data_write !== undefined, {
+    message: '至少传一个字段',
+  });
+const accessIdSchema = z.object({
+  id: z.string().regex(/^\d+$/, 'id 必须是整数').transform((v) => parseInt(v, 10)),
+});
+
+usersRouter.get('/permissions/data-operators', requireRole('admin'), async (c) => {
+  const db = requestDb(c);
+  const users = await db
+    .select({
+      id: schema.users.id,
+      username: schema.users.username,
+      full_name: schema.users.full_name,
+      role: schema.users.role,
+      is_active: schema.users.is_active,
+    })
+    .from(schema.users)
+    .orderBy(schema.users.id);
+  const operators = await readDataOperatorUsernames(c);
+  return c.json({
+    enforcement: isDataOperatorEnforced(),
+    operators,
+    users: users.map((u) => ({
+      ...u,
+      can_data_write: u.role === 'admin' ? true : operators.includes(u.username.toLowerCase()),
+    })),
+  });
+});
+
+usersRouter.patch(
+  '/:id/access',
+  requireRole('admin'),
+  zValidator('param', accessIdSchema),
+  zValidator('json', updateUserAccessSchema),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const input = c.req.valid('json');
+    const db = requestDb(c);
+
+    const targetRows = await db
+      .select({
+        id: schema.users.id,
+        username: schema.users.username,
+        role: schema.users.role,
+        is_active: schema.users.is_active,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, id))
+      .limit(1);
+    const target = targetRows[0];
+    if (!target) throw new HTTPException(404, { message: '用户不存在' });
+
+    const patch: { role?: 'admin' | 'staff'; is_active?: boolean } = {};
+    if (input.role !== undefined) patch.role = input.role;
+    if (input.is_active !== undefined) patch.is_active = input.is_active;
+    if (Object.keys(patch).length > 0) {
+      await db.update(schema.users).set(patch).where(eq(schema.users.id, id));
+    }
+
+    if (input.can_data_write !== undefined) {
+      const operators = new Set(await readDataOperatorUsernames(c));
+      const uname = target.username.toLowerCase();
+      if (input.can_data_write) operators.add(uname);
+      else operators.delete(uname);
+      await writeDataOperatorUsernames(c, Array.from(operators));
+    }
+
+    const users = await db
+      .select({
+        id: schema.users.id,
+        username: schema.users.username,
+        full_name: schema.users.full_name,
+        role: schema.users.role,
+        is_active: schema.users.is_active,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, id))
+      .limit(1);
+    const user = users[0]!;
+    const operators = await readDataOperatorUsernames(c);
+    return c.json({
+      user: {
+        ...user,
+        can_data_write: user.role === 'admin' ? true : operators.includes(user.username.toLowerCase()),
+      },
+      operators,
+    });
+  },
+);
 
 usersRouter.patch(
   '/me/avatar',

@@ -13,6 +13,7 @@ export interface ApiUser {
   role: 'admin' | 'staff';
   is_active: boolean;
   avatar_url?: string | null;
+  can_data_write?: boolean;
 }
 
 export interface ApiUserOrder {
@@ -37,10 +38,28 @@ export interface UserOrderSummary {
   cancelled_count: number;
 }
 
+export interface AdminPermissionState {
+  enforcement: boolean;
+  operators: string[];
+  users: ApiUser[];
+}
+
 export const usersApi = {
   list: () => api.get<{ users: ApiUser[] }>('/api/users'),
 
   get: (id: number) => api.get<{ user: ApiUser }>(`/api/users/${id}`),
+
+  permissions: () =>
+    api.get<AdminPermissionState>('/api/users/permissions/data-operators'),
+
+  updateAccess: (
+    id: number,
+    input: {
+      role?: 'admin' | 'staff';
+      is_active?: boolean;
+      can_data_write?: boolean;
+    },
+  ) => api.patch<{ user: ApiUser; operators: string[] }>(`/api/users/${id}/access`, input),
 
   /** 某员工录入的订单流水（按日期 + 创建时间倒序） */
   orders: (id: number, opts?: { from?: string; to?: string; status?: string; limit?: number; offset?: number }) => {

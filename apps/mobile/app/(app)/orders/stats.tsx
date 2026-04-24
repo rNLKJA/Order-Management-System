@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { formatDate } from '@meal/shared';
@@ -159,7 +160,16 @@ export default function OrdersStatsScreen() {
   const { totals, byDay, byMember } = useMemo(() => {
     const t = emptyTotals();
     const dayMap = new Map<string, DailyBucket>();
-    const memberMap = new Map<number | string, { key: number | string; label: string; meals: number; walkin: boolean }>();
+    const memberMap = new Map<
+      number | string,
+      {
+        key: number | string;
+        label: string;
+        meals: number;
+        walkin: boolean;
+        member_id: number;
+      }
+    >();
 
     for (const o of filtered) {
       const isWalkin = (o.customer_name ?? '').trim().length > 0;
@@ -202,11 +212,11 @@ export default function OrdersStatsScreen() {
         else day.member += o.quantity;
         dayMap.set(o.order_date, day);
 
-        const key = isWalkin ? `walkin:${o.customer_name}` : o.member_id;
+        const key = isWalkin ? `walkin:${o.member_id}` : o.member_id;
         const label = isWalkin
           ? (o.customer_name || '散客')
           : (memberNameById[o.member_id] ?? `会员 #${o.member_id}`);
-        const cur = memberMap.get(key) ?? { key, label, meals: 0, walkin: isWalkin };
+        const cur = memberMap.get(key) ?? { key, label, meals: 0, walkin: isWalkin, member_id: o.member_id };
         cur.meals += o.quantity;
         memberMap.set(key, cur);
       }
@@ -404,8 +414,15 @@ export default function OrdersStatsScreen() {
             ) : (
               <GlassSurface padding={SPACING.md}>
                 {byMember.map((r, idx) => (
-                  <View
+                  <Pressable
                     key={String(r.key)}
+                    onPress={() =>
+                      router.push(
+                        (r.walkin
+                          ? { pathname: '/(app)/walkins/[id]', params: { id: String(r.member_id) } }
+                          : { pathname: '/(app)/members/[id]', params: { id: String(r.member_id) } }) as never,
+                      )
+                    }
                     style={[
                       styles.rankRow,
                       idx === byMember.length - 1 && { borderBottomWidth: 0 },
@@ -425,7 +442,7 @@ export default function OrdersStatsScreen() {
                       ) : null}
                     </View>
                     <Text style={styles.rankValue}>{r.meals} 份</Text>
-                  </View>
+                  </Pressable>
                 ))}
               </GlassSurface>
             )}

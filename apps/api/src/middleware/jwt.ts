@@ -141,8 +141,18 @@ export function requireDataOperator(): MiddlewareHandler<{ Variables: AuthVariab
     if (user.role === 'admin') {
       return next();
     }
-    const allowed = DEFAULT_DATA_OPERATORS();
-    if (!allowed.includes(user.username)) {
+    const db = requestDb(c);
+    const setting = await db
+      .select({ value: schema.settings.value })
+      .from(schema.settings)
+      .where(eq(schema.settings.key, 'data_operator_usernames'))
+      .limit(1);
+    const dynamicAllowed = (setting[0]?.value ?? '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const allowed = dynamicAllowed.length > 0 ? dynamicAllowed : DEFAULT_DATA_OPERATORS();
+    if (!allowed.includes(user.username.toLowerCase())) {
       throw new HTTPException(403, {
         message: `目前仅 ${allowed.join(' / ')} 可以做数据录入 / 删除，请联系管理员`,
       });

@@ -145,6 +145,19 @@ export default function HomeScreen() {
       bg: COLORS.brandSoft,
       route: '/(app)/users',
     },
+    ...(user?.role === 'admin'
+      ? [
+          {
+            key: 'admin',
+            title: '权限管理',
+            subtitle: '管理员可在手机端分配角色与写权限',
+            icon: 'shield-checkmark-outline' as const,
+            color: COLORS.info,
+            bg: COLORS.infoSoft,
+            route: '/(app)/admin',
+          },
+        ]
+      : []),
     {
       key: 'profile',
       title: '当前用户',
