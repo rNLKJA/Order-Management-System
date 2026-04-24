@@ -9,7 +9,7 @@
  *          就跳到 /members/:id 查看新会员。
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -27,9 +27,12 @@ import { IOS_COLORS } from '../../../theme/paperTheme';
 import { AppHeader, MeshBackground } from '../../../components/ui';
 import { walkinsApi, type WalkinDetailResp } from '../../../api/walkins';
 import { cardsApi } from '../../../api/cards';
+import { usersApi } from '../../../api/users';
+import { useAuth } from '../../../hooks/useAuth';
 import {
   CardFlowModal,
   type CardFlowSubmitPayload,
+  type CardFlowUser,
 } from '../../../components/CardFlowModal';
 import { MemberEditModal } from '../../../components/MemberEditModal';
 import type { MockMember } from '../../../constants/mockData';
@@ -84,6 +87,22 @@ export default function WalkinDetailScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
 
+  const { user: authUser } = useAuth();
+  const usersQuery = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => (await usersApi.list()).users.filter((u) => u.is_active),
+    staleTime: 5 * 60 * 1000,
+  });
+  const pickerUsers = useMemo<CardFlowUser[]>(
+    () =>
+      (usersQuery.data ?? []).map((u) => ({
+        id: u.id,
+        name: u.full_name || u.username,
+      })),
+    [usersQuery.data],
+  );
+  const defaultUserId = authUser?.id ?? pickerUsers[0]?.id ?? 0;
+
   const handlePurchase = useCallback(
     async (p: CardFlowSubmitPayload) => {
       setPromoting(true);
@@ -92,6 +111,8 @@ export default function WalkinDetailScreen() {
           member_id: walkinId,
           card_code: p.spec.code,
           is_hospital: p.isHospital,
+          collector_user_id: p.collectorUserId,
+          created_by_user_id: p.createdByUserId,
           notes: p.notes,
         });
         setShowPurchaseModal(false);
@@ -334,6 +355,9 @@ export default function WalkinDetailScreen() {
           mode="purchase"
           memberName={member.name}
           memberIsHospital={member.is_hospital}
+          pickerUsers={pickerUsers}
+          defaultCollectorId={defaultUserId}
+          defaultRecorderId={defaultUserId}
           onClose={() => setShowPurchaseModal(false)}
           onSubmit={handlePurchase}
         />

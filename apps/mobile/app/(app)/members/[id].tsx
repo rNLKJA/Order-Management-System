@@ -7,7 +7,7 @@
  * 卡 mutation 成功后用 useInvalidateMembersView() 失效缓存，列表和首页自动刷新。
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
@@ -20,8 +20,11 @@ import { CARD_RENEWAL_THRESHOLD_MEALS, type SubscriptionCardCode } from '@meal/s
 import { type MockCard } from '../../../constants/mockData';
 import { cardsApi } from '../../../api/cards';
 import { membersApi } from '../../../api/members';
+import { usersApi } from '../../../api/users';
+import { useAuth } from '../../../hooks/useAuth';
 import { useMemberView, useInvalidateMembersView } from '../../../hooks/useMembersView';
-import { CardFlowModal, type CardFlowSubmitPayload } from '../../../components/CardFlowModal';
+import { useQuery } from '@tanstack/react-query';
+import { CardFlowModal, type CardFlowSubmitPayload, type CardFlowUser } from '../../../components/CardFlowModal';
 import { RefundCardModal, type RefundSubmitPayload } from '../../../components/RefundCardModal';
 import { MemberEditModal } from '../../../components/MemberEditModal';
 
@@ -36,6 +39,21 @@ export default function MemberDetailScreen() {
   const memberId = Number(id);
   const { data: member, isLoading, notFound, error } = useMemberView(memberId);
   const invalidate = useInvalidateMembersView();
+  const { user: authUser } = useAuth();
+  const usersQuery = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => (await usersApi.list()).users.filter((u) => u.is_active),
+    staleTime: 5 * 60 * 1000,
+  });
+  const pickerUsers = useMemo<CardFlowUser[]>(
+    () =>
+      (usersQuery.data ?? []).map((u) => ({
+        id: u.id,
+        name: u.full_name || u.username,
+      })),
+    [usersQuery.data],
+  );
+  const defaultUserId = authUser?.id ?? pickerUsers[0]?.id ?? 0;
 
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -51,6 +69,8 @@ export default function MemberDetailScreen() {
         member_id: member.id,
         card_code: p.spec.code,
         is_hospital: p.isHospital,
+        collector_user_id: p.collectorUserId,
+        created_by_user_id: p.createdByUserId,
         notes: p.notes,
       });
       setShowPurchaseModal(false);
@@ -70,6 +90,8 @@ export default function MemberDetailScreen() {
       const { new_card, diff } = await cardsApi.upgrade(member.active_card.id, {
         card_code: p.spec.code,
         is_hospital: p.isHospital,
+        collector_user_id: p.collectorUserId,
+        created_by_user_id: p.createdByUserId,
         notes: p.notes,
       });
       setShowUpgradeModal(false);
@@ -87,7 +109,11 @@ export default function MemberDetailScreen() {
       if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
       const { new_card, carried_meals, paid_amount } = await cardsApi.renew(
         member.active_card.id,
-        { notes: p.notes },
+        {
+          collector_user_id: p.collectorUserId,
+          created_by_user_id: p.createdByUserId,
+          notes: p.notes,
+        },
       );
       setShowRenewModal(false);
       await invalidate(member.id);
@@ -356,6 +382,9 @@ export default function MemberDetailScreen() {
         mode="purchase"
         memberName={member.nickname || member.name}
         memberIsHospital={member.is_hospital}
+        pickerUsers={pickerUsers}
+        defaultCollectorId={defaultUserId}
+        defaultRecorderId={defaultUserId}
         onClose={() => setShowPurchaseModal(false)}
         onSubmit={handlePurchase}
       />
@@ -365,6 +394,9 @@ export default function MemberDetailScreen() {
           mode="upgrade"
           memberName={member.nickname || member.name}
           memberIsHospital={member.is_hospital}
+          pickerUsers={pickerUsers}
+          defaultCollectorId={defaultUserId}
+          defaultRecorderId={defaultUserId}
           currentCard={{
             card_name: card.card_name,
             card_code: card.card_code as SubscriptionCardCode,
@@ -384,6 +416,9 @@ export default function MemberDetailScreen() {
           mode="renew"
           memberName={member.nickname || member.name}
           memberIsHospital={member.is_hospital}
+          pickerUsers={pickerUsers}
+          defaultCollectorId={defaultUserId}
+          defaultRecorderId={defaultUserId}
           currentCard={{
             card_name: card.card_name,
             card_code: card.card_code as SubscriptionCardCode,

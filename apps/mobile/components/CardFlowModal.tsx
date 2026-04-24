@@ -30,15 +30,13 @@ import {
   type SubscriptionCardCode,
 } from '@meal/shared';
 import { IOS_COLORS } from '../theme/paperTheme';
-import {
-  COLLECTORS,
-  DEFAULT_COLLECTOR,
-  DEFAULT_RECORDER,
-  RECORDERS,
-  type Collector,
-  type Recorder,
-} from '../constants/mockData';
 import { confirmAction } from '../lib/confirm';
+
+/** 员工候选项（收款人/录入者 picker），从 /api/users 拉取 */
+export interface CardFlowUser {
+  id: number;
+  name: string;
+}
 
 export type CardFlowMode = 'purchase' | 'upgrade' | 'renew';
 
@@ -61,8 +59,10 @@ export interface CardFlowCurrentCard {
 export interface CardFlowSubmitPayload {
   spec: CardSpec;
   isHospital: boolean;
-  collector: Collector;
-  recorder: Recorder;
+  collectorUserId: number;
+  collectorName: string;
+  createdByUserId: number;
+  createdByName: string;
   notes: string;
 }
 
@@ -74,6 +74,12 @@ export interface CardFlowModalProps {
   memberIsHospital: boolean;
   /** mode='upgrade' 时必须传当前 active 卡 */
   currentCard?: CardFlowCurrentCard | null;
+  /** 员工候选（来自 /api/users），按 full_name 展示 */
+  pickerUsers: CardFlowUser[];
+  /** 默认收款人 id；通常传当前登录用户 id */
+  defaultCollectorId: number;
+  /** 默认录入者 id；通常传当前登录用户 id */
+  defaultRecorderId: number;
   onClose: () => void;
   /** 返回 Promise 以便 Modal 显示 loading；抛错时展示错误 */
   onSubmit: (payload: CardFlowSubmitPayload) => Promise<void> | void;
@@ -82,16 +88,25 @@ export interface CardFlowModalProps {
 export function CardFlowModal(props: CardFlowModalProps) {
   const {
     visible, mode, memberName, memberIsHospital,
-    currentCard, onClose, onSubmit,
+    currentCard, pickerUsers, defaultCollectorId, defaultRecorderId,
+    onClose, onSubmit,
   } = props;
 
   const [isHospital, setIsHospital] = useState(memberIsHospital);
   const [selectedCode, setSelectedCode] = useState<SubscriptionCardCode | null>(null);
-  const [collector, setCollector] = useState<Collector>(DEFAULT_COLLECTOR);
-  const [recorder, setRecorder] = useState<Recorder>(DEFAULT_RECORDER);
+  const [collectorId, setCollectorId] = useState<number>(defaultCollectorId);
+  const [recorderId, setRecorderId] = useState<number>(defaultRecorderId);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const nameById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const u of pickerUsers) m.set(u.id, u.name);
+    return m;
+  }, [pickerUsers]);
+  const collectorName = nameById.get(collectorId) ?? '';
+  const recorderName = nameById.get(recorderId) ?? '';
 
   // 续卡：锁死到当前卡的 spec（同卡种、同价目表、同价格）
   const renewSpec = useMemo<CardSpec | null>(() => {
@@ -104,13 +119,13 @@ export function CardFlowModal(props: CardFlowModalProps) {
       setIsHospital(currentCard?.is_hospital ?? memberIsHospital);
       // 续卡：初始化选中态为当前卡种，其他模式清空
       setSelectedCode(mode === 'renew' ? (currentCard?.card_code ?? null) : null);
-      setCollector(DEFAULT_COLLECTOR);
-      setRecorder(DEFAULT_RECORDER);
+      setCollectorId(defaultCollectorId);
+      setRecorderId(defaultRecorderId);
       setNotes('');
       setError(null);
       setSubmitting(false);
     }
-  }, [visible, memberIsHospital, currentCard, mode]);
+  }, [visible, memberIsHospital, currentCard, mode, defaultCollectorId, defaultRecorderId]);
 
   const allCards = useMemo(() => listCards(isHospital), [isHospital]);
   const allowedCodes = useMemo(() => {
@@ -175,14 +190,14 @@ export function CardFlowModal(props: CardFlowModalProps) {
       lines = [
         `为 ${memberName} 开通【${selectedSpec.name}】`,
         `应收 ¥${selectedSpec.totalPrice}`,
-        `收款人：${collector}`,
+        `收款人：${collectorName}`,
       ];
     } else if (mode === 'upgrade') {
       confirmTitle = '确认升级';
       lines = [
         `${memberName} 从【${currentCard?.card_name ?? '当前卡'}】升级到【${selectedSpec.name}】`,
         `补差价 ¥${diff} · 升级后剩 ${newRemaining} 份`,
-        `收款人：${collector}`,
+        `收款人：${collectorName}`,
         crossZone ? '注意：跨价目表换种（院内 ↔ 院外）' : '',
       ].filter(Boolean);
     } else {
@@ -190,7 +205,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
       lines = [
         `为 ${memberName} 续卡【${selectedSpec.name}】`,
         `应收 ¥${selectedSpec.totalPrice} · 结转 ${renewCarried} 份 · 续卡后剩 ${renewNewTotal ?? selectedSpec.meals} 份`,
-        `收款人：${collector}`,
+        `收款人：${collectorName}`,
       ];
     }
     confirmAction(
@@ -203,8 +218,10 @@ export function CardFlowModal(props: CardFlowModalProps) {
           await onSubmit({
             spec: selectedSpec,
             isHospital,
-            collector,
-            recorder,
+            collectorUserId: collectorId,
+            collectorName,
+            createdByUserId: recorderId,
+            createdByName: recorderName,
             notes,
           });
         } catch (e) {
@@ -385,22 +402,22 @@ export function CardFlowModal(props: CardFlowModalProps) {
           {/* 收款人 */}
           <SectionLabel text="收款人" />
           <View style={styles.card}>
-            <ChipRow
-              options={COLLECTORS}
-              value={collector}
+            <UserChipRow
+              options={pickerUsers}
+              value={collectorId}
               disabled={submitting}
-              onChange={(v) => setCollector(v as Collector)}
+              onChange={setCollectorId}
             />
           </View>
 
           {/* 录入者 */}
           <SectionLabel text="录入者" />
           <View style={styles.card}>
-            <ChipRow
-              options={RECORDERS}
-              value={recorder}
+            <UserChipRow
+              options={pickerUsers}
+              value={recorderId}
               disabled={submitting}
-              onChange={(v) => setRecorder(v as Recorder)}
+              onChange={setRecorderId}
             />
           </View>
 
@@ -438,7 +455,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
                     应收 <Text style={styles.summaryAmount}>¥{selectedSpec.totalPrice}</Text>
                   </Text>
                   <Text style={styles.summarySub}>
-                    {selectedSpec.name} · {selectedSpec.meals} 份 · 收款人 {collector}
+                    {selectedSpec.name} · {selectedSpec.meals} 份 · 收款人 {collectorName}
                   </Text>
                 </>
               ) : mode === 'upgrade' ? (
@@ -452,7 +469,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
                     </Text>
                   </Text>
                   <Text style={styles.summarySub}>
-                    {currentCard?.card_name ?? '当前卡'} → {selectedSpec.name} · 收款人 {collector}
+                    {currentCard?.card_name ?? '当前卡'} → {selectedSpec.name} · 收款人 {collectorName}
                   </Text>
                 </>
               ) : (
@@ -466,7 +483,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
                     </Text>
                   </Text>
                   <Text style={styles.summarySub}>
-                    {selectedSpec.name} · 结转 {renewCarried} 份 · 收款人 {collector}
+                    {selectedSpec.name} · 结转 {renewCarried} 份 · 收款人 {collectorName}
                   </Text>
                 </>
               )}
@@ -501,26 +518,29 @@ function SectionLabel({ text, hint }: { text: string; hint?: string }) {
   );
 }
 
-function ChipRow({
+function UserChipRow({
   options, value, onChange, disabled,
 }: {
-  options: readonly string[];
-  value: string;
-  onChange: (v: string) => void;
+  options: readonly CardFlowUser[];
+  value: number;
+  onChange: (v: number) => void;
   disabled?: boolean;
 }) {
+  if (options.length === 0) {
+    return <Text style={styles.chipText}>加载中…</Text>;
+  }
   return (
     <View style={styles.chipRow}>
       {options.map((opt) => {
-        const active = opt === value;
+        const active = opt.id === value;
         return (
           <Pressable
-            key={opt}
+            key={opt.id}
             disabled={disabled}
-            onPress={() => onChange(opt)}
+            onPress={() => onChange(opt.id)}
             style={[styles.chip, active && styles.chipActive]}
           >
-            <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt}</Text>
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.name}</Text>
           </Pressable>
         );
       })}
