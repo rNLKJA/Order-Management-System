@@ -42,7 +42,7 @@ import {
 } from '../../../hooks/useMembersView';
 import { dailyOrderToMockOrder, membersByIdFrom } from '../../../lib/order-view';
 import { AppHeader, MeshBackground } from '../../../components/ui';
-import { confirmDestructive } from '../../../lib/confirm';
+import { confirmAction, confirmDestructive } from '../../../lib/confirm';
 
 const STATUS_MAP = {
   pending:   { label: '待出餐', color: IOS_COLORS.orange,         bg: '#FFF4E5' },
@@ -198,6 +198,30 @@ export default function OrdersScreen() {
   );
 
   /**
+   * 出餐：不是终态（可以 fulfilled → pending 回退），但出错会影响厨房节奏，
+   * 所以加一道蓝色二次确认，把订单摘要亮出来，避免"点歪了把别家订单当成出餐完成"。
+   */
+  const handleMarkFulfilled = useCallback(
+    (order: MockOrder) => {
+      const displayName = order.member_nickname || order.member_name;
+      const mealLabel = order.meal_type === 'lunch' ? '午餐' : '晚餐';
+      const zone = order.is_hospital ? '院内' : '院外';
+      const lines = [
+        `${displayName} · ${mealLabel} ${order.quantity} 份 · ${zone}`,
+        '确认本单餐品已打包出餐。',
+        '出错了可以在订单详情把状态回退到"待出餐"。',
+      ].join('\n');
+      confirmAction(
+        '确认出餐？',
+        lines,
+        () => void handleUpdateStatus(order.id, 'fulfilled'),
+        '已出餐',
+      );
+    },
+    [handleUpdateStatus],
+  );
+
+  /**
    * 送达是终态。后端会把 delivered 的订单锁死，UI 层先弹一次二次确认，
    * 让点击必须是"有意识的"动作，避免配送途中误触。
    */
@@ -306,7 +330,7 @@ export default function OrdersScreen() {
       {activeTab === 'prep' && (
         <PrepView
           orders={orders}
-          onMarkFulfilled={(id) => handleUpdateStatus(id, 'fulfilled')}
+          onMarkFulfilled={handleMarkFulfilled}
           onOpenDetail={setActiveOrder}
         />
       )}
@@ -327,6 +351,7 @@ export default function OrdersScreen() {
           order={activeOrder}
           onClose={() => setActiveOrder(null)}
           onUpdate={handleUpdateStatus}
+          onMarkFulfilled={handleMarkFulfilled}
           onMarkDelivered={handleMarkDelivered}
         />
       )}
@@ -405,7 +430,7 @@ function PrepView({
   onOpenDetail,
 }: {
   orders: MockOrder[];
-  onMarkFulfilled: (id: number) => void;
+  onMarkFulfilled: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
 }) {
   const pendingOrders = orders.filter((o) => o.status === 'pending');
@@ -447,7 +472,7 @@ function PrepView({
             <PrepCard
               key={o.id}
               order={o}
-              onConfirm={() => onMarkFulfilled(o.id)}
+              onConfirm={() => onMarkFulfilled(o)}
               onOpen={() => onOpenDetail(o)}
             />
           ))}
@@ -464,7 +489,7 @@ function PrepView({
             <PrepCard
               key={o.id}
               order={o}
-              onConfirm={() => onMarkFulfilled(o.id)}
+              onConfirm={() => onMarkFulfilled(o)}
               onOpen={() => onOpenDetail(o)}
             />
           ))}
@@ -1353,12 +1378,13 @@ const STATUS_FLOW = [
 ];
 
 function StatusSheet({
-  order, onClose, onUpdate, onMarkDelivered,
+  order, onClose, onUpdate, onMarkFulfilled, onMarkDelivered,
 }: {
   order: MockOrder;
   onClose: () => void;
   onUpdate: (id: number, status: MockOrder['status']) => void;
-  /** 点"已送达"时单独走确认流程，避免状态网格里误触锁死。 */
+  /** 点"已出餐"/"已送达"时走二次确认；状态网格里这两个 chip 都会先弹 Modal。 */
+  onMarkFulfilled: (o: MockOrder) => void;
   onMarkDelivered: (o: MockOrder) => void;
 }) {
   const isAdhoc = order.card_type === null;
@@ -1446,10 +1472,15 @@ function StatusSheet({
                   !disabled && pressed && { opacity: 0.75 },
                 ]}
                 onPress={() => {
+                  // 先关弹层再弹确认，避免两个 Modal 叠在一起遮挡
                   if (s.key === 'delivered') {
-                    // 先关弹层再弹确认，避免两个 Modal 叠在一起遮挡
                     onClose();
                     onMarkDelivered(order);
+                  } else if (s.key === 'fulfilled' && order.status === 'pending') {
+                    // pending → fulfilled 也走一次确认（只在 pending→fulfilled，
+                    // 回退 delivered→fulfilled 是 UI 回滚，不需要再确认）
+                    onClose();
+                    onMarkFulfilled(order);
                   } else {
                     onUpdate(order.id, s.key);
                   }
