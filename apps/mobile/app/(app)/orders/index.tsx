@@ -153,16 +153,16 @@ export default function OrdersScreen() {
       customerAddress?: string;
       customerIsHospital: boolean;
       orderDate: string;
-      meal: 'lunch' | 'dinner';
-      qty: number;
+      lunchQty: number;
+      dinnerQty: number;
       unitPrice: number;
       notes?: string;
     }) => {
       try {
         await ordersApi.create({
           order_date: payload.orderDate,
-          lunch_qty: payload.meal === 'lunch' ? payload.qty : 0,
-          dinner_qty: payload.meal === 'dinner' ? payload.qty : 0,
+          lunch_qty: payload.lunchQty,
+          dinner_qty: payload.dinnerQty,
           notes: payload.notes ?? '',
           customer_name: payload.customerName,
           customer_phone: payload.customerPhone,
@@ -926,8 +926,8 @@ function EntryPanel({
     customerAddress?: string;
     customerIsHospital: boolean;
     orderDate: string;
-    meal: 'lunch' | 'dinner';
-    qty: number;
+    lunchQty: number;
+    dinnerQty: number;
     unitPrice: number;
     notes?: string;
   }) => Promise<void>;
@@ -945,14 +945,15 @@ function EntryPanel({
   const [memberNotes,    setMemberNotes]    = useState('');
 
   // 散餐 state
-  const [adhocName,     setAdhocName]     = useState('');
-  const [adhocPhone,    setAdhocPhone]    = useState('');
-  const [adhocAddress,  setAdhocAddress]  = useState('');
-  const [adhocMeal,     setAdhocMeal]     = useState<'lunch' | 'dinner'>('lunch');
-  const [adhocQty,      setAdhocQty]      = useState(1);
-  const [adhocPrice,    setAdhocPrice]    = useState(String(ADHOC_DEFAULT_PRICE));
-  const [adhocHospital, setAdhocHospital] = useState(false);
-  const [adhocNotes,    setAdhocNotes]    = useState('');
+  const [adhocName,       setAdhocName]       = useState('');
+  const [adhocPhone,      setAdhocPhone]      = useState('');
+  const [adhocAddress,    setAdhocAddress]    = useState('');
+  const [adhocLunchQty,   setAdhocLunchQty]   = useState(0);
+  const [adhocDinnerQty,  setAdhocDinnerQty]  = useState(0);
+  const [adhocPrice,      setAdhocPrice]      = useState(String(ADHOC_DEFAULT_PRICE));
+  const [adhocHospital,   setAdhocHospital]   = useState(false);
+  const [adhocNotes,      setAdhocNotes]      = useState('');
+  const adhocTotalQty = adhocLunchQty + adhocDinnerQty;
 
   const q = memberQuery.trim();
   const filteredMembers = q
@@ -972,7 +973,7 @@ function EntryPanel({
     setMemberQuery(''); setSelectedMember(null);
     setLunchQty(0); setDinnerQty(0); setMemberNotes('');
     setAdhocName(''); setAdhocPhone(''); setAdhocAddress('');
-    setAdhocMeal('lunch'); setAdhocQty(1);
+    setAdhocLunchQty(0); setAdhocDinnerQty(0);
     setAdhocPrice(String(ADHOC_DEFAULT_PRICE)); setAdhocHospital(false); setAdhocNotes('');
   };
 
@@ -1015,7 +1016,11 @@ function EntryPanel({
       flashToast('请填写正确的 11 位手机号');
       return;
     }
-    if (adhocQty < 1 || !Number.isFinite(price) || price < 0) return;
+    if (adhocTotalQty < 1) {
+      flashToast('午餐和晚餐份数至少有一项 > 0');
+      return;
+    }
+    if (!Number.isFinite(price) || price < 0) return;
     setSubmitting(true);
     try {
       await onAddWalkinOrder({
@@ -1024,13 +1029,13 @@ function EntryPanel({
         customerAddress: adhocAddress.trim() || undefined,
         customerIsHospital: adhocHospital,
         orderDate: todayStr(),
-        meal: adhocMeal,
-        qty: adhocQty,
+        lunchQty: adhocLunchQty,
+        dinnerQty: adhocDinnerQty,
         unitPrice: price,
         notes: adhocNotes.trim() || undefined,
       });
       reset();
-      flashToast(`已录入散客 ${name} · ${adhocQty} 份`);
+      flashToast(`已录入散客 ${name} · ${adhocTotalQty} 份`);
     } catch {
       // 错误上层 toast
     } finally {
@@ -1039,7 +1044,7 @@ function EntryPanel({
   };
 
   const canSubmitMember = !!selectedMember && lunchQty + dinnerQty > 0 && !submitting;
-  const canSubmitAdhoc  = adhocName.trim().length > 0 && adhocQty >= 1 && !submitting;
+  const canSubmitAdhoc  = adhocName.trim().length > 0 && adhocTotalQty >= 1 && !submitting;
   const canSubmit       = mode === 'member' ? canSubmitMember : canSubmitAdhoc;
 
   return (
@@ -1252,29 +1257,14 @@ function EntryPanel({
                   手机号必填（每次录单都要带），同名散客的手机/地址会自动合并到档案。
                 </Text>
 
-                <Text style={[eStyles.sectionLabel, { marginTop: 20 }]}>餐次与数量</Text>
+                <Text style={[eStyles.sectionLabel, { marginTop: 20 }]}>份数</Text>
+                <View style={eStyles.qtySection}>
+                  <QtyRow label="午餐份数" value={adhocLunchQty}  onChange={setAdhocLunchQty} />
+                  <QtyRow label="晚餐份数" value={adhocDinnerQty} onChange={setAdhocDinnerQty} />
+                </View>
+
+                <Text style={[eStyles.sectionLabel, { marginTop: 20 }]}>单价</Text>
                 <View style={eStyles.inlineCard}>
-                  <View style={eStyles.fieldRow}>
-                    <Text style={eStyles.fieldLabel}>餐次</Text>
-                    <View style={eStyles.toggleGroup}>
-                      {([['lunch', '午餐'], ['dinner', '晚餐']] as const).map(([v, label]) => (
-                        <Pressable
-                          key={v}
-                          style={[eStyles.toggleBtn, adhocMeal === v && eStyles.toggleBtnActive]}
-                          onPress={() => setAdhocMeal(v)}
-                        >
-                          <Text style={[eStyles.toggleText, adhocMeal === v && eStyles.toggleTextActive]}>
-                            {label}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                  <View style={eStyles.fieldDivider} />
-                  <View style={eStyles.qtySection}>
-                    <QtyRow label="份数" value={adhocQty} onChange={setAdhocQty} min={1} />
-                  </View>
-                  <View style={eStyles.fieldDivider} />
                   <View style={eStyles.fieldRow}>
                     <Text style={eStyles.fieldLabel}>单价（元）</Text>
                     <TextInput
@@ -1290,7 +1280,7 @@ function EntryPanel({
                 <View style={eStyles.adhocTotal}>
                   <Text style={eStyles.adhocTotalLabel}>合计应收</Text>
                   <Text style={eStyles.adhocTotalValue}>
-                    ¥{((parseFloat(adhocPrice) || 0) * adhocQty).toFixed(0)}
+                    ¥{((parseFloat(adhocPrice) || 0) * adhocTotalQty).toFixed(0)}
                   </Text>
                 </View>
 
@@ -1326,8 +1316,8 @@ function EntryPanel({
             <>
               <Text style={eStyles.submitMain}>{adhocName.trim()}</Text>
               <Text style={eStyles.submitSub}>
-                {adhocMeal === 'lunch' ? '午餐' : '晚餐'} · {adhocQty} 份 · ¥
-                {((parseFloat(adhocPrice) || 0) * adhocQty).toFixed(0)}
+                午 {adhocLunchQty} · 晚 {adhocDinnerQty} · 共 {adhocTotalQty} 份 · ¥
+                {((parseFloat(adhocPrice) || 0) * adhocTotalQty).toFixed(0)}
               </Text>
             </>
           ) : (
