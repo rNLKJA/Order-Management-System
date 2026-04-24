@@ -6,13 +6,16 @@ import { describe, expect, it } from 'vitest';
 import { buildCorsOriginChecker, _internal } from './cors-policy';
 
 describe('buildCorsOriginChecker', () => {
-  it('生产 web 域名放行（根 + www）', () => {
+  it('生产 web 域名放行（根 + www + app 子域）', () => {
     const check = buildCorsOriginChecker();
     expect(check('https://anshun-healthy-food.com')).toBe(
       'https://anshun-healthy-food.com',
     );
     expect(check('https://www.anshun-healthy-food.com')).toBe(
       'https://www.anshun-healthy-food.com',
+    );
+    expect(check('https://app.anshun-healthy-food.com')).toBe(
+      'https://app.anshun-healthy-food.com',
     );
   });
 

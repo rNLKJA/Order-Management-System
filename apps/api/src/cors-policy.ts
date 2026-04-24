@@ -14,6 +14,7 @@
 const PROD_WEB_ORIGINS = [
   'https://anshun-healthy-food.com',
   'https://www.anshun-healthy-food.com',
+  'https://app.anshun-healthy-food.com',
 ];
 
 /**
