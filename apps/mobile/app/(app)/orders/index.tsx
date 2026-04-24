@@ -1276,14 +1276,6 @@ function EntryPanel({
                   </View>
                 </View>
 
-                {/* 合计 */}
-                <View style={eStyles.adhocTotal}>
-                  <Text style={eStyles.adhocTotalLabel}>合计应收</Text>
-                  <Text style={eStyles.adhocTotalValue}>
-                    ¥{((parseFloat(adhocPrice) || 0) * adhocTotalQty).toFixed(0)}
-                  </Text>
-                </View>
-
                 <View style={eStyles.notesBox}>
                   <TextInput
                     style={eStyles.notesInput}
@@ -1294,6 +1286,14 @@ function EntryPanel({
                     multiline
                     numberOfLines={2}
                   />
+                </View>
+
+                {/* 合计 —— 放最底，订餐前最后一眼确认金额 */}
+                <View style={eStyles.adhocTotal}>
+                  <Text style={eStyles.adhocTotalLabel}>合计应收</Text>
+                  <Text style={eStyles.adhocTotalValue}>
+                    ¥{((parseFloat(adhocPrice) || 0) * adhocTotalQty).toFixed(0)}
+                  </Text>
                 </View>
               </>
             )}
