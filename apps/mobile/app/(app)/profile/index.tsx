@@ -18,11 +18,14 @@ import { pickAvatar } from '../../../lib/avatar';
 import { usersApi } from '../../../api/users';
 import {
   AppHeader,
+  Bento,
+  BentoGrid,
   Button,
   GlassSurface,
   IconAvatar,
   MeshBackground,
   SectionLabel,
+  StatTile,
   StatusChip,
 } from '../../../components/ui';
 
@@ -100,100 +103,85 @@ export default function ProfileScreen() {
           <View style={styles.container}>
             <AppHeader title="当前用户" />
 
-            <GlassSurface padding={SPACING.xl} style={styles.profileCard}>
-              <Pressable
-                onPress={handleCamera}
-                disabled={uploading}
-                style={styles.avatarWrap}
-                hitSlop={8}
-              >
-                {user?.avatar_url ? (
-                  <Image
-                    source={{ uri: user.avatar_url }}
-                    style={styles.avatarImage}
-                  />
-                ) : (
-                  <IconAvatar
-                    icon="person-outline"
-                    size={76}
-                    color="#FFFFFF"
-                    bg={COLORS.brand}
-                  />
-                )}
-                {uploading ? (
-                  <View style={styles.avatarOverlay}>
-                    <ActivityIndicator color="#FFFFFF" />
-                  </View>
-                ) : (
-                  <View style={styles.avatarCameraBadge}>
-                    <Ionicons name="camera" size={14} color="#FFFFFF" />
-                  </View>
-                )}
-              </Pressable>
-              <Text style={styles.fullName}>{user?.full_name ?? '未登录'}</Text>
-              <Text style={styles.username}>@{user?.username ?? '—'}</Text>
-              <StatusChip
-                label={user?.role === 'admin' ? '管理员' : '员工'}
-                variant={user?.role === 'admin' ? 'danger' : 'fulfilled'}
-                dot
-                style={styles.roleChip}
-              />
-
-              <View style={styles.avatarActions}>
+            <GlassSurface padding={SPACING.lg} style={styles.profileCard}>
+              <View style={styles.profileTop}>
                 <Pressable
                   onPress={handleCamera}
                   disabled={uploading}
-                  style={styles.avatarActionBtn}
-                  hitSlop={6}
+                  style={styles.avatarWrap}
+                  hitSlop={8}
                 >
-                  <Ionicons
-                    name="camera-outline"
-                    size={15}
-                    color={COLORS.brand}
+                  {user?.avatar_url ? (
+                    <Image
+                      source={{ uri: user.avatar_url }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <IconAvatar
+                      icon="person-outline"
+                      size={76}
+                      color="#FFFFFF"
+                      bg={COLORS.brand}
+                    />
+                  )}
+                  {uploading ? (
+                    <View style={styles.avatarOverlay}>
+                      <ActivityIndicator color="#FFFFFF" />
+                    </View>
+                  ) : (
+                    <View style={styles.avatarCameraBadge}>
+                      <Ionicons name="camera" size={14} color="#FFFFFF" />
+                    </View>
+                  )}
+                </Pressable>
+                <View style={styles.profileIdentity}>
+                  <Text style={styles.fullName}>{user?.full_name ?? '未登录'}</Text>
+                  <Text style={styles.username}>@{user?.username ?? '—'}</Text>
+                  <StatusChip
+                    label={user?.role === 'admin' ? '管理员' : '员工'}
+                    variant={user?.role === 'admin' ? 'warning' : 'fulfilled'}
+                    dot
+                    style={styles.roleChip}
                   />
+                </View>
+              </View>
+
+              <View style={styles.avatarActions}>
+                <Pressable onPress={handleCamera} disabled={uploading} style={styles.avatarActionBtn} hitSlop={6}>
+                  <Ionicons name="camera-outline" size={15} color={COLORS.brand} />
                   <Text style={styles.avatarActionText}>拍照</Text>
                 </Pressable>
                 <View style={styles.avatarActionDivider} />
-                <Pressable
-                  onPress={handleLibrary}
-                  disabled={uploading}
-                  style={styles.avatarActionBtn}
-                  hitSlop={6}
-                >
-                  <Ionicons
-                    name="image-outline"
-                    size={15}
-                    color={COLORS.brand}
-                  />
+                <Pressable onPress={handleLibrary} disabled={uploading} style={styles.avatarActionBtn} hitSlop={6}>
+                  <Ionicons name="image-outline" size={15} color={COLORS.brand} />
                   <Text style={styles.avatarActionText}>相册</Text>
                 </Pressable>
                 {user?.avatar_url ? (
                   <>
                     <View style={styles.avatarActionDivider} />
-                    <Pressable
-                      onPress={handleRemove}
-                      disabled={uploading}
-                      style={styles.avatarActionBtn}
-                      hitSlop={6}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={15}
-                        color={COLORS.danger}
-                      />
-                      <Text
-                        style={[
-                          styles.avatarActionText,
-                          { color: COLORS.danger },
-                        ]}
-                      >
-                        移除
-                      </Text>
+                    <Pressable onPress={handleRemove} disabled={uploading} style={styles.avatarActionBtn} hitSlop={6}>
+                      <Ionicons name="trash-outline" size={15} color={COLORS.danger} />
+                      <Text style={[styles.avatarActionText, { color: COLORS.danger }]}>移除</Text>
                     </Pressable>
                   </>
                 ) : null}
               </View>
             </GlassSurface>
+
+            <View style={styles.section}>
+              <SectionLabel>账户概览</SectionLabel>
+              <BentoGrid gap={SPACING.md}>
+                <Bento span={4} mobileSpan={6}>
+                  <StatTile label="角色" value={user?.role === 'admin' ? '管理员' : '员工'} icon="shield-checkmark-outline" color={COLORS.info} tint="info" />
+                </Bento>
+                <Bento span={4} mobileSpan={6}>
+                  <StatTile label="状态" value="已登录" icon="checkmark-circle-outline" color={COLORS.success} tint="ok" />
+                </Bento>
+                <Bento span={4} mobileSpan={12}>
+                  <StatTile label="用户 ID" value={`${user?.id ?? '-'}`} icon="person-circle-outline" color={COLORS.brand} tint="warn" />
+                </Bento>
+              </BentoGrid>
+            </View>
 
             <View style={styles.section}>
               <SectionLabel>账号信息</SectionLabel>
@@ -270,6 +258,8 @@ const styles = StyleSheet.create({
   },
 
   profileCard: { alignItems: 'center', marginTop: SPACING.sm, marginBottom: SPACING.lg },
+  profileTop: { flexDirection: 'row', width: '100%', alignItems: 'center', gap: SPACING.base, marginBottom: SPACING.md },
+  profileIdentity: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
   avatarWrap: {
     width: 76,
     height: 76,
@@ -309,7 +299,7 @@ const styles = StyleSheet.create({
   },
   fullName: { ...TYPE.title2, color: COLORS.text.primary, marginBottom: 2 },
   username: { ...TYPE.footnote, color: COLORS.text.tertiary, marginBottom: SPACING.sm },
-  roleChip: { alignSelf: 'center', marginBottom: SPACING.md },
+  roleChip: { alignSelf: 'flex-start' },
 
   avatarActions: {
     flexDirection: 'row',

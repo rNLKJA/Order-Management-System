@@ -4,14 +4,14 @@
  */
 
 import type { ReactNode } from 'react';
-import { Pressable, type PressableProps, type ViewStyle } from 'react-native';
+import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import { GlassSurface, type GlassSurfaceProps } from './GlassSurface';
 import { MOTION } from '../../theme/paperTheme';
 
 export interface PressableCardProps
   extends Omit<PressableProps, 'style' | 'children'>,
     Pick<GlassSurfaceProps, 'level' | 'tint' | 'radius' | 'padding' | 'elevated'> {
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 }
 

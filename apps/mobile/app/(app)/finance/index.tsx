@@ -69,6 +69,18 @@ function firstOfMonth(): string {
   return `${y}-${m}-01`;
 }
 
+function todayISO(): string {
+  return formatDate(new Date());
+}
+
+function mondayOfWeek(): string {
+  const now = new Date();
+  const day = now.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  now.setDate(now.getDate() + offset);
+  return formatDate(now);
+}
+
 export default function FinanceScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -179,13 +191,26 @@ export default function FinanceScreen() {
           }
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.block}>
+            <GlassSurface padding={SPACING.base} style={styles.heroRow}>
+              <View style={styles.heroMain}>
+                <Text style={styles.heroTitle}>财务总览</Text>
+                <Text style={styles.heroSub}>{from} ~ {to}</Text>
+              </View>
+              <Pressable onPress={() => setModalVisible(true)} style={styles.heroAction}>
+                <Ionicons name="add-circle-outline" size={18} color={COLORS.brand} />
+                <Text style={styles.heroActionText}>新增支出</Text>
+              </Pressable>
+            </GlassSurface>
+          </View>
+
           {fetchError ? (
             <View style={styles.block}>
-              <View style={styles.errorBanner}>
+              <GlassSurface padding={SPACING.md} tint="danger" style={styles.errorBanner}>
                 <Text style={styles.errorBannerText}>
                   加载失败：{fetchError}
                 </Text>
-              </View>
+              </GlassSurface>
             </View>
           ) : null}
 
@@ -330,6 +355,18 @@ export default function FinanceScreen() {
                   >
                     含已冲销
                   </Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.quickRangeRow}>
+                <Pressable style={styles.quickRange} onPress={() => { setFrom(todayISO()); setTo(todayISO()); }}>
+                  <Text style={styles.quickRangeText}>今天</Text>
+                </Pressable>
+                <Pressable style={styles.quickRange} onPress={() => { setFrom(mondayOfWeek()); setTo(todayISO()); }}>
+                  <Text style={styles.quickRangeText}>本周</Text>
+                </Pressable>
+                <Pressable style={styles.quickRange} onPress={() => { setFrom(firstOfMonth()); setTo(todayISO()); }}>
+                  <Text style={styles.quickRangeText}>本月</Text>
                 </Pressable>
               </View>
             </GlassSurface>
@@ -479,13 +516,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   block: { marginBottom: SPACING.lg },
+  heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroMain: { flex: 1, minWidth: 0 },
+  heroTitle: { ...TYPE.headline, color: COLORS.text.primary },
+  heroSub: { ...TYPE.footnote, color: COLORS.text.tertiary, marginTop: 2, fontVariant: ['tabular-nums'] },
+  heroAction: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6 },
+  heroActionText: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
 
   errorBanner: {
-    padding: SPACING.md,
     borderRadius: RADIUS.md,
-    backgroundColor: 'rgba(255,59,48,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,59,48,0.2)',
   },
   errorBannerText: { ...TYPE.footnote, color: COLORS.danger },
 
@@ -542,6 +581,14 @@ const styles = StyleSheet.create({
   toggleActive: { backgroundColor: COLORS.info },
   toggleText: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '500' },
   toggleTextActive: { color: '#fff', fontWeight: '600' },
+  quickRangeRow: { flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' },
+  quickRange: {
+    backgroundColor: 'rgba(0,122,255,0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  quickRangeText: { ...TYPE.caption, color: COLORS.brand, fontWeight: '600' },
 
   // 按分类
   catRow: {

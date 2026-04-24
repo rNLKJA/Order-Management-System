@@ -1,6 +1,6 @@
 /**
  * 主界面 — v3 Bento + 毛玻璃。
- * 布局：问候 → 速览 4 连格 → 主入口 2×2 → 余餐提醒横条（若有）。
+ * 布局：欢迎卡（左图标右文案）→ 速览 4 连格 → 余餐提醒 → 快捷操作分层。
  */
 
 import { StyleSheet, ScrollView, View } from 'react-native';
@@ -23,6 +23,7 @@ import {
   MeshBackground,
   BentoGrid,
   Bento,
+  GlassSurface,
   PressableCard,
   StatTile,
   IconAvatar,
@@ -37,7 +38,6 @@ type EntryDef = {
   color: string;
   bg: string;
   route: string;
-  accent?: string;
 };
 
 function todayISO(): string {
@@ -170,6 +170,7 @@ export default function HomeScreen() {
       route: '/(app)/profile',
     },
   ];
+  const entriesByKey = Object.fromEntries(entries.map((e) => [e.key, e])) as Record<string, EntryDef>;
 
   return (
     <View style={styles.root}>
@@ -185,44 +186,24 @@ export default function HomeScreen() {
         ]}
       >
         <View style={styles.container}>
-            {/* 问候 */}
+            {/* 欢迎卡（与登录页同语言：左图标 + 右文案） */}
             <View style={styles.greeting}>
-              <Text style={styles.greetingDate}>{formatDate()}</Text>
-              <View style={styles.greetingRow}>
-                <Text style={styles.greetingHello}>{timeGreeting}，</Text>
-                <Text style={styles.greetingName}>{user?.full_name ?? '朋友'}</Text>
-              </View>
-            </View>
-
-            {/* 余餐提醒（条件显示） */}
-            {renewalCount > 0 ? (
-              <View style={styles.block}>
-                <PressableCard
-                  tint="warn"
-                  padding={SPACING.base}
-                  onPress={() => router.push('/(app)/reminders' as never)}
-                  style={styles.reminderRow}
-                >
-                  <IconAvatar
-                    icon="alert-circle-outline"
-                    color={COLORS.warning}
-                    bg="rgba(255,149,0,0.18)"
-                    size={38}
-                  />
-                  <View style={{ flex: 1, marginLeft: SPACING.md }}>
-                    <Text style={styles.reminderTitle}>
-                      {renewalCount} 位会员余餐不足
-                    </Text>
-                    <Text style={styles.reminderSub}>点击查看续卡跟进列表</Text>
+              <GlassSurface padding={SPACING.base} style={styles.heroCard}>
+                <IconAvatar
+                  icon="sparkles-outline"
+                  size={50}
+                  color={COLORS.brand}
+                  bg="rgba(0,122,255,0.14)"
+                />
+                <View style={styles.heroTextWrap}>
+                  <Text style={styles.greetingDate}>{formatDate()}</Text>
+                  <View style={styles.greetingRow}>
+                    <Text style={styles.greetingHello}>{timeGreeting}，</Text>
+                    <Text style={styles.greetingName}>{user?.full_name ?? '朋友'}</Text>
                   </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={COLORS.warning}
-                  />
-                </PressableCard>
-              </View>
-            ) : null}
+                </View>
+              </GlassSurface>
+            </View>
 
             {/* 今日速览（4 格 Bento，统一 tint 风格） */}
             <View style={styles.block}>
@@ -267,37 +248,99 @@ export default function HomeScreen() {
               </BentoGrid>
             </View>
 
-            {/* 快捷操作（4 行整宽大卡，图标｜文字 横排） */}
+            {/* 余餐提醒（条件显示） */}
+            {renewalCount > 0 ? (
+              <View style={styles.block}>
+                <PressableCard
+                  tint="warn"
+                  padding={SPACING.base}
+                  onPress={() => router.push('/(app)/reminders' as never)}
+                  style={styles.reminderRow}
+                >
+                  <IconAvatar
+                    icon="alert-circle-outline"
+                    color={COLORS.warning}
+                    bg="rgba(255,149,0,0.18)"
+                    size={38}
+                  />
+                  <View style={styles.reminderTextWrap}>
+                    <Text style={styles.reminderTitle}>
+                      {renewalCount} 位会员余餐不足
+                    </Text>
+                    <Text style={styles.reminderSub}>点击查看续卡跟进列表</Text>
+                  </View>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={COLORS.warning}
+                  />
+                </PressableCard>
+              </View>
+            ) : null}
+
+            {/* 快捷操作（Bento：左 2 行 1 列 + 右侧 2 行高主卡） */}
             <View style={styles.block}>
               <SectionLabel>快捷操作</SectionLabel>
               <BentoGrid gap={SPACING.md}>
-                {entries.map((e) => (
-                  <Bento key={e.key} span={12}>
-                    <PressableCard
-                      padding={SPACING.lg}
-                      onPress={() => router.push(e.route as never)}
-                      style={styles.entryCard}
-                    >
-                      <IconAvatar icon={e.icon} color={e.color} bg={e.bg} size={46} />
-                      <View style={styles.entryText}>
-                        <Text style={styles.entryTitle}>{e.title}</Text>
-                        <Text style={styles.entrySubtitle} numberOfLines={2}>
-                          {e.subtitle}
-                        </Text>
-                      </View>
-                      <Ionicons
-                        name="chevron-forward"
-                        size={18}
-                        color={COLORS.text.quaternary}
-                      />
-                    </PressableCard>
+                <Bento span={6} mobileSpan={12}>
+                  <View style={styles.primaryColumn}>
+                    {entriesByKey.members ? <QuickEntryCard entry={entriesByKey.members} /> : null}
+                    {entriesByKey.walkins ? <QuickEntryCard entry={entriesByKey.walkins} /> : null}
+                  </View>
+                </Bento>
+                <Bento span={6} mobileSpan={12}>
+                  {entriesByKey.orders ? <QuickEntryCard entry={entriesByKey.orders} tall /> : null}
+                </Bento>
+
+                {['orders-stats', 'finance', 'users', 'admin']
+                  .filter((key) => Boolean(entriesByKey[key]))
+                  .map((key) => (
+                    <Bento key={key} span={6} mobileSpan={12}>
+                      <QuickEntryCard entry={entriesByKey[key]!} compact />
+                    </Bento>
+                  ))}
+
+                {entriesByKey.profile ? (
+                  <Bento span={12}>
+                    <QuickEntryCard entry={entriesByKey.profile} />
                   </Bento>
-                ))}
+                ) : null}
               </BentoGrid>
             </View>
           </View>
       </ScrollView>
     </View>
+  );
+}
+
+function QuickEntryCard({
+  entry,
+  compact,
+  tall,
+}: {
+  entry: EntryDef;
+  compact?: boolean;
+  tall?: boolean;
+}) {
+  return (
+    <PressableCard
+      padding={compact ? SPACING.base : SPACING.lg}
+      onPress={() => router.push(entry.route as never)}
+      style={[styles.entryCard, compact && styles.entryCardCompact, tall && styles.entryCardTall]}
+    >
+      <IconAvatar icon={entry.icon} color={entry.color} bg={entry.bg} size={compact ? 40 : 46} />
+      <View style={styles.entryText}>
+        <Text style={styles.entryTitle}>{entry.title}</Text>
+        <Text style={styles.entrySubtitle} numberOfLines={compact ? 1 : 2}>
+          {entry.subtitle}
+        </Text>
+      </View>
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={COLORS.text.quaternary}
+      />
+    </PressableCard>
   );
 }
 
@@ -319,8 +362,17 @@ const styles = StyleSheet.create({
 
   // greeting
   greeting: {
-    paddingVertical: SPACING.lg,
-    alignItems: 'flex-start',
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.lg,
+  },
+  heroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.base,
+  },
+  heroTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   greetingDate: {
     ...TYPE.footnote,
@@ -335,14 +387,22 @@ const styles = StyleSheet.create({
   block: { marginBottom: SPACING.lg },
 
   reminderRow: { flexDirection: 'row', alignItems: 'center' },
+  reminderTextWrap: { flex: 1, marginLeft: SPACING.md },
   reminderTitle: { ...TYPE.headline, color: COLORS.text.primary },
   reminderSub: { ...TYPE.footnote, color: COLORS.text.tertiary, marginTop: 2 },
 
   // entries
+  primaryColumn: { gap: SPACING.md },
   entryCard: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  entryCardCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 84,
+  },
+  entryCardTall: { minHeight: 192 },
   entryText: { flex: 1, marginLeft: SPACING.md },
   entryTitle: { ...TYPE.title3, color: COLORS.text.primary, marginBottom: 4 },
   entrySubtitle: { ...TYPE.footnote, color: COLORS.text.secondary },

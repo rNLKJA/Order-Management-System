@@ -25,7 +25,8 @@
 import Constants from 'expo-constants';
 import { getToken, clearToken } from '../hooks/useAuth';
 
-const DEFAULT_BASE_URL = 'http://localhost:3000';
+// Web 本地预览在部分环境拿不到 expoConfig.extra，兜底统一走生产 API。
+const DEFAULT_BASE_URL = 'https://api.anshun-healthy-food.com';
 
 function getBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_BASE_URL;

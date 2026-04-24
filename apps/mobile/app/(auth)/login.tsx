@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -23,6 +24,7 @@ export default function LoginScreen() {
   const { signIn, user } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -45,7 +47,20 @@ export default function LoginScreen() {
       // 冗余跳转，避免某些 runtime 下 useEffect 未及时触发时点完按钮没反应
       router.replace('/(app)');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : '登录失败，请稍后重试');
+      if (e instanceof ApiError) {
+        setError(e.message);
+      } else {
+        const message = e instanceof Error ? e.message.toLowerCase() : '';
+        const looksLikeNetworkError =
+          message.includes('failed to fetch') ||
+          message.includes('network request failed') ||
+          message.includes('networkerror');
+        setError(
+          looksLikeNetworkError
+            ? '无法连接本地服务，请先启动 API：pnpm --filter @meal/api dev'
+            : '登录失败，请稍后重试',
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -71,38 +86,66 @@ export default function LoginScreen() {
                 bg="rgba(0,122,255,0.14)"
                 style={styles.logo}
               />
-              <Text style={styles.appName}>订餐会员管理</Text>
-              <Text style={styles.appSubtitle}>健康漂亮餐 · 内部管理系统</Text>
+              <View style={styles.headerContent}>
+                <GlassSurface
+                  level={2}
+                  tint="info"
+                  padding={SPACING.sm}
+                  radius="pill"
+                  style={styles.badge}
+                >
+                  <Text style={styles.badgeText}>内部管理平台</Text>
+                </GlassSurface>
+                <Text style={styles.appName}>订餐会员管理</Text>
+                <Text style={styles.appSubtitle}>健康漂亮餐 · 内部管理系统</Text>
+              </View>
             </View>
 
             <GlassSurface padding={0} style={styles.card}>
               <View style={styles.field}>
                 <Text style={styles.formLabel}>用户名</Text>
-                <TextInput
-                  style={styles.input}
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="请输入用户名"
-                  placeholderTextColor={COLORS.text.quaternary}
-                  returnKeyType="next"
-                />
+                <View style={styles.inputRow}>
+                  <Ionicons name="person-outline" size={18} color={COLORS.text.tertiary} />
+                  <TextInput
+                    style={styles.input}
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="请输入用户名"
+                    placeholderTextColor={COLORS.text.quaternary}
+                    returnKeyType="next"
+                  />
+                </View>
               </View>
               <View style={styles.divider} />
               <View style={styles.field}>
                 <Text style={styles.formLabel}>密码</Text>
-                <TextInput
-                  style={styles.input}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  placeholder="请输入密码"
-                  placeholderTextColor={COLORS.text.quaternary}
-                  returnKeyType="go"
-                  onSubmitEditing={handleLogin}
-                />
+                <View style={styles.inputRow}>
+                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.text.tertiary} />
+                  <TextInput
+                    style={styles.input}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    placeholder="请输入密码"
+                    placeholderTextColor={COLORS.text.quaternary}
+                    returnKeyType="go"
+                    onSubmitEditing={handleLogin}
+                  />
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => setShowPassword((v) => !v)}
+                    style={({ pressed }) => [styles.eyeBtn, pressed && styles.eyeBtnPressed]}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={18}
+                      color={COLORS.text.tertiary}
+                    />
+                  </Pressable>
+                </View>
               </View>
             </GlassSurface>
 
@@ -147,12 +190,20 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   column: { width: '100%', maxWidth: 400, alignSelf: 'center' },
-  header: { alignItems: 'center', marginBottom: SPACING.xl },
-  logo: { marginBottom: SPACING.base },
-  appName: { ...TYPE.title1, color: COLORS.text.primary },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+    gap: SPACING.base,
+  },
+  headerContent: { flex: 1, alignItems: 'flex-start' },
+  logo: { marginBottom: 0 },
+  badge: { marginBottom: SPACING.sm },
+  badgeText: { ...TYPE.caption, color: COLORS.brand, fontWeight: '700', letterSpacing: 0.4 },
+  appName: { ...TYPE.title1, color: COLORS.text.primary, lineHeight: 34 },
   appSubtitle: { ...TYPE.footnote, color: COLORS.text.tertiary, marginTop: 4 },
 
-  card: { marginBottom: SPACING.md },
+  card: { marginBottom: SPACING.md, borderWidth: 1, borderColor: GLASS.border },
   field: { paddingHorizontal: SPACING.base, paddingVertical: SPACING.md },
   formLabel: {
     ...TYPE.caption,
@@ -161,12 +212,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginBottom: 4,
   },
+  inputRow: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
   input: {
     fontSize: 17,
     color: COLORS.text.primary,
     minHeight: 32,
+    flex: 1,
     paddingVertical: 2,
   },
+  eyeBtn: { padding: 2, borderRadius: 8 },
+  eyeBtnPressed: { opacity: 0.6 },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: GLASS.outline,
@@ -177,7 +237,7 @@ const styles = StyleSheet.create({
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   errorText: { ...TYPE.footnote, color: COLORS.danger, flex: 1 },
 
-  loginBtn: { marginTop: 4, borderRadius: RADIUS.md },
+  loginBtn: { marginTop: 6, borderRadius: RADIUS.md },
 
   footer: {
     ...TYPE.footnote,
