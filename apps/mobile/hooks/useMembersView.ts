@@ -16,6 +16,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { membersApi, type Member } from '../api/members';
 import { cardsApi, type Card } from '../api/cards';
+import { ordersApi, type DailyOrder } from '../api/orders';
 import { usersApi, type ApiUser } from '../api/users';
 import { listFinance } from '../api/finance';
 import {
@@ -28,6 +29,8 @@ const KEYS = {
   users: ['users'] as const,
   membersList: ['members', 'list'] as const,
   member: (id: number) => ['members', 'detail', id] as const,
+  /** 会员维度的订餐流水（GET /api/orders?member_id=） */
+  memberOrders: (id: number) => ['members', 'detail', id, 'orders'] as const,
   memberCards: (id: number) => ['members', id, 'cards'] as const,
 };
 
@@ -108,6 +111,17 @@ export interface UseMemberViewResult {
 }
 
 /** 单个会员 + 其所有卡 → MockMember。 */
+/** 某会员的订餐流水（出餐记录），与会员详情页共用缓存失效。 */
+export function useMemberOrders(memberId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: KEYS.memberOrders(memberId),
+    enabled: Number.isFinite(memberId) && memberId > 0 && enabled,
+    queryFn: async (): Promise<DailyOrder[]> =>
+      (await ordersApi.list({ member_id: memberId, status: 'all', limit: 200 })).orders,
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function useMemberView(id: number): UseMemberViewResult {
   const usersQuery = useUsersMap();
   const queryClient = useQueryClient();
@@ -167,7 +181,10 @@ export function useInvalidateMembersView(): (memberId?: number) => Promise<void>
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: KEYS.membersList }),
         memberId != null
-          ? queryClient.invalidateQueries({ queryKey: KEYS.member(memberId) })
+          ? Promise.all([
+              queryClient.invalidateQueries({ queryKey: KEYS.member(memberId) }),
+              queryClient.invalidateQueries({ queryKey: KEYS.memberOrders(memberId) }),
+            ])
           : Promise.resolve(),
       ]);
     },

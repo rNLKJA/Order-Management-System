@@ -1,13 +1,15 @@
 /**
- * 会员详情页 — 含卡管理（开卡、升级、续卡、退卡、历史卡）。
+ * 会员详情页 — 含卡管理（开卡、升级、续卡、退卡）与流水（出餐记录、开卡记录）。
  *
- * 数据：useMemberView(id) 从 /api/members/:id + /api/cards?member_id=:id 拉真实数据
- * 卡动作：统一走 components/CardFlowModal → cardsApi.purchase/upgrade/renew
- * 退卡：components/RefundCardModal → cardsApi.refund
- * 卡 mutation 成功后用 useInvalidateMembersView() 失效缓存，列表和首页自动刷新。
+ * 数据：
+ *  - useMemberView(id) → /api/members/:id + /api/cards?member_id=:id
+ *  - useMemberOrders(id) → /api/orders?member_id=:id（最近 200 条）
+ * 卡动作：CardFlowModal → cardsApi；退卡：RefundCardModal
+ * 变更后用 useInvalidateMembersView() 失效会员、卡与出餐流水缓存。
  */
 
 import { useCallback, useMemo, useState } from 'react';
+import type { UseQueryResult } from '@tanstack/react-query';
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
@@ -23,9 +25,12 @@ import { membersApi } from '../../../api/members';
 import { useAuth } from '../../../hooks/useAuth';
 import {
   useMemberView,
+  useMemberOrders,
   useInvalidateMembersView,
   useUsersMap,
 } from '../../../hooks/useMembersView';
+import type { DailyOrder } from '../../../api/orders';
+import type { ApiUser } from '../../../api/users';
 import { CardFlowModal, type CardFlowSubmitPayload, type CardFlowUser } from '../../../components/CardFlowModal';
 import { RefundCardModal, type RefundSubmitPayload } from '../../../components/RefundCardModal';
 import { MemberEditModal } from '../../../components/MemberEditModal';
@@ -36,10 +41,18 @@ function triggerSuccessHaptic() {
   }
 }
 
+const ORDER_STATUS = {
+  pending: { label: '待出餐', fg: IOS_COLORS.orange, bg: '#FFF4E5' },
+  fulfilled: { label: '已出餐', fg: IOS_COLORS.blue, bg: IOS_COLORS.blueLight },
+  delivered: { label: '已送达', fg: '#34C759', bg: '#E8F8ED' },
+  cancelled: { label: '已取消', fg: IOS_COLORS.labelSecondary, bg: IOS_COLORS.fillLight },
+} as const;
+
 export default function MemberDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const memberId = Number(id);
   const { data: member, isLoading, notFound, error } = useMemberView(memberId);
+  const ordersQuery = useMemberOrders(memberId, !!member);
   const invalidate = useInvalidateMembersView();
   const { user: authUser } = useAuth();
   const usersQuery = useUsersMap();
@@ -363,9 +376,15 @@ export default function MemberDetailScreen() {
           </View>
         </Section>
 
-        {/* 历史卡片 */}
+        {/* 出餐记录 */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>历史卡片</Text>
+          <Text style={styles.sectionTitle}>出餐记录</Text>
+        </View>
+        <MemberOrderHistory ordersQuery={ordersQuery} usersById={usersQuery.data ?? {}} />
+
+        {/* 开卡记录（含进行中 / 已升级 / 已用完 / 已退卡） */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>开卡记录</Text>
         </View>
         <View style={styles.historyCards}>
           {member.card_history.map((c, i) => (
@@ -514,6 +533,117 @@ function Tag({ label, color }: { label: string; color: string }) {
   return (
     <View style={[styles.tag, { backgroundColor: color + '22' }]}>
       <Text style={[styles.tagText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+function MemberOrderHistory({
+  ordersQuery,
+  usersById,
+}: {
+  ordersQuery: UseQueryResult<DailyOrder[], Error>;
+  usersById: Record<number, ApiUser>;
+}) {
+  const byDate = useMemo(() => {
+    const list = ordersQuery.data ?? [];
+    const map = new Map<string, DailyOrder[]>();
+    for (const o of list) {
+      const k = o.order_date;
+      const arr = map.get(k) ?? [];
+      arr.push(o);
+      map.set(k, arr);
+    }
+    return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  }, [ordersQuery.data]);
+
+  if (ordersQuery.isLoading) {
+    return (
+      <View style={styles.orderHistoryWrap}>
+        <ActivityIndicator color={IOS_COLORS.blue} style={{ paddingVertical: 28 }} />
+      </View>
+    );
+  }
+  if (ordersQuery.isError) {
+    return (
+      <View style={styles.orderHistoryWrap}>
+        <Text style={styles.orderHistoryErr}>
+          加载失败：{(ordersQuery.error as Error).message}
+        </Text>
+      </View>
+    );
+  }
+  const orders = ordersQuery.data ?? [];
+  if (orders.length === 0) {
+    return (
+      <View style={styles.orderHistoryWrap}>
+        <Text style={styles.orderHistoryEmpty}>暂无出餐记录</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.orderHistoryWrap}>
+      {byDate.map(([date, dayOrders]) => (
+        <View key={date} style={styles.dayBlock}>
+          <Text style={styles.dayHeader}>
+            {date}
+            <Text style={styles.dayCount}> · {dayOrders.length} 条</Text>
+          </Text>
+          {dayOrders.map((o) => (
+            <MemberOrderRow key={o.id} order={o} usersById={usersById} />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function MemberOrderRow({
+  order,
+  usersById,
+}: {
+  order: DailyOrder;
+  usersById: Record<number, ApiUser>;
+}) {
+  const st = ORDER_STATUS[order.status];
+  const recorder = usersById[order.created_by_user_id]?.full_name ?? '—';
+  const isAdhoc = order.card_id == null;
+  return (
+    <View style={styles.memberOrderRow}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.memberOrderTop}>
+          <Text style={styles.memberOrderMeta} numberOfLines={1}>
+            {order.meal_type === 'lunch' ? '午餐' : '晚餐'} · {order.quantity} 份
+            {order.amount > 0 ? ` · ¥${order.amount}` : ''}
+          </Text>
+          {isAdhoc ? (
+            <View style={[styles.mOrderChip, { backgroundColor: '#FFF4E5' }]}>
+              <Text style={[styles.mOrderChipText, { color: '#FF9500' }]}>散餐</Text>
+            </View>
+          ) : null}
+          {order.delivery_channel === 'courier' ? (
+            <View style={[styles.mOrderChip, { backgroundColor: '#F5E9FC' }]}>
+              <Text style={[styles.mOrderChipText, { color: '#AF52DE' }]}>快递</Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={styles.memberOrderSub} numberOfLines={1}>
+          录入：{recorder}
+        </Text>
+        {order.courier_ref ? (
+          <Text style={styles.memberOrderSub} numberOfLines={1}>
+            承运：{order.courier_ref}
+          </Text>
+        ) : null}
+        {order.notes ? (
+          <Text style={styles.memberOrderNotes} numberOfLines={2}>
+            备注：{order.notes}
+          </Text>
+        ) : null}
+      </View>
+      <View style={[styles.memberOrderStatus, { backgroundColor: st.bg }]}>
+        <Text style={[styles.memberOrderStatusText, { color: st.fg }]}>{st.label}</Text>
+      </View>
     </View>
   );
 }
@@ -721,6 +851,52 @@ const styles = StyleSheet.create({
   historyMeta: { fontSize: 12, color: IOS_COLORS.labelSecondary },
   historyRefund: { fontSize: 12, color: '#FF3B30' },
   historyNotes: { fontSize: 12, color: IOS_COLORS.labelTertiary, fontStyle: 'italic' },
+
+  orderHistoryWrap: { paddingHorizontal: 20, marginBottom: 8 },
+  orderHistoryEmpty: {
+    fontSize: 14,
+    color: IOS_COLORS.labelSecondary,
+    textAlign: 'center',
+    paddingVertical: 28,
+    backgroundColor: IOS_COLORS.card,
+    borderRadius: 14,
+  },
+  orderHistoryErr: {
+    fontSize: 14,
+    color: '#FF3B30',
+    textAlign: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    backgroundColor: IOS_COLORS.card,
+    borderRadius: 14,
+  },
+  dayBlock: { marginBottom: 12 },
+  dayHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: IOS_COLORS.label,
+    paddingVertical: 6,
+    paddingLeft: 2,
+  },
+  dayCount: { fontWeight: '400', color: IOS_COLORS.labelSecondary },
+  memberOrderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: IOS_COLORS.card,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 6,
+  },
+  memberOrderTop: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  memberOrderMeta: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
+  memberOrderSub: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
+  memberOrderNotes: { fontSize: 12, color: IOS_COLORS.orange, marginTop: 4, lineHeight: 17 },
+  mOrderChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  mOrderChipText: { fontSize: 10, fontWeight: '700' },
+  memberOrderStatus: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, flexShrink: 0 },
+  memberOrderStatusText: { fontSize: 11, fontWeight: '700' },
 
   snackbar: { marginBottom: 24 },
 });

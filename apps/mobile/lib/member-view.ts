@@ -9,8 +9,6 @@
  *  - 挂到 MockMember 上：active_card / card_history / stats
  *
  * 注意：
- *  - 后端尚未实现"退卡"，因此不会产出 status='refunded'。
- *    当这个功能上线后需要同步扩 Card/ MockCard 类型。
  *  - stats.total_consumed_meals 由 used_meals 求和；真实数据暂不拉订单，
  *    这个字段会随卡的 used_meals 变化（够用于首页 / 列表的近似）。
  */
@@ -63,6 +61,10 @@ export function apiCardToMockCard(
     recorder,
     notes: card.notes || undefined,
     upgraded_from: upgradedFromName,
+    refund_amount: card.refund_amount ?? undefined,
+    refunded_at:
+      card.refunded_at != null ? new Date(card.refunded_at).toISOString() : undefined,
+    refund_reason: card.refund_reason || undefined,
   };
 }
 
