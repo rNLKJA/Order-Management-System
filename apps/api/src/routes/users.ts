@@ -25,8 +25,10 @@ import { hashPassword } from '../services/password.js';
 import {
   DEFAULT_DATA_OPERATORS,
   isDataOperatorEnforced,
+  PRIMARY_ADMIN_USERNAME,
   requireAuth,
   requireRole,
+  resolveEffectiveRole,
   type AuthVariables,
 } from '../middleware/jwt.js';
 
@@ -86,7 +88,12 @@ usersRouter.get('/', async (c) => {
     .from(schema.users)
     .orderBy(schema.users.id);
 
-  return c.json({ users: rows });
+  return c.json({
+    users: rows.map((u) => ({
+      ...u,
+      role: resolveEffectiveRole(u.username, u.role),
+    })),
+  });
 });
 
 const updateUserAccessSchema = z
@@ -103,6 +110,18 @@ const accessIdSchema = z.object({
 });
 const updatePasswordSchema = z.object({
   password: z.string().min(8, '密码至少 8 位').max(64, '密码不能超过 64 位'),
+});
+const createStaffSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3, '用户名至少 3 位')
+    .max(64, '用户名不能超过 64 位')
+    .regex(/^[a-zA-Z0-9._-]+$/, '用户名仅支持字母、数字、点、下划线与连字符'),
+  full_name: z.string().trim().min(1, '姓名不能为空').max(64, '姓名不能超过 64 位'),
+  password: z.string().min(8, '密码至少 8 位').max(64, '密码不能超过 64 位'),
+  is_active: z.boolean().optional().default(true),
+  can_data_write: z.boolean().optional().default(false),
 });
 
 usersRouter.get('/permissions/data-operators', requireRole('admin'), async (c) => {
@@ -123,10 +142,75 @@ usersRouter.get('/permissions/data-operators', requireRole('admin'), async (c) =
     operators,
     users: users.map((u) => ({
       ...u,
-      can_data_write: u.role === 'admin' ? true : operators.includes(u.username.toLowerCase()),
+      role: resolveEffectiveRole(u.username, u.role),
+      can_data_write:
+        resolveEffectiveRole(u.username, u.role) === 'admin' || operators.includes(u.username.toLowerCase()),
     })),
   });
 });
+
+usersRouter.post(
+  '/staff',
+  requireRole('admin'),
+  zValidator('json', createStaffSchema),
+  async (c) => {
+    const db = requestDb(c);
+    const input = c.req.valid('json');
+    const passwordHash = await hashPassword(input.password);
+    const username = input.username.trim();
+    const fullName = input.full_name.trim();
+
+    let createdId: number;
+    try {
+      const created = await db
+        .insert(schema.users)
+        .values({
+          username,
+          full_name: fullName,
+          password_hash: passwordHash,
+          role: 'staff',
+          is_active: input.is_active,
+        })
+        .returning({
+          id: schema.users.id,
+        });
+      createdId = created[0]!.id;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('users.username')) {
+        throw new HTTPException(409, { message: '用户名已存在' });
+      }
+      throw err;
+    }
+
+    if (input.can_data_write) {
+      const operators = new Set(await readDataOperatorUsernames(c));
+      operators.add(username.toLowerCase());
+      await writeDataOperatorUsernames(c, Array.from(operators));
+    }
+
+    const rows = await db
+      .select({
+        id: schema.users.id,
+        username: schema.users.username,
+        full_name: schema.users.full_name,
+        role: schema.users.role,
+        is_active: schema.users.is_active,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, createdId))
+      .limit(1);
+    const row = rows[0];
+    if (!row) throw new HTTPException(500, { message: '创建员工后读取失败' });
+    return c.json({
+      user: {
+        ...row,
+        role: resolveEffectiveRole(row.username, row.role),
+        can_data_write: !!input.can_data_write,
+      },
+    });
+  },
+);
 
 usersRouter.patch(
   '/:id/access',
@@ -150,9 +234,18 @@ usersRouter.patch(
       .limit(1);
     const target = targetRows[0];
     if (!target) throw new HTTPException(404, { message: '用户不存在' });
+    const targetIsPrimaryAdmin = target.username.toLowerCase() === PRIMARY_ADMIN_USERNAME;
 
     const patch: { role?: 'admin' | 'staff'; is_active?: boolean } = {};
-    if (input.role !== undefined) patch.role = input.role;
+    if (input.role !== undefined) {
+      if (input.role === 'admin' && !targetIsPrimaryAdmin) {
+        throw new HTTPException(422, { message: '仅 rNLKJA 可以设为管理员' });
+      }
+      if (input.role === 'staff' && targetIsPrimaryAdmin) {
+        throw new HTTPException(422, { message: 'rNLKJA 不能降级为员工' });
+      }
+      patch.role = input.role;
+    }
     if (input.is_active !== undefined) patch.is_active = input.is_active;
     if (Object.keys(patch).length > 0) {
       await db.update(schema.users).set(patch).where(eq(schema.users.id, id));
@@ -179,10 +272,12 @@ usersRouter.patch(
       .limit(1);
     const user = users[0]!;
     const operators = await readDataOperatorUsernames(c);
+    const effectiveRole = resolveEffectiveRole(user.username, user.role);
     return c.json({
       user: {
         ...user,
-        can_data_write: user.role === 'admin' ? true : operators.includes(user.username.toLowerCase()),
+        role: effectiveRole,
+        can_data_write: effectiveRole === 'admin' ? true : operators.includes(user.username.toLowerCase()),
       },
       operators,
     });
@@ -252,7 +347,14 @@ usersRouter.patch(
         avatar_url: schema.users.avatar_url,
       });
 
-    return c.json({ user: updated[0] });
+    return c.json({
+      user: updated[0]
+        ? {
+            ...updated[0],
+            role: resolveEffectiveRole(updated[0].username, updated[0].role),
+          }
+        : undefined,
+    });
   },
 );
 
@@ -272,7 +374,14 @@ usersRouter.delete('/me/avatar', async (c) => {
       avatar_url: schema.users.avatar_url,
     });
 
-  return c.json({ user: updated[0] });
+  return c.json({
+    user: updated[0]
+      ? {
+          ...updated[0],
+          role: resolveEffectiveRole(updated[0].username, updated[0].role),
+        }
+      : undefined,
+  });
 });
 
 // ==================== GET /api/users/:id ====================
@@ -299,7 +408,12 @@ usersRouter.get('/:id', zValidator('param', idParamSchema), async (c) => {
     .limit(1);
 
   if (!rows[0]) throw new HTTPException(404, { message: '用户不存在' });
-  return c.json({ user: rows[0] });
+  return c.json({
+    user: {
+      ...rows[0],
+      role: resolveEffectiveRole(rows[0].username, rows[0].role),
+    },
+  });
 });
 
 // ==================== GET /api/users/:id/orders ====================

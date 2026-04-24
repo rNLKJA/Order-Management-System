@@ -19,7 +19,7 @@ import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import { verifyPassword } from '../services/password.js';
 import { signToken } from '../services/jwt.js';
-import { requireAuth, type AuthVariables } from '../middleware/jwt.js';
+import { requireAuth, resolveEffectiveRole, type AuthVariables } from '../middleware/jwt.js';
 import { rateLimit } from '../middleware/rate-limit.js';
 
 export const authRouter = new Hono<{ Variables: AuthVariables }>();
@@ -59,7 +59,7 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
 
   const token = await signToken({
     user_id: user.id,
-    role: user.role,
+    role: resolveEffectiveRole(user.username, user.role),
     token_version: user.token_version,
   });
 
@@ -69,7 +69,7 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
       id: user.id,
       username: user.username,
       full_name: user.full_name,
-      role: user.role,
+      role: resolveEffectiveRole(user.username, user.role),
       avatar_url: user.avatar_url,
     },
   };
@@ -91,5 +91,12 @@ authRouter.get('/me', requireAuth(), async (c) => {
     .from(schema.users)
     .where(eq(schema.users.id, authUser.id))
     .limit(1);
-  return c.json({ user: rows[0] ?? authUser });
+  const row = rows[0];
+  if (!row) return c.json({ user: authUser });
+  return c.json({
+    user: {
+      ...row,
+      role: resolveEffectiveRole(row.username, row.role),
+    },
+  });
 });

