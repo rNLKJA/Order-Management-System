@@ -190,6 +190,10 @@ const createOrderSchema = z
     notes: z.string().optional().default(''),
     /** 散客姓名；填了就是 walk-in，不关联任何会员卡 */
     customer_name: z.string().max(64).optional().default(''),
+    /** 散客联系方式（可选）；第一次录单时把这些写到 walk-in member 上，送餐卡片就能看到 */
+    customer_phone: z.string().max(32).optional().default(''),
+    customer_address: z.string().max(256).optional().default(''),
+    customer_is_hospital: z.boolean().optional(),
     /** 散客模式下指定单价（覆盖 settings.ad_hoc_price） */
     adhoc_unit_price: z.number().nonnegative().optional(),
     created_by_user_id: z.number().int().positive().optional(),
@@ -252,8 +256,15 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
   const runTransaction = async () => {
     return db.transaction(async (tx) => {
     // 散客模式：按姓名找/建一个 is_walkin=true 的 member
+    // 顺便把本次填的手机/地址/院内外合并写回，送餐卡片才有东西可显示。
     const memberId = isWalkin
-      ? (await getOrCreateWalkinMember(tx, customerName, createdByUserId)).id
+      ? (
+          await getOrCreateWalkinMember(tx, customerName, createdByUserId, {
+            phone: input.customer_phone,
+            address: input.customer_address,
+            is_hospital: input.customer_is_hospital,
+          })
+        ).id
       : input.member_id!;
 
     // 读 ad_hoc_price（散客模式优先 body.adhoc_unit_price）

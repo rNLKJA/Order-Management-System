@@ -925,6 +925,69 @@ describe('Orders API /api/orders', () => {
     expect(res.status).toBe(400);
   });
 
+  it('POST 散客附带手机+地址：写回 walk-in member，下次留空不被洗掉', async () => {
+    const post = (body: Record<string, unknown>) =>
+      app.fetch(
+        new Request('http://test.local/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${staffToken}`,
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+
+    // 第一次：带手机 + 地址
+    const r1 = await post({
+      order_date: '2026-04-24',
+      lunch_qty: 1,
+      customer_name: '刘大爷',
+      customer_phone: '13800008888',
+      customer_address: '江北区测试路 1 号',
+    });
+    expect(r1.status).toBe(201);
+    const b1 = (await r1.json()) as { orders: schema.DailyOrder[] };
+    const memberId = b1.orders[0]!.member_id;
+
+    let rows = await db
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.id, memberId));
+    expect(rows[0]!.phone).toBe('13800008888');
+    expect(rows[0]!.address).toBe('江北区测试路 1 号');
+    expect(rows[0]!.is_walkin).toBe(true);
+
+    // 第二次：同名再录，但不传手机+地址 → 不应该洗掉
+    const r2 = await post({
+      order_date: '2026-04-25',
+      dinner_qty: 1,
+      customer_name: '刘大爷',
+    });
+    expect(r2.status).toBe(201);
+    rows = await db
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.id, memberId));
+    expect(rows[0]!.phone).toBe('13800008888');
+    expect(rows[0]!.address).toBe('江北区测试路 1 号');
+
+    // 第三次：同名，只改地址 → 手机保留，地址更新
+    const r3 = await post({
+      order_date: '2026-04-26',
+      lunch_qty: 1,
+      customer_name: '刘大爷',
+      customer_address: '新地址 88 号',
+    });
+    expect(r3.status).toBe(201);
+    rows = await db
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.id, memberId));
+    expect(rows[0]!.phone).toBe('13800008888');
+    expect(rows[0]!.address).toBe('新地址 88 号');
+  });
+
   it('POST 散客同名复用：两次同名 walk-in → 同一 is_walkin member_id', async () => {
     const post = (name: string) =>
       app.fetch(

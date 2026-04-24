@@ -147,6 +147,9 @@ export default function OrdersScreen() {
   const handleAddWalkinOrder = useCallback(
     async (payload: {
       customerName: string;
+      customerPhone?: string;
+      customerAddress?: string;
+      customerIsHospital: boolean;
       orderDate: string;
       meal: 'lunch' | 'dinner';
       qty: number;
@@ -160,15 +163,19 @@ export default function OrdersScreen() {
           dinner_qty: payload.meal === 'dinner' ? payload.qty : 0,
           notes: payload.notes ?? '',
           customer_name: payload.customerName,
+          customer_phone: payload.customerPhone,
+          customer_address: payload.customerAddress,
+          customer_is_hospital: payload.customerIsHospital,
           adhoc_unit_price: payload.unitPrice,
         });
-        await invalidateOrders();
+        // 散客本人的 phone/address 写回了 member 表，会员列表要刷一下
+        await Promise.all([invalidateOrders(), invalidateMembers()]);
       } catch (e) {
         flashToast(e instanceof Error ? e.message : '录入失败');
         throw e;
       }
     },
-    [invalidateOrders, flashToast],
+    [invalidateOrders, invalidateMembers, flashToast],
   );
 
   const handleUpdateStatus = useCallback(
@@ -876,6 +883,9 @@ function EntryPanel({
   }) => Promise<void>;
   onAddWalkinOrder: (payload: {
     customerName: string;
+    customerPhone?: string;
+    customerAddress?: string;
+    customerIsHospital: boolean;
     orderDate: string;
     meal: 'lunch' | 'dinner';
     qty: number;
@@ -895,8 +905,10 @@ function EntryPanel({
   const [dinnerQty,      setDinnerQty]      = useState(0);
   const [memberNotes,    setMemberNotes]    = useState('');
 
-  // 散餐 state（前端保留，后端 POST /api/orders 暂不支持无 member_id 录入，提交时会提示）
+  // 散餐 state
   const [adhocName,     setAdhocName]     = useState('');
+  const [adhocPhone,    setAdhocPhone]    = useState('');
+  const [adhocAddress,  setAdhocAddress]  = useState('');
   const [adhocMeal,     setAdhocMeal]     = useState<'lunch' | 'dinner'>('lunch');
   const [adhocQty,      setAdhocQty]      = useState(1);
   const [adhocPrice,    setAdhocPrice]    = useState(String(ADHOC_DEFAULT_PRICE));
@@ -920,7 +932,8 @@ function EntryPanel({
     setMode('member');
     setMemberQuery(''); setSelectedMember(null);
     setLunchQty(0); setDinnerQty(0); setMemberNotes('');
-    setAdhocName(''); setAdhocMeal('lunch'); setAdhocQty(1);
+    setAdhocName(''); setAdhocPhone(''); setAdhocAddress('');
+    setAdhocMeal('lunch'); setAdhocQty(1);
     setAdhocPrice(String(ADHOC_DEFAULT_PRICE)); setAdhocHospital(false); setAdhocNotes('');
   };
 
@@ -959,6 +972,9 @@ function EntryPanel({
     try {
       await onAddWalkinOrder({
         customerName: name,
+        customerPhone: adhocPhone.trim() || undefined,
+        customerAddress: adhocAddress.trim() || undefined,
+        customerIsHospital: adhocHospital,
         orderDate: todayStr(),
         meal: adhocMeal,
         qty: adhocQty,
@@ -1138,6 +1154,31 @@ function EntryPanel({
                   </View>
                   <View style={eStyles.fieldDivider} />
                   <View style={eStyles.fieldRow}>
+                    <Text style={eStyles.fieldLabel}>手机号</Text>
+                    <TextInput
+                      style={eStyles.fieldInput}
+                      placeholder="选填，用于送餐联系"
+                      placeholderTextColor={IOS_COLORS.labelTertiary}
+                      value={adhocPhone}
+                      onChangeText={setAdhocPhone}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                  <View style={eStyles.fieldDivider} />
+                  <View style={eStyles.fieldRowTop}>
+                    <Text style={eStyles.fieldLabel}>送餐地址</Text>
+                    <TextInput
+                      style={[eStyles.fieldInput, eStyles.fieldInputMulti]}
+                      placeholder="选填，送餐/自取都建议填写"
+                      placeholderTextColor={IOS_COLORS.labelTertiary}
+                      value={adhocAddress}
+                      onChangeText={setAdhocAddress}
+                      multiline
+                      numberOfLines={2}
+                    />
+                  </View>
+                  <View style={eStyles.fieldDivider} />
+                  <View style={eStyles.fieldRow}>
                     <Text style={eStyles.fieldLabel}>类型</Text>
                     <View style={eStyles.toggleGroup}>
                       {([false, true] as const).map((v) => (
@@ -1154,6 +1195,9 @@ function EntryPanel({
                     </View>
                   </View>
                 </View>
+                <Text style={eStyles.hintUnderCard}>
+                  同名散客再次录单时，新填的手机/地址会更新档案；留空则保留上次的。
+                </Text>
 
                 <Text style={[eStyles.sectionLabel, { marginTop: 20 }]}>餐次与数量</Text>
                 <View style={eStyles.inlineCard}>
@@ -1688,9 +1732,26 @@ const eStyles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
   },
+  fieldRowTop: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    gap: 12,
+  },
   fieldDivider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginLeft: 16 },
   fieldLabel: { fontSize: 15, color: IOS_COLORS.label },
   fieldInput: { fontSize: 15, color: IOS_COLORS.label, flex: 1, textAlign: 'right', paddingLeft: 8 },
+  fieldInputMulti: {
+    textAlign: 'right',
+    minHeight: 44,
+    lineHeight: 20,
+    paddingTop: 4,
+  },
+  hintUnderCard: {
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
+    paddingHorizontal: 20,
+    paddingTop: 6,
+  },
 
   toggleGroup: {
     flexDirection: 'row',

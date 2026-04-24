@@ -24,21 +24,41 @@ export function walkinUid(name: string): string {
   return `${WALKIN_UID_PREFIX}${name.trim()}`;
 }
 
+export interface WalkinContact {
+  /** 散客手机号（可选） */
+  phone?: string;
+  /** 送餐地址（可选） */
+  address?: string;
+  /** 是否算院内订单（散客模式默认 false，前端可覆盖） */
+  is_hospital?: boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type TxWithUpdate = Tx & { update: any };
+
 /**
  * 按散客姓名找或建一个 walk-in member。
  * 查找条件是 (uid='__WALKIN__{name}' AND is_walkin=true)，
  * is_walkin 的约束让"张三晋升为会员后，下次又来了个新张三"不会复用旧 id。
+ *
+ * 如果 contact 里传了新的 phone / address，会合并保存到 member：
+ *  - 旧记录某字段为空 → 写入新值
+ *  - 旧记录已有值 → 新值非空才覆盖（避免下次录单把空串洗掉已有的地址）
  */
 export async function getOrCreateWalkinMember(
-  tx: Tx,
+  tx: TxWithUpdate,
   customerName: string,
   createdByUserId: number,
+  contact: WalkinContact = {},
 ): Promise<typeof schema.members.$inferSelect> {
   const name = customerName.trim();
   if (!name) {
     throw new Error('customer_name 不能为空');
   }
 
+  const phone = (contact.phone ?? '').trim();
+  const address = (contact.address ?? '').trim();
+  const isHospital = contact.is_hospital ?? false;
   const uid = walkinUid(name);
 
   const existing = await tx
@@ -50,7 +70,23 @@ export async function getOrCreateWalkinMember(
     .limit(1);
 
   const hit = existing[0] as typeof schema.members.$inferSelect | undefined;
-  if (hit) return hit;
+  if (hit) {
+    // 合并更新：非空新值 或 旧值为空时的默认值
+    const patch: Partial<typeof schema.members.$inferInsert> = {};
+    if (phone && phone !== hit.phone) patch.phone = phone;
+    if (address && address !== hit.address) patch.address = address;
+    if (isHospital !== hit.is_hospital) patch.is_hospital = isHospital;
+    if (Object.keys(patch).length > 0) {
+      patch.updated_at = new Date();
+      const updated = await tx
+        .update(schema.members)
+        .set(patch)
+        .where(eq(schema.members.id, hit.id))
+        .returning();
+      return updated[0]!;
+    }
+    return hit;
+  }
 
   const inserted = await tx
     .insert(schema.members)
@@ -58,11 +94,11 @@ export async function getOrCreateWalkinMember(
       uid,
       name,
       nickname: '',
-      phone: '', // 散客没有手机号，留空；正式会员化时再补
+      phone,
       wechat_id: '',
-      address: '',
+      address,
       dietary_notes: '',
-      is_hospital: false,
+      is_hospital: isHospital,
       is_active: true,
       is_walkin: true,
       created_by_user_id: createdByUserId,

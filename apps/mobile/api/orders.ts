@@ -50,6 +50,10 @@ export interface CreateOrderInput {
   notes?: string;
   /** 散客姓名 */
   customer_name?: string;
+  /** 散客联系方式（可选，留空就不覆盖现有档案） */
+  customer_phone?: string;
+  customer_address?: string;
+  customer_is_hospital?: boolean;
   /** 散客模式自定义单价（覆盖 ad_hoc_price） */
   adhoc_unit_price?: number;
   created_by_user_id?: number;
