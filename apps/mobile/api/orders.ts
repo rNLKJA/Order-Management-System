@@ -22,6 +22,10 @@ export interface DailyOrder {
   cancelled_at: string | null;
   cancelled_by_user_id: number | null;
   cancel_reason: string;
+  /** 送餐渠道：self=本店员工自送；courier=外包快递 */
+  delivery_channel: 'self' | 'courier';
+  /** 外包渠道承运方标识（快递公司名 / 骑手 id） */
+  courier_ref: string;
   created_by_user_id: number;
   created_at: string;
   updated_at: string;
@@ -56,6 +60,10 @@ export interface CreateOrderInput {
   customer_is_hospital?: boolean;
   /** 散客模式自定义单价（覆盖 ad_hoc_price） */
   adhoc_unit_price?: number;
+  /** 送餐渠道：self=自送（默认）；courier=外包快递 */
+  delivery_channel?: 'self' | 'courier';
+  /** 快递承运方标识（快递公司 / 骑手 id） */
+  courier_ref?: string;
   created_by_user_id?: number;
 }
 
@@ -67,6 +75,7 @@ export interface CreateOrderResponse {
 
 export interface OrderListParams {
   member_id?: number;
+  created_by_user_id?: number;
   /** 单日筛选。与 from/to 互斥；传了 date 就忽略 from/to */
   date?: string;
   /** 起始日期（含），YYYY-MM-DD */
@@ -76,6 +85,7 @@ export interface OrderListParams {
   status?: 'pending' | 'fulfilled' | 'delivered' | 'cancelled' | 'all';
   meal_type?: 'lunch' | 'dinner' | 'all';
   zone?: 'all' | 'hospital' | 'regular';
+  delivery_channel?: 'all' | 'self' | 'courier';
   limit?: number;
   offset?: number;
 }
@@ -84,12 +94,14 @@ export const ordersApi = {
   list: (params: OrderListParams = {}) => {
     const qs = new URLSearchParams();
     if (params.member_id != null) qs.set('member_id', String(params.member_id));
+    if (params.created_by_user_id != null) qs.set('created_by_user_id', String(params.created_by_user_id));
     if (params.date) qs.set('date', params.date);
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
     if (params.status) qs.set('status', params.status);
     if (params.meal_type) qs.set('meal_type', params.meal_type);
     if (params.zone) qs.set('zone', params.zone);
+    if (params.delivery_channel) qs.set('delivery_channel', params.delivery_channel);
     if (params.limit != null) qs.set('limit', String(params.limit));
     if (params.offset != null) qs.set('offset', String(params.offset));
     const query = qs.toString();

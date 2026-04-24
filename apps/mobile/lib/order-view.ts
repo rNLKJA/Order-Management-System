@@ -39,6 +39,8 @@ export function dailyOrderToMockOrder(
     // 散客没有卡；会员有卡时显示卡名；会员无卡则 null（= 散餐）
     card_type: walkin ? null : (card?.card_name ?? null),
     customer_name: walkin ? order.customer_name : undefined,
+    delivery_channel: order.delivery_channel ?? 'self',
+    courier_ref: order.courier_ref || undefined,
   };
 }
 

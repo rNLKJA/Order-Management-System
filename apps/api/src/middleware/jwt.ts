@@ -103,3 +103,50 @@ export function requireRole(
     await next();
   };
 }
+
+/**
+ * 数据写操作守卫（新增 / 删除 / 改状态 等）。
+ *
+ * 真实业务线上只有 `高平 (gaoping)` 能做数据录入和删除；其他人只读。
+ * 目前还在测试阶段，默认 `DATA_OPERATOR_ENFORCEMENT=0`，所有 admin/staff 都能写；
+ * 等切正式生产时把 Vercel 上那条环境变量改成 `1` 就生效。
+ *
+ * 白名单可以通过 `DATA_OPERATOR_USERNAMES` 覆盖（逗号分隔），便于加备份录入员。
+ * admin 始终放行，避免运维自己把自己锁出来。
+ */
+export function DEFAULT_DATA_OPERATORS(): string[] {
+  const raw = (globalThis.process?.env?.DATA_OPERATOR_USERNAMES ?? '').trim();
+  if (raw) return raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return ['gaoping'];
+}
+
+export function isDataOperatorEnforced(): boolean {
+  return (globalThis.process?.env?.DATA_OPERATOR_ENFORCEMENT ?? '0') === '1';
+}
+
+export function requireDataOperator(): MiddlewareHandler<{ Variables: AuthVariables }> {
+  return async (c, next) => {
+    // 只拦截写请求；GET/OPTIONS/HEAD 放行
+    const method = c.req.method;
+    if (method === 'GET' || method === 'OPTIONS' || method === 'HEAD') {
+      return next();
+    }
+    if (!isDataOperatorEnforced()) {
+      return next();
+    }
+    const user = c.get('authUser');
+    if (!user) {
+      throw new HTTPException(401, { message: '未登录' });
+    }
+    if (user.role === 'admin') {
+      return next();
+    }
+    const allowed = DEFAULT_DATA_OPERATORS();
+    if (!allowed.includes(user.username)) {
+      throw new HTTPException(403, {
+        message: `目前仅 ${allowed.join(' / ')} 可以做数据录入 / 删除，请联系管理员`,
+      });
+    }
+    await next();
+  };
+}

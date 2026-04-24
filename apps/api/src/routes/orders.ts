@@ -19,7 +19,7 @@ import { and, asc, desc, eq, gte, inArray, lte, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
-import { requireAuth, type AuthVariables } from '../middleware/jwt.js';
+import { requireAuth, requireDataOperator, type AuthVariables } from '../middleware/jwt.js';
 import {
   deductMeals,
   cancelOrder,
@@ -35,6 +35,7 @@ import { getOrCreateWalkinMember } from '../services/walkin.js';
 export const ordersRouter = new Hono<{ Variables: AuthVariables }>();
 
 ordersRouter.use('*', requireAuth());
+ordersRouter.use('*', requireDataOperator());
 
 // ==================== GET /today (先注册，避免 :id 匹配 "today") ====================
 
@@ -84,6 +85,12 @@ const listQuerySchema = z.object({
     .regex(/^\d+$/, 'member_id 必须是整数')
     .transform((v) => parseInt(v, 10))
     .optional(),
+  /** 按录入员工筛选（"某人录了哪些单"） */
+  created_by_user_id: z
+    .string()
+    .regex(/^\d+$/, 'created_by_user_id 必须是整数')
+    .transform((v) => parseInt(v, 10))
+    .optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date 格式 YYYY-MM-DD').optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'from 格式 YYYY-MM-DD').optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'to 格式 YYYY-MM-DD').optional(),
@@ -93,6 +100,8 @@ const listQuerySchema = z.object({
     .default('all'),
   meal_type: z.enum(['lunch', 'dinner', 'all']).optional().default('all'),
   zone: z.enum(['all', 'hospital', 'regular']).optional().default('all'),
+  /** 送餐渠道（为未来交给快递做准备，现在默认 'all'） */
+  delivery_channel: z.enum(['all', 'self', 'courier']).optional().default('all'),
   limit: z
     .string()
     .optional()
@@ -110,11 +119,12 @@ const listQuerySchema = z.object({
 });
 
 ordersRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
-  const { member_id, date, from, to, status, meal_type, zone, limit, offset } = c.req.valid('query');
+  const { member_id, created_by_user_id, date, from, to, status, meal_type, zone, delivery_channel, limit, offset } = c.req.valid('query');
   const db = requestDb(c);
 
   const conds: SQL[] = [];
   if (member_id !== undefined) conds.push(eq(schema.daily_orders.member_id, member_id));
+  if (created_by_user_id !== undefined) conds.push(eq(schema.daily_orders.created_by_user_id, created_by_user_id));
   if (date) {
     conds.push(eq(schema.daily_orders.order_date, date));
   } else {
@@ -123,6 +133,7 @@ ordersRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
   }
   if (status !== 'all') conds.push(eq(schema.daily_orders.status, status));
   if (meal_type !== 'all') conds.push(eq(schema.daily_orders.meal_type, meal_type));
+  if (delivery_channel !== 'all') conds.push(eq(schema.daily_orders.delivery_channel, delivery_channel));
 
   const whereClause = conds.length > 0 ? and(...conds) : undefined;
 
@@ -196,6 +207,10 @@ const createOrderSchema = z
     customer_is_hospital: z.boolean().optional(),
     /** 散客模式下指定单价（覆盖 settings.ad_hoc_price） */
     adhoc_unit_price: z.number().nonnegative().optional(),
+    /** 送餐渠道：self=员工自送（默认）；courier=外包快递 */
+    delivery_channel: z.enum(['self', 'courier']).optional().default('self'),
+    /** 外包渠道下的承运方标识（快递公司名 / 骑手 id） */
+    courier_ref: z.string().max(64).optional().default(''),
     created_by_user_id: z.number().int().positive().optional(),
   })
   .refine((d) => (d.lunch_qty ?? 0) + (d.dinner_qty ?? 0) > 0, {
@@ -306,6 +321,9 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
     // 构建要插入的订单行
     const orderValues: Array<typeof schema.daily_orders.$inferInsert> = [];
 
+    const deliveryChannel = input.delivery_channel ?? 'self';
+    const courierRef = (input.courier_ref ?? '').trim();
+
     if (lunchQty > 0) {
       orderValues.push({
         member_id: memberId,
@@ -318,6 +336,8 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
         created_by_user_id: createdByUserId,
         notes: input.notes ?? '',
         customer_name: customerName,
+        delivery_channel: deliveryChannel,
+        courier_ref: courierRef,
       });
     }
     if (dinnerQty > 0) {
@@ -332,6 +352,8 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
         created_by_user_id: createdByUserId,
         notes: input.notes ?? '',
         customer_name: customerName,
+        delivery_channel: deliveryChannel,
+        courier_ref: courierRef,
       });
     }
 

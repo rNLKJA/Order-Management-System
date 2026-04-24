@@ -70,6 +70,10 @@ export interface MockOrder {
   dietary_notes: string;
   notes: string;
   card_type: string | null;
+  /** 送餐渠道：self=员工自送（默认）；courier=外包快递 */
+  delivery_channel: 'self' | 'courier';
+  /** 外包渠道承运方（快递公司/骑手 id） */
+  courier_ref?: string;
   /** 散客姓名（非空 → walk-in，不关联会员卡） */
   customer_name?: string;
 }

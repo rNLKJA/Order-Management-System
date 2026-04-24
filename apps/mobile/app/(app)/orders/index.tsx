@@ -65,7 +65,7 @@ function todayStr(): string {
 // ============================================================
 // Tabs
 // ============================================================
-type TabKey = 'entry' | 'overview' | 'prep' | 'delivery';
+type TabKey = 'entry' | 'overview' | 'prep' | 'delivery' | 'courier';
 
 const TABS: {
   key: TabKey;
@@ -76,7 +76,8 @@ const TABS: {
   { key: 'entry',    label: '录入', icon: 'add-circle-outline',      hint: '快速录单' },
   { key: 'overview', label: '总览', icon: 'list-outline',            hint: '全部订单' },
   { key: 'prep',     label: '出餐', icon: 'fast-food-outline',       hint: '打包备餐' },
-  { key: 'delivery', label: '送餐', icon: 'bicycle-outline',         hint: '检查配送' },
+  { key: 'delivery', label: '送餐', icon: 'bicycle-outline',         hint: '员工自送' },
+  { key: 'courier',  label: '快递', icon: 'cube-outline',            hint: '外包快递' },
 ];
 
 // ============================================================
@@ -127,6 +128,8 @@ export default function OrdersScreen() {
       lunchQty: number;
       dinnerQty: number;
       notes?: string;
+      deliveryChannel: 'self' | 'courier';
+      courierRef?: string;
     }) => {
       try {
         await ordersApi.create({
@@ -135,6 +138,8 @@ export default function OrdersScreen() {
           lunch_qty: payload.lunchQty,
           dinner_qty: payload.dinnerQty,
           notes: payload.notes ?? '',
+          delivery_channel: payload.deliveryChannel,
+          courier_ref: payload.courierRef,
         });
         // 会员卡可能被扣减，会员列表也要失效
         await Promise.all([invalidateOrders(), invalidateMembers(payload.memberId)]);
@@ -157,6 +162,8 @@ export default function OrdersScreen() {
       dinnerQty: number;
       unitPrice: number;
       notes?: string;
+      deliveryChannel: 'self' | 'courier';
+      courierRef?: string;
     }) => {
       try {
         await ordersApi.create({
@@ -169,6 +176,8 @@ export default function OrdersScreen() {
           customer_address: payload.customerAddress,
           customer_is_hospital: payload.customerIsHospital,
           adhoc_unit_price: payload.unitPrice,
+          delivery_channel: payload.deliveryChannel,
+          courier_ref: payload.courierRef,
         });
         // 散客本人的 phone/address 写回了 member 表，会员列表要刷一下
         await Promise.all([invalidateOrders(), invalidateMembers()]);
@@ -338,7 +347,7 @@ export default function OrdersScreen() {
         />
       )}
 
-      {/* —— 送餐 —— */}
+      {/* —— 送餐（员工自送）—— */}
       {activeTab === 'delivery' && (
         <DeliveryView
           orders={orders}
@@ -346,6 +355,19 @@ export default function OrdersScreen() {
           onMarkDelivered={handleMarkDelivered}
           onOpenDetail={setActiveOrder}
           onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
+          channel="self"
+        />
+      )}
+
+      {/* —— 快递（外包配送）—— */}
+      {activeTab === 'courier' && (
+        <DeliveryView
+          orders={orders}
+          membersById={membersById}
+          onMarkDelivered={handleMarkDelivered}
+          onOpenDetail={setActiveOrder}
+          onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
+          channel="courier"
         />
       )}
 
@@ -617,14 +639,19 @@ function DeliveryView({
   onMarkDelivered,
   onOpenDetail,
   onShowMember,
+  channel = 'self',
 }: {
   orders: MockOrder[];
   membersById: Record<number, MockMember>;
   onMarkDelivered: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
   onShowMember: (memberId: number) => void;
+  /** 'self' → 员工自送；'courier' → 外包快递 */
+  channel?: 'self' | 'courier';
 }) {
-  const fulfilled = orders.filter((o) => o.status === 'fulfilled');
+  const fulfilled = orders.filter(
+    (o) => o.status === 'fulfilled' && (o.delivery_channel ?? 'self') === channel,
+  );
   const lunch = fulfilled.filter((o) => o.meal_type === 'lunch');
   const dinner = fulfilled.filter((o) => o.meal_type === 'dinner');
   const hospitalCount = fulfilled.filter((o) => o.is_hospital).length;
@@ -691,9 +718,21 @@ function DeliveryView({
 
       {fulfilled.length === 0 && (
         <View style={prepStyles.empty}>
-          <Ionicons name="bicycle-outline" size={48} color={IOS_COLORS.labelTertiary} />
-          <Text style={prepStyles.emptyTitle}>当前没有待送达订单</Text>
-          <Text style={prepStyles.emptySub}>请去「出餐」页面先打包出餐</Text>
+          <Ionicons
+            name={channel === 'courier' ? 'cube-outline' : 'bicycle-outline'}
+            size={48}
+            color={IOS_COLORS.labelTertiary}
+          />
+          <Text style={prepStyles.emptyTitle}>
+            {channel === 'courier'
+              ? '当前没有交给快递的订单'
+              : '当前没有待送达订单'}
+          </Text>
+          <Text style={prepStyles.emptySub}>
+            {channel === 'courier'
+              ? '在录单时把配送方式选「快递」，这里就会显示相应的单'
+              : '请去「出餐」页面先打包出餐'}
+          </Text>
         </View>
       )}
     </ScrollView>
@@ -756,6 +795,11 @@ function DeliveryCard({
             {isWalkin ? (
               <View style={[prepStyles.tag, { backgroundColor: '#FFF4E5' }]}>
                 <Text style={[prepStyles.tagText, { color: '#FF9500' }]}>散客</Text>
+              </View>
+            ) : null}
+            {order.delivery_channel === 'courier' ? (
+              <View style={[prepStyles.tag, { backgroundColor: '#F5E9FC' }]}>
+                <Text style={[prepStyles.tagText, { color: '#AF52DE' }]}>快递{order.courier_ref ? ` · ${order.courier_ref}` : ''}</Text>
               </View>
             ) : null}
           </View>
@@ -919,6 +963,8 @@ function EntryPanel({
     lunchQty: number;
     dinnerQty: number;
     notes?: string;
+    deliveryChannel: 'self' | 'courier';
+    courierRef?: string;
   }) => Promise<void>;
   onAddWalkinOrder: (payload: {
     customerName: string;
@@ -930,12 +976,17 @@ function EntryPanel({
     dinnerQty: number;
     unitPrice: number;
     notes?: string;
+    deliveryChannel: 'self' | 'courier';
+    courierRef?: string;
   }) => Promise<void>;
   onJumpToOverview?: () => void;
 }) {
   const [toast, setToast] = useState<string | null>(null);
   const [mode, setMode] = useState<EntryMode>('member');
   const [submitting, setSubmitting] = useState(false);
+  // 共用的配送渠道选择（会员餐和散餐共用一套状态，切 mode 不 reset 更顺手）
+  const [deliveryChannel, setDeliveryChannel] = useState<'self' | 'courier'>('self');
+  const [courierRef, setCourierRef] = useState('');
 
   // 会员餐 state
   const [memberQuery,    setMemberQuery]    = useState('');
@@ -975,6 +1026,7 @@ function EntryPanel({
     setAdhocName(''); setAdhocPhone(''); setAdhocAddress('');
     setAdhocLunchQty(0); setAdhocDinnerQty(0);
     setAdhocPrice(String(ADHOC_DEFAULT_PRICE)); setAdhocHospital(false); setAdhocNotes('');
+    setDeliveryChannel('self'); setCourierRef('');
   };
 
   const flashToast = (msg: string) => {
@@ -992,6 +1044,8 @@ function EntryPanel({
         lunchQty,
         dinnerQty,
         notes: memberNotes.trim() || undefined,
+        deliveryChannel,
+        courierRef: deliveryChannel === 'courier' ? courierRef.trim() || undefined : undefined,
       });
       const name = selectedMember.nickname || selectedMember.name;
       const qty = lunchQty + dinnerQty;
@@ -1033,6 +1087,8 @@ function EntryPanel({
         dinnerQty: adhocDinnerQty,
         unitPrice: price,
         notes: adhocNotes.trim() || undefined,
+        deliveryChannel,
+        courierRef: deliveryChannel === 'courier' ? courierRef.trim() || undefined : undefined,
       });
       reset();
       flashToast(`已录入散客 ${name} · ${adhocTotalQty} 份`);
@@ -1219,6 +1275,14 @@ function EntryPanel({
                   <QtyRow label="晚餐份数" value={dinnerQty} onChange={setDinnerQty} />
                 </View>
 
+                <Text style={[eStyles.sectionLabel, { marginTop: 16 }]}>配送方式</Text>
+                <ChannelPicker
+                  value={deliveryChannel}
+                  onChange={setDeliveryChannel}
+                  courierRef={courierRef}
+                  onCourierRefChange={setCourierRef}
+                />
+
                 <View style={eStyles.notesBox}>
                   <TextInput
                     style={eStyles.notesInput}
@@ -1317,6 +1381,14 @@ function EntryPanel({
                   </View>
                 </View>
 
+                <Text style={[eStyles.sectionLabel, { marginTop: 20 }]}>配送方式</Text>
+                <ChannelPicker
+                  value={deliveryChannel}
+                  onChange={setDeliveryChannel}
+                  courierRef={courierRef}
+                  onCourierRefChange={setCourierRef}
+                />
+
                 <View style={eStyles.notesBox}>
                   <TextInput
                     style={eStyles.notesInput}
@@ -1401,6 +1473,58 @@ function EntryPanel({
             </Pressable>
           ) : null}
         </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ============================================================
+// ChannelPicker — 配送方式（员工自送 / 外包快递）+ 快递承运方备注
+// ============================================================
+function ChannelPicker({
+  value,
+  onChange,
+  courierRef,
+  onCourierRefChange,
+}: {
+  value: 'self' | 'courier';
+  onChange: (v: 'self' | 'courier') => void;
+  courierRef: string;
+  onCourierRefChange: (v: string) => void;
+}) {
+  return (
+    <View style={eStyles.inlineCard}>
+      <View style={eStyles.fieldRow}>
+        <Text style={eStyles.fieldLabel}>配送方式</Text>
+        <View style={eStyles.toggleGroup}>
+          {([['self', '员工自送'], ['courier', '快递']] as const).map(([v, label]) => (
+            <Pressable
+              key={v}
+              style={[eStyles.toggleBtn, value === v && eStyles.toggleBtnActive]}
+              onPress={() => onChange(v)}
+            >
+              <Text style={[eStyles.toggleText, value === v && eStyles.toggleTextActive]}>
+                {label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      {value === 'courier' ? (
+        <>
+          <View style={eStyles.fieldDivider} />
+          <View style={eStyles.fieldRow}>
+            <Text style={eStyles.fieldLabel}>承运方</Text>
+            <TextInput
+              style={eStyles.fieldInput}
+              placeholder="选填：快递公司 / 骑手手机后四位"
+              placeholderTextColor={IOS_COLORS.labelTertiary}
+              value={courierRef}
+              onChangeText={onCourierRefChange}
+              maxLength={64}
+            />
+          </View>
+        </>
       ) : null}
     </View>
   );

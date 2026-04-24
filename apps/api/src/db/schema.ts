@@ -170,6 +170,14 @@ export const daily_orders = sqliteTable(
     cancelled_at: integer('cancelled_at', { mode: 'timestamp_ms' }),
     cancelled_by_user_id: integer('cancelled_by_user_id').references(() => users.id),
     cancel_reason: text('cancel_reason').notNull().default(''),
+    /** 送餐渠道：self = 本店员工自送；courier = 已外包快递。
+     *  目前所有订单默认 self；未来快递系统接入后在下单或"送餐" tab
+     *  里切换，出餐页可以按 channel 过滤。 */
+    delivery_channel: text('delivery_channel', { enum: ['self', 'courier'] })
+      .notNull()
+      .default('self'),
+    /** 外包渠道的承运方标识（快递公司名 / 骑手 id），留 text 字段未来扩展 */
+    courier_ref: text('courier_ref').notNull().default(''),
     created_by_user_id: integer('created_by_user_id')
       .notNull()
       .references(() => users.id),
@@ -186,6 +194,7 @@ export const daily_orders = sqliteTable(
     cardIdx: index('orders_card_idx').on(t.card_id),
     dateIdx: index('orders_date_idx').on(t.order_date),
     statusIdx: index('orders_status_idx').on(t.status),
+    deliveryChannelIdx: index('orders_delivery_channel_idx').on(t.delivery_channel),
   }),
 );
 

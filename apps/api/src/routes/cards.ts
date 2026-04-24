@@ -27,7 +27,7 @@ import {
 } from '@meal/shared';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
-import { requireAuth, type AuthVariables } from '../middleware/jwt.js';
+import { requireAuth, requireDataOperator, type AuthVariables } from '../middleware/jwt.js';
 import { computeUpgrade, UpgradeError } from '../services/upgrade.js';
 import { computeRenew, RenewError } from '../services/renew.js';
 import { createAutoSubscriptionIncome } from '../services/finance.js';
@@ -36,6 +36,7 @@ import { refundCard, CardRefundError } from '../services/refund.js';
 export const cardsRouter = new Hono<{ Variables: AuthVariables }>();
 
 cardsRouter.use('*', requireAuth());
+cardsRouter.use('*', requireDataOperator());
 
 // ================== GET /api/cards ==================
 

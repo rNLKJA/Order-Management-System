@@ -36,6 +36,13 @@
       "when": 1777086745982,
       "tag": "0004_walkin_sentinel_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1777186745982,
+      "tag": "0005_delivery_channel",
+      "breakpoints": true
     }
   ]
 }

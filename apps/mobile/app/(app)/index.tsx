@@ -137,6 +137,15 @@ export default function HomeScreen() {
       route: '/(app)/finance',
     },
     {
+      key: 'users',
+      title: '员工名单',
+      subtitle: '查看所有账号 · 点进去看各人录单流水',
+      icon: 'people-circle-outline',
+      color: COLORS.brand,
+      bg: COLORS.brandSoft,
+      route: '/(app)/users',
+    },
+    {
       key: 'profile',
       title: '当前用户',
       subtitle: user?.full_name

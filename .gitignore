@@ -67,3 +67,4 @@ eas.json.local
 
 # OS
 Thumbs.db
+.secret/

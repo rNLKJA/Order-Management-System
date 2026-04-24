@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <!-- 禁止 input 聚焦时 iOS/Android 自动缩放；界面是 RN 原生风格，不需要浏览器级缩放 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>订餐会员管理</title>
+    <!-- react-native-web recommended style reset -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+        /* iOS Safari 字号 ≥ 16px 才不触发 input 自动缩放，这里兜底 */
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      /* 强制所有 input/textarea/select 默认 16px，避免 iOS 聚焦放大 */
+      input,
+      textarea,
+      select {
+        font-size: 16px;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>需要开启 JavaScript 才能使用本应用。</noscript>
+    <div id="root"></div>
+  </body>
+</html>

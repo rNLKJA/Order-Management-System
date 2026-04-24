@@ -26,11 +26,12 @@ import {
 } from '@meal/shared';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
-import { requireAuth, requireRole, type AuthVariables } from '../middleware/jwt.js';
+import { requireAuth, requireRole, requireDataOperator, type AuthVariables } from '../middleware/jwt.js';
 
 export const financeRouter = new Hono<{ Variables: AuthVariables }>();
 
 financeRouter.use('*', requireAuth());
+financeRouter.use('*', requireDataOperator());
 
 /**
  * Zod 校验失败 → 422 UNPROCESSABLE_ENTITY。

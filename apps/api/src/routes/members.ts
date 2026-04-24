@@ -23,7 +23,7 @@ import { z } from 'zod';
 import { memberCreateSchema, memberUpdateSchema, buildUid } from '@meal/shared';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
-import { requireAuth, requireRole, type AuthVariables } from '../middleware/jwt.js';
+import { requireAuth, requireRole, requireDataOperator, type AuthVariables } from '../middleware/jwt.js';
 import {
   countMemberReferences,
   findDuplicatePhone,
@@ -34,6 +34,7 @@ export const membersRouter = new Hono<{ Variables: AuthVariables }>();
 
 // 全部接口需要登录
 membersRouter.use('*', requireAuth());
+membersRouter.use('*', requireDataOperator());
 
 const listQuerySchema = z.object({
   q: z.string().optional(),
