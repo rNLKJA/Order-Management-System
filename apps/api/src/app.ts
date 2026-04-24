@@ -14,6 +14,7 @@ import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 import { HTTPException } from 'hono/http-exception';
 
+import { buildCorsOriginChecker, _internal as corsInternal } from './cors-policy.js';
 import { authRouter } from './routes/auth.js';
 import { auditRouter } from './routes/audit.js';
 import { cardsRouter } from './routes/cards.js';
@@ -47,10 +48,14 @@ export function createApp(deps: AppDeps = {}) {
   // 全局中间件
   app.use('*', logger());
   app.use('*', secureHeaders());
+  // CORS：白名单 + 移动端透传（详见 cors-policy.ts）
+  const corsOrigin = buildCorsOriginChecker({
+    extra: corsInternal.parseExtra(process.env.CORS_ALLOWED_ORIGINS),
+  });
   app.use(
     '*',
     cors({
-      origin: (origin) => origin ?? '*',
+      origin: corsOrigin,
       allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
       credentials: true,
