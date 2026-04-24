@@ -11,11 +11,11 @@ import {
   TextInput,
   Switch,
   Text,
-  Button,
   HelperText,
   useTheme,
 } from 'react-native-paper';
 import { memberCreateSchema, type MemberCreateInput } from '@meal/shared';
+import { GlassSurface, SectionLabel, Button } from './ui';
 
 export interface MemberFormValues extends MemberCreateInput {}
 
@@ -76,100 +76,98 @@ export function MemberForm({
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
     >
-      <TextInput
-        label="姓名 *"
-        value={name}
-        onChangeText={setName}
-        mode="outlined"
-        style={styles.field}
-        error={!!errors.name}
-      />
-      <HelperText type="error" visible={!!errors.name}>
-        {errors.name ?? ''}
-      </HelperText>
+      <View style={styles.block}>
+        <SectionLabel>基础信息</SectionLabel>
+        <GlassSurface padding={12} style={styles.card}>
+          <TextInput
+            label="姓名 *"
+            value={name}
+            onChangeText={setName}
+            mode="outlined"
+            style={styles.field}
+            error={!!errors.name}
+          />
+          <HelperText type="error" visible={!!errors.name}>
+            {errors.name ?? ''}
+          </HelperText>
 
-      <TextInput
-        label="昵称"
-        value={nickname}
-        onChangeText={setNickname}
-        mode="outlined"
-        style={styles.field}
-      />
+          <TextInput
+            label="昵称"
+            value={nickname}
+            onChangeText={setNickname}
+            mode="outlined"
+            style={styles.field}
+          />
 
-      <TextInput
-        label="手机号 *"
-        value={phone}
-        onChangeText={setPhone}
-        mode="outlined"
-        keyboardType="phone-pad"
-        autoCorrect={false}
-        style={styles.field}
-        error={!!errors.phone}
-      />
-      <HelperText type="error" visible={!!errors.phone}>
-        {errors.phone ?? ''}
-      </HelperText>
+          <TextInput
+            label="手机号 *"
+            value={phone}
+            onChangeText={setPhone}
+            mode="outlined"
+            keyboardType="phone-pad"
+            autoCorrect={false}
+            style={styles.field}
+            error={!!errors.phone}
+          />
+          <HelperText type="error" visible={!!errors.phone}>
+            {errors.phone ?? ''}
+          </HelperText>
 
-      <TextInput
-        label="微信号"
-        value={wechatId}
-        onChangeText={setWechatId}
-        mode="outlined"
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.field}
-        error={!!errors.wechat_id}
-      />
-      <HelperText type="error" visible={!!errors.wechat_id}>
-        {errors.wechat_id ?? ''}
-      </HelperText>
-
-      <TextInput
-        label="地址"
-        value={address}
-        onChangeText={setAddress}
-        mode="outlined"
-        multiline
-        style={styles.field}
-      />
-
-      <TextInput
-        label="忌口（会自动带到每次订单备注）"
-        value={dietaryNotes}
-        onChangeText={setDietaryNotes}
-        mode="outlined"
-        multiline
-        style={styles.field}
-      />
-
-      <View style={styles.row}>
-        <Text variant="bodyLarge">医院订阅</Text>
-        <Switch value={isHospital} onValueChange={setIsHospital} />
+          <TextInput
+            label="微信号"
+            value={wechatId}
+            onChangeText={setWechatId}
+            mode="outlined"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.field}
+            error={!!errors.wechat_id}
+          />
+          <HelperText type="error" visible={!!errors.wechat_id}>
+            {errors.wechat_id ?? ''}
+          </HelperText>
+        </GlassSurface>
       </View>
-      <HelperText type="info" visible>
-        勾选后，该会员将被视为院内订阅客户，送餐默认走 sunmanlin。
-      </HelperText>
+
+      <View style={styles.block}>
+        <SectionLabel>补充信息</SectionLabel>
+        <GlassSurface padding={12} style={styles.card}>
+          <TextInput
+            label="地址"
+            value={address}
+            onChangeText={setAddress}
+            mode="outlined"
+            multiline
+            style={styles.field}
+          />
+
+          <TextInput
+            label="忌口（会自动带到每次订单备注）"
+            value={dietaryNotes}
+            onChangeText={setDietaryNotes}
+            mode="outlined"
+            multiline
+            style={styles.field}
+          />
+        </GlassSurface>
+      </View>
+
+      <View style={styles.block}>
+        <SectionLabel>订阅设置</SectionLabel>
+        <GlassSurface padding={12} style={styles.card}>
+          <View style={styles.row}>
+            <Text variant="bodyLarge">医院订阅</Text>
+            <Switch value={isHospital} onValueChange={setIsHospital} />
+          </View>
+          <HelperText type="info" visible>
+            勾选后，该会员会按院内价格订阅，默认送餐人会自动带出。
+          </HelperText>
+        </GlassSurface>
+      </View>
 
       <View style={styles.actions}>
-        {onCancel ? (
-          <Button
-            mode="outlined"
-            onPress={onCancel}
-            disabled={submitting}
-            style={styles.button}
-          >
-            取消
-          </Button>
-        ) : null}
-        <Button
-          mode="contained"
-          onPress={handleSubmit}
-          loading={submitting}
-          disabled={submitting}
-          style={styles.button}
-        >
-          {submitLabel}
-        </Button>
+        {onCancel ? <Button label="取消" variant="secondary" onPress={onCancel} disabled={submitting} style={styles.button} /> : null}
+        <Button label={submitLabel} onPress={handleSubmit} loading={submitting} disabled={submitting} style={styles.button} />
       </View>
     </ScrollView>
   );
@@ -179,6 +177,12 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     paddingBottom: 48,
+  },
+  block: {
+    marginBottom: 16,
+  },
+  card: {
+    gap: 2,
   },
   field: {
     marginBottom: 4,
@@ -193,11 +197,11 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 16,
+    marginTop: 8,
     justifyContent: 'flex-end',
   },
   button: {
     borderRadius: 10,
-    minWidth: 120,
+    minWidth: 132,
   },
 });

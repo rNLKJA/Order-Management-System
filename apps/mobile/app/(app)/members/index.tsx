@@ -192,6 +192,10 @@ function MemberRow({ member }: { member: MockMember }) {
           {renewal ? <StatusChip label="临界" variant="danger" /> : null}
         </View>
         <Text style={styles.memberSub}>{member.name} · {member.phone}</Text>
+        <Text style={styles.memberMeta} numberOfLines={1}>
+          UID {member.uid}
+          {member.wechat_id ? ` · 微信 ${member.wechat_id}` : ''}
+        </Text>
         {card ? (
           <Text style={styles.cardInfo}>
             {card.card_name} · 剩余 {card.remaining_meals}/{card.total_meals} 份
@@ -247,6 +251,7 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   memberName: { ...TYPE.headline, color: COLORS.text.primary },
   memberSub: { ...TYPE.caption, color: COLORS.text.tertiary },
+  memberMeta: { ...TYPE.caption, color: COLORS.text.quaternary, marginTop: 1 },
   cardInfo: { ...TYPE.caption, color: COLORS.text.secondary, fontVariant: ['tabular-nums'] },
   noCard: { ...TYPE.caption, color: COLORS.text.quaternary },
   rowArrow: { marginLeft: 4 },

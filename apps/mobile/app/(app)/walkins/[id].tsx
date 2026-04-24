@@ -109,7 +109,16 @@ export default function WalkinDetailScreen() {
         })),
     [usersQuery.data],
   );
-  const defaultUserId = authUser?.id ?? pickerUsers[0]?.id ?? 0;
+  const defaultCollectorId =
+    pickerUsers.find((u) => u.name.includes('孙梦瑶'))?.id ??
+    authUser?.id ??
+    pickerUsers[0]?.id ??
+    0;
+  const defaultRecorderId =
+    pickerUsers.find((u) => u.name.includes('高平'))?.id ??
+    authUser?.id ??
+    pickerUsers[0]?.id ??
+    0;
 
   const handlePurchase = useCallback(
     async (p: CardFlowSubmitPayload) => {
@@ -335,8 +344,8 @@ export default function WalkinDetailScreen() {
           memberName={member.name}
           memberIsHospital={member.is_hospital}
           pickerUsers={pickerUsers}
-          defaultCollectorId={defaultUserId}
-          defaultRecorderId={defaultUserId}
+        defaultCollectorId={defaultCollectorId}
+        defaultRecorderId={defaultRecorderId}
           onClose={() => setShowPurchaseModal(false)}
           onSubmit={handlePurchase}
         />

@@ -122,21 +122,23 @@ function UserRow({ user, disabled }: { user: ApiUser; disabled?: boolean }) {
       padding={SPACING.base}
       style={[styles.row, disabled && styles.rowDisabled]}
     >
-      {user.avatar_url ? (
-        <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
-      ) : (
-        <IconAvatar icon="person-outline" size={44} color={COLORS.brand} bg={COLORS.brandSoft} />
-      )}
+      <View style={styles.avatarBlock}>
+        {user.avatar_url ? (
+          <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
+        ) : (
+          <IconAvatar icon="person-outline" size={44} color={COLORS.brand} bg={COLORS.brandSoft} />
+        )}
+        <StatusChip label={roleLabel} variant={roleVariant} />
+      </View>
       <View style={styles.main}>
         <Text style={styles.name} numberOfLines={1}>
           {user.full_name || user.username}
         </Text>
         <Text style={styles.sub} numberOfLines={1}>
-          @{user.username} · id {user.id}
+          @{user.username}
         </Text>
       </View>
       <View style={styles.meta}>
-        <StatusChip label={roleLabel} variant={roleVariant} />
         <StatusChip label={user.is_active ? '在职' : '停用'} variant={user.is_active ? 'fulfilled' : 'neutral'} />
       </View>
       <Ionicons name="chevron-forward" size={18} color={COLORS.text.quaternary} />
@@ -159,6 +161,7 @@ const styles = StyleSheet.create({
   emptyText: { ...TYPE.body, color: COLORS.text.tertiary, textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.sm },
   rowDisabled: { opacity: 0.56 },
+  avatarBlock: { alignItems: 'center', gap: 6 },
   avatarImage: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.brandSoft },
   main: { flex: 1, minWidth: 0 },
   name: { ...TYPE.headline, color: COLORS.text.primary },

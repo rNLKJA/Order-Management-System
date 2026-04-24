@@ -43,7 +43,7 @@ export function DatePicker({
     const InputEl = require('react').createElement;
     return (
       <View style={[styles.wrap, style]}>
-        {label ? <Text style={styles.label}>{label}</Text> : null}
+        {label ? <Text style={styles.labelInline}>{label}</Text> : null}
         {InputEl('input', {
           type: 'date',
           value,
@@ -54,7 +54,7 @@ export function DatePicker({
             const next = e.target.value;
             if (next === '' || isValidDate(next)) onChange(next);
           },
-          style: webInputStyle,
+          style: [webInputStyle, label ? webInputStyleInline : null],
         })}
       </View>
     );
@@ -63,11 +63,11 @@ export function DatePicker({
   // Native：先留着 TextInput，等接原生 picker 再换
   return (
     <View style={[styles.wrap, style]}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? <Text style={styles.labelInline}>{label}</Text> : null}
       <TextInput
         value={value}
         onChangeText={onChange}
-        style={styles.nativeInput}
+        style={[styles.nativeInput, label ? styles.nativeInputInline : null]}
         placeholder={placeholder}
         placeholderTextColor={COLORS.text.quaternary}
         editable={!disabled}
@@ -94,24 +94,34 @@ const webInputStyle = {
   fontFamily: 'inherit',
 } as const;
 
+const webInputStyleInline = {
+  textAlign: 'right',
+} as const;
+
 const styles = StyleSheet.create({
   wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(118,118,128,0.08)',
     borderRadius: RADIUS.sm,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
-  label: {
+  labelInline: {
     ...TYPE.caption,
     color: COLORS.text.tertiary,
-    textTransform: 'uppercase',
     letterSpacing: 0.4,
-    marginBottom: 2,
+    marginRight: 8,
+    minWidth: 14,
   },
   nativeInput: {
+    flex: 1,
     fontSize: 15,
     color: COLORS.text.primary,
     paddingVertical: 4,
     fontVariant: ['tabular-nums'],
+  },
+  nativeInputInline: {
+    textAlign: 'right',
   },
 });

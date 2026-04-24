@@ -6,10 +6,11 @@
  */
 
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, ScrollView, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, ScrollView, View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useAuth } from '../../../hooks/useAuth';
 import { COLORS, GLASS, SPACING, TYPE } from '../../../theme/paperTheme';
 import { confirmDestructive, notify } from '../../../lib/confirm';
@@ -32,6 +33,7 @@ import {
 export default function ProfileScreen() {
   const { user, signOut, refresh } = useAuth();
   const [uploading, setUploading] = useState(false);
+  const [avatarMenuVisible, setAvatarMenuVisible] = useState(false);
 
   const handleSignOut = () => {
     confirmDestructive(
@@ -60,18 +62,21 @@ export default function ProfileScreen() {
 
   const handleCamera = async () => {
     if (uploading) return;
+    setAvatarMenuVisible(false);
     const dataUrl = await pickAvatar({ fromLibrary: false });
     if (dataUrl) await runUpload(dataUrl);
   };
 
   const handleLibrary = async () => {
     if (uploading) return;
+    setAvatarMenuVisible(false);
     const dataUrl = await pickAvatar({ fromLibrary: true });
     if (dataUrl) await runUpload(dataUrl);
   };
 
   const handleRemove = async () => {
     if (uploading) return;
+    setAvatarMenuVisible(false);
     const ok = await confirmDialog({
       title: '移除头像？',
       message: '移除后将显示默认头像，可以随时重新上传。',
@@ -104,9 +109,21 @@ export default function ProfileScreen() {
             <AppHeader title="当前用户" />
 
             <GlassSurface padding={SPACING.lg} style={styles.profileCard}>
+              <View style={styles.cardTopRow}>
+                <Text style={styles.cardTitle}>个人名片</Text>
+                <Pressable
+                  onPress={() => setAvatarMenuVisible(true)}
+                  disabled={uploading}
+                  style={({ pressed }) => [styles.editBtn, pressed && styles.pressed]}
+                  hitSlop={8}
+                >
+                  <Ionicons name="create-outline" size={16} color={COLORS.brand} />
+                  <Text style={styles.editBtnText}>编辑</Text>
+                </Pressable>
+              </View>
               <View style={styles.profileTop}>
                 <Pressable
-                  onPress={handleCamera}
+                  onPress={() => setAvatarMenuVisible(true)}
                   disabled={uploading}
                   style={styles.avatarWrap}
                   hitSlop={8}
@@ -145,27 +162,7 @@ export default function ProfileScreen() {
                   />
                 </View>
               </View>
-
-              <View style={styles.avatarActions}>
-                <Pressable onPress={handleCamera} disabled={uploading} style={styles.avatarActionBtn} hitSlop={6}>
-                  <Ionicons name="camera-outline" size={15} color={COLORS.brand} />
-                  <Text style={styles.avatarActionText}>拍照</Text>
-                </Pressable>
-                <View style={styles.avatarActionDivider} />
-                <Pressable onPress={handleLibrary} disabled={uploading} style={styles.avatarActionBtn} hitSlop={6}>
-                  <Ionicons name="image-outline" size={15} color={COLORS.brand} />
-                  <Text style={styles.avatarActionText}>相册</Text>
-                </Pressable>
-                {user?.avatar_url ? (
-                  <>
-                    <View style={styles.avatarActionDivider} />
-                    <Pressable onPress={handleRemove} disabled={uploading} style={styles.avatarActionBtn} hitSlop={6}>
-                      <Ionicons name="trash-outline" size={15} color={COLORS.danger} />
-                      <Text style={[styles.avatarActionText, { color: COLORS.danger }]}>移除</Text>
-                    </Pressable>
-                  </>
-                ) : null}
-              </View>
+              <Text style={styles.avatarHint}>点击头像或编辑按钮可更新照片</Text>
             </GlassSurface>
 
             <View style={styles.section}>
@@ -193,6 +190,22 @@ export default function ProfileScreen() {
                   value={user?.role === 'admin' ? '管理员（全部权限）' : '员工（日常操作）'}
                   isLast
                 />
+              </GlassSurface>
+            </View>
+
+            <View style={styles.section}>
+              <SectionLabel>隐私与合规</SectionLabel>
+              <GlassSurface padding={0} style={styles.infoCard}>
+                <Pressable
+                  onPress={() => router.push('/(app)/profile/privacy')}
+                  style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.72 }]}
+                >
+                  <View style={styles.linkLeft}>
+                    <Ionicons name="document-text-outline" size={16} color={COLORS.text.tertiary} />
+                    <Text style={styles.linkTitle}>隐私政策</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.text.quaternary} />
+                </Pressable>
               </GlassSurface>
             </View>
 
@@ -234,6 +247,37 @@ export default function ProfileScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      <Modal
+        transparent
+        visible={avatarMenuVisible}
+        animationType="fade"
+        onRequestClose={() => setAvatarMenuVisible(false)}
+      >
+        <Pressable style={styles.menuOverlay} onPress={() => setAvatarMenuVisible(false)} />
+        <View style={styles.menuWrap}>
+          <GlassSurface padding={SPACING.md} style={styles.menuCard}>
+            <Text style={styles.menuTitle}>编辑头像</Text>
+            <Pressable onPress={handleCamera} disabled={uploading} style={styles.menuAction}>
+              <Ionicons name="camera-outline" size={16} color={COLORS.brand} />
+              <Text style={styles.menuActionText}>拍照</Text>
+            </Pressable>
+            <Pressable onPress={handleLibrary} disabled={uploading} style={styles.menuAction}>
+              <Ionicons name="image-outline" size={16} color={COLORS.brand} />
+              <Text style={styles.menuActionText}>从相册选择</Text>
+            </Pressable>
+            {user?.avatar_url ? (
+              <Pressable onPress={handleRemove} disabled={uploading} style={styles.menuAction}>
+                <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
+                <Text style={[styles.menuActionText, { color: COLORS.danger }]}>移除头像</Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={() => setAvatarMenuVisible(false)} style={styles.menuCancel}>
+              <Text style={styles.menuCancelText}>取消</Text>
+            </Pressable>
+          </GlassSurface>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -258,6 +302,19 @@ const styles = StyleSheet.create({
   },
 
   profileCard: { alignItems: 'center', marginTop: SPACING.sm, marginBottom: SPACING.lg },
+  cardTopRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm },
+  cardTitle: { ...TYPE.footnote, color: COLORS.text.tertiary, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: '600' },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,122,255,0.08)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  editBtnText: { ...TYPE.caption, color: COLORS.brand, fontWeight: '700' },
+  pressed: { opacity: 0.72 },
   profileTop: { flexDirection: 'row', width: '100%', alignItems: 'center', gap: SPACING.base, marginBottom: SPACING.md },
   profileIdentity: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
   avatarWrap: {
@@ -300,32 +357,16 @@ const styles = StyleSheet.create({
   fullName: { ...TYPE.title2, color: COLORS.text.primary, marginBottom: 2 },
   username: { ...TYPE.footnote, color: COLORS.text.tertiary, marginBottom: SPACING.sm },
   roleChip: { alignSelf: 'flex-start' },
+  avatarHint: { ...TYPE.caption, color: COLORS.text.tertiary },
 
-  avatarActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,122,255,0.08)',
-    borderRadius: 12,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
-  avatarActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  avatarActionText: {
-    ...TYPE.footnote,
-    color: COLORS.brand,
-    fontWeight: '600',
-  },
-  avatarActionDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 16,
-    backgroundColor: 'rgba(0,122,255,0.25)',
-  },
+  menuOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
+  menuWrap: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: SPACING.page, paddingBottom: 24 },
+  menuCard: { gap: 6 },
+  menuTitle: { ...TYPE.callout, color: COLORS.text.primary, marginBottom: 4 },
+  menuAction: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 4 },
+  menuActionText: { ...TYPE.body, color: COLORS.text.primary },
+  menuCancel: { alignItems: 'center', paddingTop: 8, paddingBottom: 4 },
+  menuCancelText: { ...TYPE.body, color: COLORS.text.tertiary, fontWeight: '600' },
 
   section: { marginBottom: SPACING.lg },
 
@@ -343,6 +384,23 @@ const styles = StyleSheet.create({
   },
   infoLabel: { ...TYPE.body, color: COLORS.text.primary },
   infoValue: { ...TYPE.body, color: COLORS.text.tertiary, flexShrink: 1, marginLeft: 12 },
+  linkRow: {
+    minHeight: 48,
+    paddingHorizontal: SPACING.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  linkLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  linkTitle: {
+    ...TYPE.body,
+    color: COLORS.text.primary,
+    fontWeight: '600',
+  },
 
   permCard: { gap: SPACING.sm },
   permRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },

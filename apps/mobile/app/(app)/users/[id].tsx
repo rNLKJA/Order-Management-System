@@ -10,27 +10,31 @@
  */
 
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { usersApi, type ApiUserOrder } from '../../../api/users';
-import { IOS_COLORS } from '../../../theme/paperTheme';
-import { AppHeader, MeshBackground } from '../../../components/ui';
+import { COLORS, GLASS, SPACING, TYPE } from '../../../theme/paperTheme';
+import {
+  AppHeader,
+  Bento,
+  BentoGrid,
+  GlassSurface,
+  IconAvatar,
+  MeshBackground,
+  PressableCard,
+  SectionLabel,
+  StatTile,
+  StatusChip,
+} from '../../../components/ui';
 
 const STATUS_LABEL = {
-  pending: { label: '待出餐', fg: IOS_COLORS.orange, bg: '#FFF4E5' },
-  fulfilled: { label: '已出餐', fg: IOS_COLORS.blue, bg: IOS_COLORS.blueLight },
-  delivered: { label: '已送达', fg: '#34C759', bg: '#E8F8ED' },
-  cancelled: { label: '已取消', fg: IOS_COLORS.labelSecondary, bg: IOS_COLORS.fillLight },
+  pending: { label: '待出餐', fg: COLORS.warning, bg: COLORS.warningSoft, chip: 'warning' as const },
+  fulfilled: { label: '已出餐', fg: COLORS.brand, bg: COLORS.brandSoft, chip: 'info' as const },
+  delivered: { label: '已送达', fg: COLORS.success, bg: COLORS.successSoft, chip: 'success' as const },
+  cancelled: { label: '已取消', fg: COLORS.text.secondary, bg: GLASS.surface3, chip: 'neutral' as const },
 } as const;
 const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
 type LimitOption = (typeof LIMIT_OPTIONS)[number];
@@ -88,7 +92,18 @@ export default function UserDetailScreen() {
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <AppHeader title="员工详情" onBack={() => router.back()} />
           <View style={styles.center}>
-            <Text style={styles.muted}>用户 id 非法</Text>
+            <GlassSurface tint="danger" padding={SPACING.base} style={styles.messageCard}>
+              <IconAvatar
+                icon="alert-circle-outline"
+                size={32}
+                color={COLORS.danger}
+                bg="rgba(255,59,48,0.14)"
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.messageTitle}>用户 ID 不合法</Text>
+                <Text style={styles.messageSub}>请从员工列表重新进入详情页。</Text>
+              </View>
+            </GlassSurface>
           </View>
         </SafeAreaView>
       </View>
@@ -102,7 +117,7 @@ export default function UserDetailScreen() {
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <AppHeader title="员工详情" onBack={() => router.back()} />
           <View style={styles.center}>
-            <ActivityIndicator color={IOS_COLORS.blue} />
+            <ActivityIndicator color={COLORS.brand} />
           </View>
         </SafeAreaView>
       </View>
@@ -120,80 +135,125 @@ export default function UserDetailScreen() {
         />
 
         <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-          {/* 统计卡 */}
-          <View style={styles.statsGrid}>
-            <StatTile value={stats?.total_orders ?? '—'} label="累计录单" />
-            <StatTile value={stats?.total_meals ?? '—'} label="餐数" />
-            <StatTile
-              value={stats ? `¥${Number(stats.total_amount ?? 0).toFixed(0)}` : '—'}
-              label="累计金额"
-            />
-          </View>
+          <GlassSurface padding={SPACING.base} style={styles.heroCard}>
+            <View style={styles.heroRow}>
+              <IconAvatar
+                icon={user.role === 'admin' ? 'shield-checkmark-outline' : 'person-outline'}
+                size={48}
+                color={user.role === 'admin' ? COLORS.brand : COLORS.text.secondary}
+                  bg={user.role === 'admin' ? COLORS.brandSoft : GLASS.surface3}
+              />
+              <View style={{ flex: 1 }}>
+                <View style={styles.heroTitleRow}>
+                  <Text style={styles.heroTitle}>{user.full_name || user.username}</Text>
+                  <StatusChip
+                    label={user.role === 'admin' ? '管理员' : '员工'}
+                    variant={user.role === 'admin' ? 'hospital' : 'neutral'}
+                  />
+                </View>
+                <Text style={styles.heroSub}>@{user.username}</Text>
+              </View>
+            </View>
+          </GlassSurface>
+
+          <SectionLabel>账户概览</SectionLabel>
+          <BentoGrid>
+            <Bento span={4}>
+              <StatTile
+                label="累计录单"
+                value={String(stats?.total_orders ?? '—')}
+                icon="receipt-outline"
+                color={COLORS.brand}
+              />
+            </Bento>
+            <Bento span={4}>
+              <StatTile
+                label="餐数"
+                value={String(stats?.total_meals ?? '—')}
+                icon="restaurant-outline"
+                color={COLORS.warning}
+              />
+            </Bento>
+            <Bento span={4}>
+              <StatTile
+                label="累计金额"
+                value={stats ? `¥${Number(stats.total_amount ?? 0).toFixed(0)}` : '—'}
+                icon="cash-outline"
+                color={COLORS.success}
+              />
+            </Bento>
+          </BentoGrid>
 
           {stats ? (
-            <View style={styles.breakdownRow}>
-              <StatusChip label="待出餐" count={stats.pending_count} color={IOS_COLORS.orange} />
-              <StatusChip label="已出餐" count={stats.fulfilled_count} color={IOS_COLORS.blue} />
-              <StatusChip label="已送达" count={stats.delivered_count} color="#34C759" />
-              <StatusChip
-                label="已取消"
-                count={stats.cancelled_count}
-                color={IOS_COLORS.labelSecondary}
-              />
-            </View>
+            <GlassSurface padding={SPACING.sm} style={styles.breakdownRow}>
+              <StatusChip label={`待出餐 ${stats.pending_count}`} variant="warning" dot />
+              <StatusChip label={`已出餐 ${stats.fulfilled_count}`} variant="fulfilled" dot />
+              <StatusChip label={`已送达 ${stats.delivered_count}`} variant="delivered" dot />
+              <StatusChip label={`已取消 ${stats.cancelled_count}`} variant="neutral" dot />
+            </GlassSurface>
           ) : null}
 
-          {/* 明细 */}
-          <Text style={styles.sectionTitle}>订单流水</Text>
-          <View style={styles.filterBar}>
-            {(['all', 'pending', 'fulfilled', 'delivered', 'cancelled'] as const).map((s) => {
-              const active = statusFilter === s;
-              const label =
-                s === 'all'
-                  ? '全部'
-                  : s === 'pending'
-                    ? '待出餐'
-                    : s === 'fulfilled'
-                      ? '已出餐'
-                      : s === 'delivered'
-                        ? '已送达'
-                        : '已取消';
-              return (
-                <Pressable
-                  key={s}
-                  style={[styles.filterChip, active && styles.filterChipActive]}
-                  onPress={() => setStatusFilter(s)}
+          <SectionLabel>订单流水</SectionLabel>
+          <GlassSurface padding={SPACING.base} style={styles.filterCard}>
+            <Text style={styles.filterLabel}>状态筛选</Text>
+            <View style={styles.filterBar}>
+              {(['all', 'pending', 'fulfilled', 'delivered', 'cancelled'] as const).map((s) => {
+                const active = statusFilter === s;
+                const label =
+                  s === 'all'
+                    ? '全部'
+                    : s === 'pending'
+                      ? '待出餐'
+                      : s === 'fulfilled'
+                        ? '已出餐'
+                        : s === 'delivered'
+                          ? '已送达'
+                          : '已取消';
+                return (
+                  <PressableCard
+                    key={s}
+                    padding={8}
+                    tint={active ? 'info' : undefined}
+                    level={1}
+                    onPress={() => setStatusFilter(s)}
+                    style={styles.filterChip}
+                  >
+                    <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                      {label}
+                    </Text>
+                  </PressableCard>
+                );
+              })}
+            </View>
+            <Text style={[styles.filterLabel, { marginTop: SPACING.sm }]}>每次加载</Text>
+            <View style={styles.filterBar}>
+              {LIMIT_OPTIONS.map((n) => (
+                <PressableCard
+                  key={n}
+                  padding={8}
+                  tint={limit === n ? 'info' : undefined}
+                  level={1}
+                  onPress={() => setLimit(n)}
+                  style={styles.limitChip}
                 >
-                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                    {label}
+                  <Text style={[styles.filterChipText, limit === n && styles.filterChipTextActive]}>
+                    {n}
                   </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={styles.limitRow}>
-            <Text style={styles.limitLabel}>每次加载</Text>
-            {LIMIT_OPTIONS.map((n) => (
-              <Pressable
-                key={n}
-                style={[styles.limitChip, limit === n && styles.limitChipActive]}
-                onPress={() => setLimit(n)}
-              >
-                <Text style={[styles.limitChipText, limit === n && styles.limitChipTextActive]}>
-                  {n}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+                </PressableCard>
+              ))}
+            </View>
+          </GlassSurface>
 
           {ordQ.isLoading ? (
             <View style={styles.center}>
-              <ActivityIndicator color={IOS_COLORS.blue} />
+              <ActivityIndicator color={COLORS.brand} />
             </View>
           ) : orders.length === 0 ? (
-            <View style={styles.center}>
-              <Text style={styles.muted}>该员工暂无录单记录</Text>
-            </View>
+            <GlassSurface padding={SPACING.lg} style={styles.emptyCard}>
+              <IconAvatar icon="document-text-outline" size={36} color={COLORS.text.tertiary} bg={GLASS.surface3} />
+              <Text style={styles.messageTitle}>该员工暂无录单记录</Text>
+              <Text style={styles.messageSub}>可先回到订餐页面录入后再查看。</Text>
+            </GlassSurface>
           ) : (
             byDate.map(([date, list]) => (
               <View key={date} style={styles.dayBlock}>
@@ -226,12 +286,10 @@ function OrderRow({ item }: { item: ApiUserOrder }) {
     : { pathname: '/(app)/members/[id]', params: { id: String(o.member_id) } };
 
   return (
-    <Pressable
+    <PressableCard
       onPress={() => router.push(target as never)}
-      style={({ pressed }) => [
-        styles.orderRow,
-        pressed && { backgroundColor: IOS_COLORS.fillLight },
-      ]}
+      padding={SPACING.sm}
+      style={styles.orderRow}
     >
       <View style={{ flex: 1 }}>
         <View style={styles.orderTop}>
@@ -239,19 +297,13 @@ function OrderRow({ item }: { item: ApiUserOrder }) {
             {displayName}
           </Text>
           {isWalkin ? (
-            <View style={[styles.chip, { backgroundColor: '#FFF4E5' }]}>
-              <Text style={[styles.chipText, { color: '#FF9500' }]}>散客</Text>
-            </View>
+            <StatusChip label="散客" variant="warning" />
           ) : null}
           {isAdhoc && !isWalkin ? (
-            <View style={[styles.chip, { backgroundColor: '#FFF4E5' }]}>
-              <Text style={[styles.chipText, { color: '#FF9500' }]}>散餐</Text>
-            </View>
+            <StatusChip label="散餐" variant="warning" />
           ) : null}
           {o.delivery_channel === 'courier' ? (
-            <View style={[styles.chip, { backgroundColor: '#F5E9FC' }]}>
-              <Text style={[styles.chipText, { color: '#AF52DE' }]}>快递</Text>
-            </View>
+            <StatusChip label="快递" variant="hospital" />
           ) : null}
         </View>
         <Text style={styles.orderMeta} numberOfLines={1}>
@@ -264,148 +316,70 @@ function OrderRow({ item }: { item: ApiUserOrder }) {
           </Text>
         ) : null}
       </View>
-      <View style={[styles.statusChip, { backgroundColor: status.bg }]}>
-        <Text style={[styles.statusChipText, { color: status.fg }]}>{status.label}</Text>
-      </View>
+      <StatusChip label={status.label} fg={status.fg} bg={status.bg} dot />
       <Ionicons
         name="chevron-forward"
         size={16}
-        color={IOS_COLORS.labelTertiary}
+        color={COLORS.text.quaternary}
         style={{ marginLeft: 4 }}
       />
-    </Pressable>
-  );
-}
-
-function StatTile({ value, label }: { value: string | number; label: string }) {
-  return (
-    <View style={styles.statTile}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function StatusChip({ label, count, color }: { label: string; count: number; color: string }) {
-  return (
-    <View style={styles.breakChip}>
-      <Text style={[styles.breakCount, { color }]}>{count}</Text>
-      <Text style={styles.breakLabel}>{label}</Text>
-    </View>
+    </PressableCard>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  center: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 8 },
-  muted: { fontSize: 14, color: IOS_COLORS.labelSecondary },
-
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  statTile: {
-    flex: 1,
-    backgroundColor: IOS_COLORS.card,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    gap: 4,
-  },
-  statValue: { fontSize: 20, fontWeight: '700', color: IOS_COLORS.label },
-  statLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
-
+  center: { alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING.lg, gap: SPACING.sm },
+  messageCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginHorizontal: SPACING.page },
+  messageTitle: { ...TYPE.body, color: COLORS.text.primary, fontWeight: '700' },
+  messageSub: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 2 },
+  heroCard: { marginHorizontal: SPACING.page, marginTop: SPACING.sm },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  heroTitleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' },
+  heroTitle: { ...TYPE.title3, color: COLORS.text.primary },
+  heroSub: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 2 },
   breakdownRow: {
     flexDirection: 'row',
     gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    marginHorizontal: SPACING.page,
+    marginTop: SPACING.sm,
     flexWrap: 'wrap',
   },
-  breakChip: {
-    flex: 1,
-    minWidth: 80,
-    alignItems: 'center',
-    backgroundColor: IOS_COLORS.card,
-    borderRadius: 10,
-    paddingVertical: 8,
-  },
-  breakCount: { fontSize: 16, fontWeight: '700' },
-  breakLabel: { fontSize: 11, color: IOS_COLORS.labelSecondary, marginTop: 2 },
+  filterCard: { marginHorizontal: SPACING.page },
+  filterLabel: { ...TYPE.caption, color: COLORS.text.tertiary },
   filterBar: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    gap: SPACING.xs,
+    marginTop: 6,
   },
-  filterChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
-    backgroundColor: IOS_COLORS.fillLight,
-  },
-  filterChipActive: { backgroundColor: IOS_COLORS.blueLight },
-  filterChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
-  filterChipTextActive: { color: IOS_COLORS.blue },
-  limitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 6,
-  },
-  limitLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
-  limitChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
-    backgroundColor: IOS_COLORS.fillLight,
-  },
-  limitChipActive: { backgroundColor: IOS_COLORS.blueLight },
-  limitChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
-  limitChipTextActive: { color: IOS_COLORS.blue },
-
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: IOS_COLORS.labelSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 18,
-    paddingTop: 24,
-    paddingBottom: 8,
-  },
-
-  dayBlock: { paddingHorizontal: 16, marginBottom: 10 },
+  filterChip: { minWidth: 64, alignItems: 'center' },
+  limitChip: { minWidth: 54, alignItems: 'center' },
+  filterChipText: { ...TYPE.caption, color: COLORS.text.secondary, fontWeight: '600' },
+  filterChipTextActive: { color: COLORS.brand },
+  dayBlock: { paddingHorizontal: SPACING.page, marginBottom: SPACING.sm },
   dayHeader: {
-    fontSize: 13,
+    ...TYPE.callout,
     fontWeight: '700',
-    color: IOS_COLORS.label,
-    paddingVertical: 6,
+    color: COLORS.text.primary,
+    paddingVertical: SPACING.xs,
   },
-  dayCount: { fontWeight: '400', color: IOS_COLORS.labelSecondary },
+  dayCount: { fontWeight: '400', color: COLORS.text.secondary },
 
   orderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: IOS_COLORS.card,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 6,
+    gap: SPACING.xs,
+    marginBottom: SPACING.xs,
   },
   orderTop: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  orderName: { fontSize: 15, fontWeight: '700', color: IOS_COLORS.label },
-  orderMeta: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
-  orderNotes: { fontSize: 12, color: IOS_COLORS.orange, marginTop: 2 },
-
-  chip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
-  chipText: { fontSize: 10, fontWeight: '700' },
-
-  statusChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  statusChipText: { fontSize: 11, fontWeight: '700' },
+  orderName: { ...TYPE.body, fontWeight: '700', color: COLORS.text.primary },
+  orderMeta: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 2 },
+  orderNotes: { ...TYPE.footnote, color: COLORS.warning, marginTop: 2 },
+  emptyCard: {
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginHorizontal: SPACING.page,
+    marginTop: SPACING.sm,
+  },
 });

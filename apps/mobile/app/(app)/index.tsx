@@ -99,7 +99,7 @@ export default function HomeScreen() {
         ? '加载中...'
         : walkinCount === 0
           ? '还没有散客记录 · 可从每日订餐录入'
-          : `${walkinCount} 位散客 · 点开可为 TA 开卡`,
+          : `${walkinCount} 位散客`,
       icon: 'walk-outline',
       color: COLORS.warning,
       bg: COLORS.warningSoft,

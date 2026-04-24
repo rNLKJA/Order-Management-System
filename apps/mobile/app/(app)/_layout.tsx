@@ -33,6 +33,7 @@ export default function AppLayout() {
       <Stack.Screen name="finance/index" />
       <Stack.Screen name="reminders/index" />
       <Stack.Screen name="profile/index" />
+      <Stack.Screen name="profile/privacy" />
     </Stack>
   );
 }

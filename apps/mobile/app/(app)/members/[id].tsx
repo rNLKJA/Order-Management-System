@@ -79,7 +79,16 @@ export default function MemberDetailScreen() {
         })),
     [usersQuery.data],
   );
-  const defaultUserId = authUser?.id ?? pickerUsers[0]?.id ?? 0;
+  const defaultCollectorId =
+    pickerUsers.find((u) => u.name.includes('孙梦瑶'))?.id ??
+    authUser?.id ??
+    pickerUsers[0]?.id ??
+    0;
+  const defaultRecorderId =
+    pickerUsers.find((u) => u.name.includes('高平'))?.id ??
+    authUser?.id ??
+    pickerUsers[0]?.id ??
+    0;
 
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -255,6 +264,9 @@ export default function MemberDetailScreen() {
             <View style={styles.heroMain}>
               <Text style={styles.bigName}>{member.name}</Text>
               {member.nickname ? <Text style={styles.bigNickname}>“{member.nickname}”</Text> : null}
+              <Text style={styles.heroMeta} numberOfLines={1}>
+                UID {member.uid} · {member.phone}
+              </Text>
             </View>
             <StatusChip
               label={member.is_hospital ? '院内会员' : '院外会员'}
@@ -263,12 +275,15 @@ export default function MemberDetailScreen() {
           </GlassSurface>
         </View>
 
-        {/* 联系信息 */}
-        <Section title="联系方式">
-          <InfoRow label="手机号" value={member.phone} />
-          <InfoRow label="微信号" value={member.wechat_id || '未填写'} />
-          <InfoRow label="地址" value={member.address || '未填写'} isLast />
-        </Section>
+        {/* 联系信息：名片信息块 */}
+        <View style={styles.sectionWrap}>
+          <SectionLabel>会员信息名片</SectionLabel>
+          <GlassSurface padding={12} style={styles.contactCard}>
+            <ContactItem icon="call-outline" label="手机号" value={member.phone} />
+            <ContactItem icon="logo-wechat" label="微信号" value={member.wechat_id || '未填写'} />
+            <ContactItem icon="location-outline" label="地址" value={member.address || '未填写'} />
+          </GlassSurface>
+        </View>
 
         {member.dietary_notes ? (
           <Section title="忌口">
@@ -475,8 +490,8 @@ export default function MemberDetailScreen() {
         memberName={member.nickname || member.name}
         memberIsHospital={member.is_hospital}
         pickerUsers={pickerUsers}
-        defaultCollectorId={defaultUserId}
-        defaultRecorderId={defaultUserId}
+        defaultCollectorId={defaultCollectorId}
+        defaultRecorderId={defaultRecorderId}
         onClose={() => setShowPurchaseModal(false)}
         onSubmit={handlePurchase}
       />
@@ -487,8 +502,8 @@ export default function MemberDetailScreen() {
           memberName={member.nickname || member.name}
           memberIsHospital={member.is_hospital}
           pickerUsers={pickerUsers}
-          defaultCollectorId={defaultUserId}
-          defaultRecorderId={defaultUserId}
+          defaultCollectorId={defaultCollectorId}
+          defaultRecorderId={defaultRecorderId}
           currentCard={{
             card_name: card.card_name,
             card_code: card.card_code as SubscriptionCardCode,
@@ -509,8 +524,8 @@ export default function MemberDetailScreen() {
           memberName={member.nickname || member.name}
           memberIsHospital={member.is_hospital}
           pickerUsers={pickerUsers}
-          defaultCollectorId={defaultUserId}
-          defaultRecorderId={defaultUserId}
+          defaultCollectorId={defaultCollectorId}
+          defaultRecorderId={defaultRecorderId}
           currentCard={{
             card_name: card.card_name,
             card_code: card.card_code as SubscriptionCardCode,
@@ -574,11 +589,26 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function InfoRow({ label, value, isLast }: { label: string; value: string; isLast?: boolean }) {
+function ContactItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
   return (
-    <View style={[styles.infoRow, isLast && styles.infoRowLast]}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+    <View style={styles.contactItem}>
+      <View style={styles.contactIconWrap}>
+        <Ionicons name={icon} size={15} color={IOS_COLORS.blue} />
+      </View>
+      <View style={styles.contactMain}>
+        <Text style={styles.contactLabel}>{label}</Text>
+        <Text style={styles.contactValue} numberOfLines={2}>
+          {value}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -821,6 +851,7 @@ const styles = StyleSheet.create({
   },
   heroCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroMain: { flex: 1, minWidth: 0 },
+  heroMeta: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2, fontVariant: ['tabular-nums'] },
   bigAvatar: {
     width: 70, height: 70, borderRadius: 35,
     alignItems: 'center', justifyContent: 'center', marginBottom: 10,
@@ -834,6 +865,20 @@ const styles = StyleSheet.create({
 
   sectionWrap: { paddingHorizontal: 20, marginBottom: 16 },
   sectionLabel: { fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, paddingLeft: 4 },
+  contactCard: { gap: 8 },
+  contactItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  contactIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: IOS_COLORS.blueLight,
+    flexShrink: 0,
+  },
+  contactMain: { flex: 1, minWidth: 0 },
+  contactLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
+  contactValue: { fontSize: 15, color: IOS_COLORS.label, marginTop: 1 },
   infoCard: { backgroundColor: IOS_COLORS.card, borderRadius: 14, overflow: 'hidden' },
   infoRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

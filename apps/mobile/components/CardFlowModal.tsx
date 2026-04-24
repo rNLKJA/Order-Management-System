@@ -21,6 +21,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import {
   listCards,
   listUpgradeOptions,
@@ -345,6 +346,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
             {allCards.map((opt) => {
               const enabled = allowedCodes.has(opt.code);
               const active = enabled && opt.code === selectedCode;
+              const iconName = cardIconByCode(opt.code);
               return (
                 <Pressable
                   key={opt.code}
@@ -356,30 +358,43 @@ export function CardFlowModal(props: CardFlowModalProps) {
                     !enabled && styles.cardOptionDisabled,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.cardOptionName,
-                      !enabled && styles.cardOptionTextDisabled,
-                    ]}
-                  >
-                    {opt.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.cardOptionMeals,
-                      !enabled && styles.cardOptionTextDisabled,
-                    ]}
-                  >
-                    {opt.meals} 份
-                  </Text>
-                  <Text
-                    style={[
-                      styles.cardOptionPrice,
-                      !enabled && styles.cardOptionTextDisabled,
-                    ]}
-                  >
-                    ¥{opt.totalPrice}
-                  </Text>
+                  <View style={styles.cardOptionTop}>
+                    <View style={styles.cardInfoLeft}>
+                      <View style={styles.cardIconWrap}>
+                        <Ionicons
+                          name={iconName}
+                          size={16}
+                          color={enabled ? IOS_COLORS.blue : IOS_COLORS.labelTertiary}
+                        />
+                      </View>
+                      <View style={{ minWidth: 0, flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.cardOptionName,
+                            !enabled && styles.cardOptionTextDisabled,
+                          ]}
+                        >
+                          {opt.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.cardOptionMeals,
+                            !enabled && styles.cardOptionTextDisabled,
+                          ]}
+                        >
+                          {opt.meals} 份
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={[
+                        styles.cardOptionPrice,
+                        !enabled && styles.cardOptionTextDisabled,
+                      ]}
+                    >
+                      ¥{opt.totalPrice}
+                    </Text>
+                  </View>
                   <Text
                     style={[
                       styles.cardOptionUnit,
@@ -552,6 +567,25 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function cardIconByCode(code: SubscriptionCardCode): keyof typeof Ionicons.glyphMap {
+  switch (code) {
+    case 'experience':
+      return 'sparkles-outline';
+    case 'small_week':
+      return 'time-outline';
+    case 'week':
+      return 'calendar-outline';
+    case 'month':
+      return 'calendar-clear-outline';
+    case 'season':
+      return 'layers-outline';
+    case 'year':
+      return 'ribbon-outline';
+    default:
+      return 'card-outline';
+  }
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
 
@@ -616,17 +650,28 @@ const styles = StyleSheet.create({
   },
   cardOption: {
     flexGrow: 1, flexBasis: '46%', minWidth: 140,
-    backgroundColor: IOS_COLORS.card, borderRadius: 14, padding: 14, gap: 4,
+    backgroundColor: IOS_COLORS.card, borderRadius: 14, padding: 14, gap: 6,
     borderWidth: 2, borderColor: 'transparent',
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
   },
   cardOptionActive: { borderColor: IOS_COLORS.blue, backgroundColor: IOS_COLORS.blueLight },
   cardOptionDisabled: { backgroundColor: IOS_COLORS.fillLight, opacity: 0.55 },
-  cardOptionName: { fontSize: 16, fontWeight: '700', color: IOS_COLORS.label },
-  cardOptionMeals: { fontSize: 13, color: IOS_COLORS.labelSecondary },
-  cardOptionPrice: { fontSize: 22, fontWeight: '700', color: IOS_COLORS.blue },
-  cardOptionUnit: { fontSize: 12, color: IOS_COLORS.labelSecondary },
+  cardOptionTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  cardInfoLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
+  cardIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,122,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardOptionName: { fontSize: 18, fontWeight: '700', color: IOS_COLORS.label },
+  cardOptionMeals: { fontSize: 13, color: IOS_COLORS.labelSecondary, marginTop: 1 },
+  cardOptionPrice: { fontSize: 34, fontWeight: '700', color: IOS_COLORS.blue, lineHeight: 36, textAlign: 'right' },
+  cardOptionUnit: { fontSize: 12, color: IOS_COLORS.labelSecondary, textAlign: 'right' },
   cardOptionTextDisabled: { color: IOS_COLORS.labelTertiary },
   disabledReason: { fontSize: 11, color: IOS_COLORS.red, marginTop: 2 },
 

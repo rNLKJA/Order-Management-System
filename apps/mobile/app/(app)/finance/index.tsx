@@ -110,6 +110,18 @@ export default function FinanceScreen() {
     [from, to, typeFilter, category, includeVoided],
   );
 
+  const today = todayISO();
+  const weekStart = mondayOfWeek();
+  const monthStart = firstOfMonth();
+  const selectedQuickRange =
+    from === today && to === today
+      ? 'today'
+      : from === weekStart && to === today
+        ? 'week'
+        : from === monthStart && to === today
+          ? 'month'
+          : null;
+
   const fetchData = useCallback(
     async (mode: 'load' | 'refresh' = 'load') => {
       if (mode === 'load') setLoading(true);
@@ -169,16 +181,6 @@ export default function FinanceScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader
           title="财务记账"
-          right={
-            <Pressable
-              onPress={() => setModalVisible(true)}
-              style={styles.headerAction}
-              hitSlop={8}
-            >
-              <Ionicons name="add" size={22} color={COLORS.brand} />
-              <Text style={styles.headerActionText}>新增</Text>
-            </Pressable>
-          }
         />
 
         <ScrollView
@@ -359,14 +361,23 @@ export default function FinanceScreen() {
               </View>
 
               <View style={styles.quickRangeRow}>
-                <Pressable style={styles.quickRange} onPress={() => { setFrom(todayISO()); setTo(todayISO()); }}>
-                  <Text style={styles.quickRangeText}>今天</Text>
+                <Pressable
+                  style={[styles.quickRange, selectedQuickRange === 'today' && styles.quickRangeActive]}
+                  onPress={() => { setFrom(today); setTo(today); }}
+                >
+                  <Text style={[styles.quickRangeText, selectedQuickRange === 'today' && styles.quickRangeTextActive]}>今天</Text>
                 </Pressable>
-                <Pressable style={styles.quickRange} onPress={() => { setFrom(mondayOfWeek()); setTo(todayISO()); }}>
-                  <Text style={styles.quickRangeText}>本周</Text>
+                <Pressable
+                  style={[styles.quickRange, selectedQuickRange === 'week' && styles.quickRangeActive]}
+                  onPress={() => { setFrom(weekStart); setTo(today); }}
+                >
+                  <Text style={[styles.quickRangeText, selectedQuickRange === 'week' && styles.quickRangeTextActive]}>本周</Text>
                 </Pressable>
-                <Pressable style={styles.quickRange} onPress={() => { setFrom(firstOfMonth()); setTo(todayISO()); }}>
-                  <Text style={styles.quickRangeText}>本月</Text>
+                <Pressable
+                  style={[styles.quickRange, selectedQuickRange === 'month' && styles.quickRangeActive]}
+                  onPress={() => { setFrom(monthStart); setTo(today); }}
+                >
+                  <Text style={[styles.quickRangeText, selectedQuickRange === 'month' && styles.quickRangeTextActive]}>本月</Text>
                 </Pressable>
               </View>
             </GlassSurface>
@@ -528,9 +539,6 @@ const styles = StyleSheet.create({
   },
   errorBannerText: { ...TYPE.footnote, color: COLORS.danger },
 
-  headerAction: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
-  headerActionText: { fontSize: 15, color: COLORS.brand, fontWeight: '500' },
-
   // 筛选卡
   filterCard: { gap: SPACING.md },
   dateRow: { flexDirection: 'row', gap: SPACING.sm },
@@ -584,11 +592,18 @@ const styles = StyleSheet.create({
   quickRangeRow: { flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' },
   quickRange: {
     backgroundColor: 'rgba(0,122,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'transparent',
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
+  quickRangeActive: {
+    backgroundColor: 'rgba(0,122,255,0.18)',
+    borderColor: COLORS.warning,
+  },
   quickRangeText: { ...TYPE.caption, color: COLORS.brand, fontWeight: '600' },
+  quickRangeTextActive: { color: COLORS.brand, fontWeight: '700' },
 
   // 按分类
   catRow: {
