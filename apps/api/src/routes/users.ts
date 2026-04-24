@@ -15,7 +15,7 @@
 
 import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, lte, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { userAvatarUpdateSchema } from '@meal/shared';
@@ -333,10 +333,52 @@ usersRouter.get(
     const { from, to, status, limit, offset } = c.req.valid('query');
     const db = requestDb(c);
 
-    const conds: SQL[] = [eq(schema.daily_orders.created_by_user_id, id)];
+    const actorCondByStatus = (
+      targetStatus: 'all' | 'pending' | 'fulfilled' | 'delivered' | 'cancelled',
+    ): SQL => {
+      if (targetStatus === 'pending') {
+        return and(
+          eq(schema.daily_orders.status, 'pending'),
+          eq(schema.daily_orders.created_by_user_id, id),
+        ) as SQL;
+      }
+      if (targetStatus === 'fulfilled') {
+        return and(
+          eq(schema.daily_orders.status, 'fulfilled'),
+          eq(schema.daily_orders.fulfilled_by_user_id, id),
+        ) as SQL;
+      }
+      if (targetStatus === 'delivered') {
+        return and(
+          eq(schema.daily_orders.status, 'delivered'),
+          eq(schema.daily_orders.delivered_by_user_id, id),
+        ) as SQL;
+      }
+      if (targetStatus === 'cancelled') {
+        return and(
+          eq(schema.daily_orders.status, 'cancelled'),
+          eq(schema.daily_orders.cancelled_by_user_id, id),
+        ) as SQL;
+      }
+      return or(
+        and(eq(schema.daily_orders.status, 'pending'), eq(schema.daily_orders.created_by_user_id, id)),
+        and(
+          eq(schema.daily_orders.status, 'fulfilled'),
+          eq(schema.daily_orders.fulfilled_by_user_id, id),
+        ),
+        and(
+          eq(schema.daily_orders.status, 'delivered'),
+          eq(schema.daily_orders.delivered_by_user_id, id),
+        ),
+        and(
+          eq(schema.daily_orders.status, 'cancelled'),
+          eq(schema.daily_orders.cancelled_by_user_id, id),
+        ),
+      ) as SQL;
+    };
+    const conds: SQL[] = [actorCondByStatus(status)];
     if (from) conds.push(gte(schema.daily_orders.order_date, from));
     if (to) conds.push(lte(schema.daily_orders.order_date, to));
-    if (status !== 'all') conds.push(eq(schema.daily_orders.status, status));
 
     const rows = await db
       .select({
@@ -375,13 +417,32 @@ usersRouter.get(
         total_orders: sql<number>`count(*)`,
         total_meals: sql<number>`sum(${schema.daily_orders.quantity})`,
         total_amount: sql<number>`sum(${schema.daily_orders.amount})`,
-        pending_count: sql<number>`sum(case when ${schema.daily_orders.status} = 'pending' then 1 else 0 end)`,
-        fulfilled_count: sql<number>`sum(case when ${schema.daily_orders.status} = 'fulfilled' then 1 else 0 end)`,
-        delivered_count: sql<number>`sum(case when ${schema.daily_orders.status} = 'delivered' then 1 else 0 end)`,
-        cancelled_count: sql<number>`sum(case when ${schema.daily_orders.status} = 'cancelled' then 1 else 0 end)`,
+        pending_count: sql<number>`sum(case when ${schema.daily_orders.status} = 'pending' and ${schema.daily_orders.created_by_user_id} = ${id} then 1 else 0 end)`,
+        fulfilled_count: sql<number>`sum(case when ${schema.daily_orders.status} = 'fulfilled' and ${schema.daily_orders.fulfilled_by_user_id} = ${id} then 1 else 0 end)`,
+        delivered_count: sql<number>`sum(case when ${schema.daily_orders.status} = 'delivered' and ${schema.daily_orders.delivered_by_user_id} = ${id} then 1 else 0 end)`,
+        cancelled_count: sql<number>`sum(case when ${schema.daily_orders.status} = 'cancelled' and ${schema.daily_orders.cancelled_by_user_id} = ${id} then 1 else 0 end)`,
       })
       .from(schema.daily_orders)
-      .where(eq(schema.daily_orders.created_by_user_id, id));
+      .where(
+        or(
+          and(
+            eq(schema.daily_orders.status, 'pending'),
+            eq(schema.daily_orders.created_by_user_id, id),
+          ),
+          and(
+            eq(schema.daily_orders.status, 'fulfilled'),
+            eq(schema.daily_orders.fulfilled_by_user_id, id),
+          ),
+          and(
+            eq(schema.daily_orders.status, 'delivered'),
+            eq(schema.daily_orders.delivered_by_user_id, id),
+          ),
+          and(
+            eq(schema.daily_orders.status, 'cancelled'),
+            eq(schema.daily_orders.cancelled_by_user_id, id),
+          ),
+        ),
+      );
 
     const s = summary[0] ?? {
       total_orders: 0,
