@@ -37,6 +37,8 @@ import { useMembersView } from '../../../hooks/useMembersView';
 import { COLORS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
 
 type ZoneFilter = 'all' | 'hospital' | 'regular';
+const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
+type LimitOption = (typeof LIMIT_OPTIONS)[number];
 
 function firstOfMonth(): string {
   const now = new Date();
@@ -96,6 +98,7 @@ export default function OrdersStatsScreen() {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(() => formatDate(new Date()));
   const [zone, setZone] = useState<ZoneFilter>('all');
+  const [limit, setLimit] = useState<LimitOption>(50);
 
   const [orders, setOrders] = useState<DailyOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -130,7 +133,7 @@ export default function OrdersStatsScreen() {
           from,
           to,
           status: 'all',
-          limit: 500,
+          limit,
         });
         setOrders(res.orders);
       } catch (e) {
@@ -141,7 +144,7 @@ export default function OrdersStatsScreen() {
         setRefreshing(false);
       }
     },
-    [from, to],
+    [from, to, limit],
   );
 
   useEffect(() => {
@@ -300,6 +303,20 @@ export default function OrdersStatsScreen() {
                     </Pressable>
                   );
                 })}
+              </View>
+              <View style={styles.limitRow}>
+                <Text style={styles.limitLabel}>每次加载</Text>
+                {LIMIT_OPTIONS.map((n) => (
+                  <Pressable
+                    key={n}
+                    style={[styles.limitChip, limit === n && styles.limitChipActive]}
+                    onPress={() => setLimit(n)}
+                  >
+                    <Text style={[styles.limitChipText, limit === n && styles.limitChipTextActive]}>
+                      {n}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
             </GlassSurface>
           </View>
@@ -589,6 +606,21 @@ const styles = StyleSheet.create({
   },
   segmentText: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '500' },
   segmentTextActive: { color: COLORS.text.primary, fontWeight: '600' },
+  limitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  limitLabel: { fontSize: 12, color: COLORS.text.secondary, marginRight: 2 },
+  limitChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: 'rgba(118,118,128,0.12)',
+  },
+  limitChipActive: { backgroundColor: 'rgba(0,122,255,0.16)' },
+  limitChipText: { fontSize: 12, color: COLORS.text.secondary, fontWeight: '600' },
+  limitChipTextActive: { color: COLORS.brand },
 
   // status rows
   statusRow: {

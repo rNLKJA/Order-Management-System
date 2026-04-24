@@ -9,7 +9,7 @@
  * 暂不支持删除订单（取消走订单详情走 cancel 路由），这里是只读视图。
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -32,10 +32,15 @@ const STATUS_LABEL = {
   delivered: { label: '已送达', fg: '#34C759', bg: '#E8F8ED' },
   cancelled: { label: '已取消', fg: IOS_COLORS.labelSecondary, bg: IOS_COLORS.fillLight },
 } as const;
+const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
+type LimitOption = (typeof LIMIT_OPTIONS)[number];
+type StatusFilter = 'all' | 'pending' | 'fulfilled' | 'delivered' | 'cancelled';
 
 export default function UserDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = Number(id);
+  const [limit, setLimit] = useState<LimitOption>(50);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const userQ = useQuery({
     queryKey: ['users', userId],
@@ -50,9 +55,15 @@ export default function UserDetailScreen() {
   });
 
   const ordQ = useQuery({
-    queryKey: ['users', userId, 'orders'],
+    queryKey: ['users', userId, 'orders', statusFilter, limit],
     enabled: Number.isFinite(userId) && userId > 0,
-    queryFn: async () => (await usersApi.orders(userId, { limit: 200 })).orders,
+    queryFn: async () =>
+      (
+        await usersApi.orders(userId, {
+          status: statusFilter,
+          limit,
+        })
+      ).orders,
   });
 
   const user = userQ.data;
@@ -134,6 +145,46 @@ export default function UserDetailScreen() {
 
           {/* 明细 */}
           <Text style={styles.sectionTitle}>订单流水</Text>
+          <View style={styles.filterBar}>
+            {(['all', 'pending', 'fulfilled', 'delivered', 'cancelled'] as const).map((s) => {
+              const active = statusFilter === s;
+              const label =
+                s === 'all'
+                  ? '全部'
+                  : s === 'pending'
+                    ? '待出餐'
+                    : s === 'fulfilled'
+                      ? '已出餐'
+                      : s === 'delivered'
+                        ? '已送达'
+                        : '已取消';
+              return (
+                <Pressable
+                  key={s}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setStatusFilter(s)}
+                >
+                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.limitRow}>
+            <Text style={styles.limitLabel}>每次加载</Text>
+            {LIMIT_OPTIONS.map((n) => (
+              <Pressable
+                key={n}
+                style={[styles.limitChip, limit === n && styles.limitChipActive]}
+                onPress={() => setLimit(n)}
+              >
+                <Text style={[styles.limitChipText, limit === n && styles.limitChipTextActive]}>
+                  {n}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
           {ordQ.isLoading ? (
             <View style={styles.center}>
@@ -283,6 +334,39 @@ const styles = StyleSheet.create({
   },
   breakCount: { fontSize: 16, fontWeight: '700' },
   breakLabel: { fontSize: 11, color: IOS_COLORS.labelSecondary, marginTop: 2 },
+  filterBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  filterChipActive: { backgroundColor: IOS_COLORS.blueLight },
+  filterChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
+  filterChipTextActive: { color: IOS_COLORS.blue },
+  limitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+  },
+  limitLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
+  limitChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  limitChipActive: { backgroundColor: IOS_COLORS.blueLight },
+  limitChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
+  limitChipTextActive: { color: IOS_COLORS.blue },
 
   sectionTitle: {
     fontSize: 14,

@@ -34,6 +34,8 @@ import type { ApiUser } from '../../../api/users';
 import { CardFlowModal, type CardFlowSubmitPayload, type CardFlowUser } from '../../../components/CardFlowModal';
 import { RefundCardModal, type RefundSubmitPayload } from '../../../components/RefundCardModal';
 import { MemberEditModal } from '../../../components/MemberEditModal';
+const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
+type LimitOption = (typeof LIMIT_OPTIONS)[number];
 
 function triggerSuccessHaptic() {
   if (Platform.OS !== 'web') {
@@ -52,7 +54,8 @@ export default function MemberDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const memberId = Number(id);
   const { data: member, isLoading, notFound, error } = useMemberView(memberId);
-  const ordersQuery = useMemberOrders(memberId, !!member);
+  const [recordsLimit, setRecordsLimit] = useState<LimitOption>(50);
+  const ordersQuery = useMemberOrders(memberId, !!member, recordsLimit);
   const invalidate = useInvalidateMembersView();
   const { user: authUser } = useAuth();
   const usersQuery = useUsersMap();
@@ -392,6 +395,20 @@ export default function MemberDetailScreen() {
             </Text>
           </Pressable>
         </View>
+        <View style={styles.limitRow}>
+          <Text style={styles.limitLabel}>每次加载</Text>
+          {LIMIT_OPTIONS.map((n) => (
+            <Pressable
+              key={n}
+              style={[styles.limitChip, recordsLimit === n && styles.limitChipActive]}
+              onPress={() => setRecordsLimit(n)}
+            >
+              <Text style={[styles.limitChipText, recordsLimit === n && styles.limitChipTextActive]}>
+                {n}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
         {recordTab === 'orders' ? (
           <MemberOrderHistory
             ordersQuery={ordersQuery}
@@ -403,7 +420,7 @@ export default function MemberDetailScreen() {
           />
         ) : (
           <CardHistoryAccordion
-            cards={member.card_history}
+            cards={member.card_history.slice(0, recordsLimit)}
             expandedCards={expandedCards}
             onToggleCard={(cardId) =>
               setExpandedCards((prev) => ({ ...prev, [cardId]: !prev[cardId] }))
@@ -844,6 +861,23 @@ const styles = StyleSheet.create({
   recordTabBtnActive: { backgroundColor: IOS_COLORS.card },
   recordTabText: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
   recordTabTextActive: { color: IOS_COLORS.label },
+  limitRow: {
+    marginHorizontal: 20,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  limitLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
+  limitChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  limitChipActive: { backgroundColor: IOS_COLORS.blueLight },
+  limitChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
+  limitChipTextActive: { color: IOS_COLORS.blue },
 
   cardSection: { paddingHorizontal: 20, marginBottom: 24, gap: 10 },
   renewalBanner: {

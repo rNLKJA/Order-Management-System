@@ -27,10 +27,10 @@ import type { MockMember } from '../constants/mockData';
 
 const KEYS = {
   users: ['users'] as const,
-  membersList: ['members', 'list'] as const,
+  membersList: (limit: number) => ['members', 'list', limit] as const,
   member: (id: number) => ['members', 'detail', id] as const,
   /** 会员维度的订餐流水（GET /api/orders?member_id=） */
-  memberOrders: (id: number) => ['members', 'detail', id, 'orders'] as const,
+  memberOrders: (id: number, limit: number) => ['members', 'detail', id, 'orders', limit] as const,
   memberCards: (id: number) => ['members', id, 'cards'] as const,
 };
 
@@ -59,17 +59,21 @@ export interface UseMembersViewResult {
  * 聚焦页面时自动重取。
  */
 export function useMembersView(): UseMembersViewResult {
+  return useMembersViewWithLimit(200);
+}
+
+export function useMembersViewWithLimit(limit: 10 | 50 | 100 | 200): UseMembersViewResult {
   const usersQuery = useUsersMap();
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: KEYS.membersList,
+    queryKey: KEYS.membersList(limit),
     enabled: !!usersQuery.data,
     queryFn: async (): Promise<MockMember[]> => {
       // 拿全量（会员 + 散客），订餐页的送餐卡片需要拿到散客的 phone/address；
       // 纯会员列表页消费侧会自己再过滤一次 is_walkin=false。
       const { items } = await membersApi.list({
-        limit: 200,
+        limit,
         include_archived: false,
         type: 'all',
       });
@@ -87,7 +91,7 @@ export function useMembersView(): UseMembersViewResult {
 
   useFocusEffect(
     useCallback(() => {
-      void queryClient.invalidateQueries({ queryKey: KEYS.membersList });
+      void queryClient.invalidateQueries({ queryKey: ['members', 'list'] });
     }, [queryClient]),
   );
 
@@ -112,12 +116,16 @@ export interface UseMemberViewResult {
 
 /** 单个会员 + 其所有卡 → MockMember。 */
 /** 某会员的订餐流水（出餐记录），与会员详情页共用缓存失效。 */
-export function useMemberOrders(memberId: number, enabled: boolean) {
+export function useMemberOrders(
+  memberId: number,
+  enabled: boolean,
+  limit: 10 | 50 | 100 | 200 = 200,
+) {
   return useQuery({
-    queryKey: KEYS.memberOrders(memberId),
+    queryKey: KEYS.memberOrders(memberId, limit),
     enabled: Number.isFinite(memberId) && memberId > 0 && enabled,
     queryFn: async (): Promise<DailyOrder[]> =>
-      (await ordersApi.list({ member_id: memberId, status: 'all', limit: 200 })).orders,
+      (await ordersApi.list({ member_id: memberId, status: 'all', limit })).orders,
     refetchOnWindowFocus: true,
   });
 }
@@ -179,11 +187,11 @@ export function useInvalidateMembersView(): (memberId?: number) => Promise<void>
   return useCallback(
     async (memberId?: number) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: KEYS.membersList }),
+        queryClient.invalidateQueries({ queryKey: ['members', 'list'] }),
         memberId != null
           ? Promise.all([
               queryClient.invalidateQueries({ queryKey: KEYS.member(memberId) }),
-              queryClient.invalidateQueries({ queryKey: KEYS.memberOrders(memberId) }),
+              queryClient.invalidateQueries({ queryKey: ['members', 'detail', memberId, 'orders'] }),
             ])
           : Promise.resolve(),
       ]);

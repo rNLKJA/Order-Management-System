@@ -66,6 +66,8 @@ function todayStr(): string {
 // Tabs
 // ============================================================
 type TabKey = 'entry' | 'overview' | 'prep' | 'delivery' | 'courier';
+const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
+type LimitOption = (typeof LIMIT_OPTIONS)[number];
 
 const TABS: {
   key: TabKey;
@@ -85,6 +87,7 @@ const TABS: {
 // ============================================================
 export default function OrdersScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [displayLimit, setDisplayLimit] = useState<LimitOption>(50);
   const [activeOrder, setActiveOrder] = useState<MockOrder | null>(null);
   const [quickInfoMember, setQuickInfoMember] = useState<MockMember | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -106,9 +109,11 @@ export default function OrdersScreen() {
 
   const lunch  = orders.filter((o) => o.meal_type === 'lunch');
   const dinner = orders.filter((o) => o.meal_type === 'dinner');
+  const lunchVisible = lunch.slice(0, displayLimit);
+  const dinnerVisible = dinner.slice(0, displayLimit);
   const allSections = [
-    ...(lunch.length  > 0 ? [{ title: '午餐', data: lunch  }] : []),
-    ...(dinner.length > 0 ? [{ title: '晚餐', data: dinner }] : []),
+    ...(lunchVisible.length  > 0 ? [{ title: '午餐', data: lunchVisible  }] : []),
+    ...(dinnerVisible.length > 0 ? [{ title: '晚餐', data: dinnerVisible }] : []),
   ];
 
   const totalLunch  = lunch.reduce((s, o) => s + o.quantity, 0);
@@ -279,6 +284,20 @@ export default function OrdersScreen() {
 
       {/* 二级导航 */}
       <OrderTabBar activeTab={activeTab} onChange={setActiveTab} />
+      <View style={styles.limitRow}>
+        <Text style={styles.limitLabel}>每次加载</Text>
+        {LIMIT_OPTIONS.map((n) => (
+          <Pressable
+            key={n}
+            style={[styles.limitChip, displayLimit === n && styles.limitChipActive]}
+            onPress={() => setDisplayLimit(n)}
+          >
+            <Text style={[styles.limitChipText, displayLimit === n && styles.limitChipTextActive]}>
+              {n}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
       {/* —— 总览 —— */}
       {activeTab === 'overview' && (
@@ -341,6 +360,7 @@ export default function OrdersScreen() {
       {activeTab === 'prep' && (
         <PrepView
           orders={orders}
+          displayLimit={displayLimit}
           onMarkFulfilled={handleMarkFulfilled}
           onOpenDetail={setActiveOrder}
           onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
@@ -351,6 +371,7 @@ export default function OrdersScreen() {
       {activeTab === 'delivery' && (
         <DeliveryView
           orders={orders}
+          displayLimit={displayLimit}
           membersById={membersById}
           onMarkDelivered={handleMarkDelivered}
           onOpenDetail={setActiveOrder}
@@ -363,6 +384,7 @@ export default function OrdersScreen() {
       {activeTab === 'courier' && (
         <DeliveryView
           orders={orders}
+          displayLimit={displayLimit}
           membersById={membersById}
           onMarkDelivered={handleMarkDelivered}
           onOpenDetail={setActiveOrder}
@@ -459,18 +481,20 @@ function OrderTabBar({
 // ============================================================
 function PrepView({
   orders,
+  displayLimit,
   onMarkFulfilled,
   onOpenDetail,
   onShowMember,
 }: {
   orders: MockOrder[];
+  displayLimit: 10 | 50 | 100 | 200;
   onMarkFulfilled: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
   onShowMember: (memberId: number) => void;
 }) {
   const pendingOrders = orders.filter((o) => o.status === 'pending');
-  const lunch = pendingOrders.filter((o) => o.meal_type === 'lunch');
-  const dinner = pendingOrders.filter((o) => o.meal_type === 'dinner');
+  const lunch = pendingOrders.filter((o) => o.meal_type === 'lunch').slice(0, displayLimit);
+  const dinner = pendingOrders.filter((o) => o.meal_type === 'dinner').slice(0, displayLimit);
   const totalLunch = lunch.reduce((s, o) => s + o.quantity, 0);
   const totalDinner = dinner.reduce((s, o) => s + o.quantity, 0);
 
@@ -635,6 +659,7 @@ function PrepCard({
 // ============================================================
 function DeliveryView({
   orders,
+  displayLimit,
   membersById,
   onMarkDelivered,
   onOpenDetail,
@@ -642,6 +667,7 @@ function DeliveryView({
   channel = 'self',
 }: {
   orders: MockOrder[];
+  displayLimit: 10 | 50 | 100 | 200;
   membersById: Record<number, MockMember>;
   onMarkDelivered: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
@@ -652,8 +678,8 @@ function DeliveryView({
   const fulfilled = orders.filter(
     (o) => o.status === 'fulfilled' && (o.delivery_channel ?? 'self') === channel,
   );
-  const lunch = fulfilled.filter((o) => o.meal_type === 'lunch');
-  const dinner = fulfilled.filter((o) => o.meal_type === 'dinner');
+  const lunch = fulfilled.filter((o) => o.meal_type === 'lunch').slice(0, displayLimit);
+  const dinner = fulfilled.filter((o) => o.meal_type === 'dinner').slice(0, displayLimit);
   const hospitalCount = fulfilled.filter((o) => o.is_hospital).length;
   const outsideCount = fulfilled.filter((o) => !o.is_hospital).length;
 
@@ -1727,6 +1753,24 @@ const styles = StyleSheet.create({
   },
   tabLabel: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
   tabLabelActive: { color: IOS_COLORS.blue, fontWeight: '700' },
+  limitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  limitLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
+  limitChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  limitChipActive: { backgroundColor: IOS_COLORS.blueLight },
+  limitChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
+  limitChipTextActive: { color: IOS_COLORS.blue },
 
   summaryBar: {
     flexDirection: 'row',

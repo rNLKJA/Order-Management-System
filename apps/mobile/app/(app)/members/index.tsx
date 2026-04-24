@@ -10,16 +10,19 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../../theme/paperTheme';
 import { type MockMember } from '../../../constants/mockData';
-import { useMembersView } from '../../../hooks/useMembersView';
+import { useMembersViewWithLimit } from '../../../hooks/useMembersView';
 import { AppHeader, MeshBackground } from '../../../components/ui';
 
 type MemberFilter = 'all' | 'hospital' | 'regular' | 'expired';
+const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
+type LimitOption = (typeof LIMIT_OPTIONS)[number];
 
 export default function MembersScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<MemberFilter>('all');
+  const [limit, setLimit] = useState<LimitOption>(50);
 
-  const { data, isLoading, error, refetch } = useMembersView();
+  const { data, isLoading, error, refetch } = useMembersViewWithLimit(limit);
   // 会员档案只显示正式会员，散客走 /walkins 独立目录
   const members = (data ?? []).filter((m) => !m.is_walkin);
 
@@ -95,6 +98,20 @@ export default function MembersScreen() {
           </Pressable>
         ))}
         <Text style={styles.filterCount}>{filtered.length} 位</Text>
+      </View>
+      <View style={styles.limitRow}>
+        <Text style={styles.limitLabel}>每次加载</Text>
+        {LIMIT_OPTIONS.map((n) => (
+          <Pressable
+            key={n}
+            style={[styles.limitChip, limit === n && styles.limitChipActive]}
+            onPress={() => setLimit(n)}
+          >
+            <Text style={[styles.limitChipText, limit === n && styles.limitChipTextActive]}>
+              {n}
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
       {/* 列表 */}
@@ -243,6 +260,23 @@ const styles = StyleSheet.create({
   filterChipText: { fontSize: 13, color: IOS_COLORS.labelSecondary },
   filterChipTextActive: { color: '#fff', fontWeight: '600' },
   filterCount: { marginLeft: 'auto', fontSize: 13, color: IOS_COLORS.labelSecondary },
+  limitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  limitLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginRight: 2 },
+  limitChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  limitChipActive: { backgroundColor: IOS_COLORS.blueLight },
+  limitChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
+  limitChipTextActive: { color: IOS_COLORS.blue },
 
   list: { paddingBottom: 32, paddingHorizontal: 12, gap: 8 },
   separator: { height: 0 },
