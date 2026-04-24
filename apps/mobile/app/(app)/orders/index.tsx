@@ -42,6 +42,7 @@ import {
 } from '../../../hooks/useMembersView';
 import { dailyOrderToMockOrder, membersByIdFrom } from '../../../lib/order-view';
 import { AppHeader, MeshBackground } from '../../../components/ui';
+import { MemberQuickInfoModal } from '../../../components/MemberQuickInfoModal';
 import { confirmAction, confirmDestructive } from '../../../lib/confirm';
 
 const STATUS_MAP = {
@@ -84,6 +85,7 @@ const TABS: {
 export default function OrdersScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [activeOrder, setActiveOrder] = useState<MockOrder | null>(null);
+  const [quickInfoMember, setQuickInfoMember] = useState<MockMember | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const ordersQuery = useOrdersToday();
@@ -332,6 +334,7 @@ export default function OrdersScreen() {
           orders={orders}
           onMarkFulfilled={handleMarkFulfilled}
           onOpenDetail={setActiveOrder}
+          onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
         />
       )}
 
@@ -342,8 +345,16 @@ export default function OrdersScreen() {
           membersById={membersById}
           onMarkDelivered={handleMarkDelivered}
           onOpenDetail={setActiveOrder}
+          onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
         />
       )}
+
+      {/* 会员快速资料 */}
+      <MemberQuickInfoModal
+        visible={!!quickInfoMember}
+        member={quickInfoMember}
+        onClose={() => setQuickInfoMember(null)}
+      />
 
       {/* 状态更新弹层 */}
       {activeOrder && (
@@ -428,10 +439,12 @@ function PrepView({
   orders,
   onMarkFulfilled,
   onOpenDetail,
+  onShowMember,
 }: {
   orders: MockOrder[];
   onMarkFulfilled: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
+  onShowMember: (memberId: number) => void;
 }) {
   const pendingOrders = orders.filter((o) => o.status === 'pending');
   const lunch = pendingOrders.filter((o) => o.meal_type === 'lunch');
@@ -474,6 +487,7 @@ function PrepView({
               order={o}
               onConfirm={() => onMarkFulfilled(o)}
               onOpen={() => onOpenDetail(o)}
+              onShowMember={onShowMember}
             />
           ))}
         </View>
@@ -491,6 +505,7 @@ function PrepView({
               order={o}
               onConfirm={() => onMarkFulfilled(o)}
               onOpen={() => onOpenDetail(o)}
+              onShowMember={onShowMember}
             />
           ))}
         </View>
@@ -507,29 +522,16 @@ function PrepView({
   );
 }
 
-function navigateToMemberProfile(order: MockOrder) {
-  const isWalkin = !!order.customer_name;
-  if (isWalkin) {
-    router.push({
-      pathname: '/(app)/walkins/[id]',
-      params: { id: String(order.member_id) },
-    });
-  } else {
-    router.push({
-      pathname: '/(app)/members/[id]',
-      params: { id: String(order.member_id) },
-    });
-  }
-}
-
 function PrepCard({
   order,
   onConfirm,
   onOpen,
+  onShowMember,
 }: {
   order: MockOrder;
   onConfirm: () => void;
   onOpen: () => void;
+  onShowMember: (memberId: number) => void;
 }) {
   const isAdhoc = order.card_type === null;
   const hasNotes = !!order.dietary_notes || !!order.notes;
@@ -544,16 +546,19 @@ function PrepCard({
         <View style={prepStyles.cardContent}>
           <View style={prepStyles.cardTop}>
             <Pressable
-              onPress={() => navigateToMemberProfile(order)}
+              onPress={() => onShowMember(order.member_id)}
               style={prepStyles.nameLink}
               hitSlop={6}
             >
-              <Text style={[prepStyles.cardName, prepStyles.cardNameLink]}>
+              <Text
+                style={[prepStyles.cardName, prepStyles.cardNameLink]}
+                numberOfLines={1}
+              >
                 {order.member_nickname || order.member_name}
               </Text>
               <Ionicons
-                name="chevron-forward"
-                size={14}
+                name="information-circle-outline"
+                size={16}
                 color={IOS_COLORS.blue}
               />
             </Pressable>
@@ -596,8 +601,8 @@ function PrepCard({
         style={({ pressed }) => [prepStyles.sideConfirm, pressed && { opacity: 0.85 }]}
         onPress={onConfirm}
       >
-        <Ionicons name="checkmark" size={22} color="#fff" />
-        <Text style={prepStyles.sideConfirmText}>出餐{'\n'}完成</Text>
+        <Ionicons name="checkmark" size={20} color="#fff" />
+        <Text style={prepStyles.sideConfirmText} numberOfLines={1}>出餐完成</Text>
       </Pressable>
     </View>
   );
@@ -611,11 +616,13 @@ function DeliveryView({
   membersById,
   onMarkDelivered,
   onOpenDetail,
+  onShowMember,
 }: {
   orders: MockOrder[];
   membersById: Record<number, MockMember>;
   onMarkDelivered: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
+  onShowMember: (memberId: number) => void;
 }) {
   const fulfilled = orders.filter((o) => o.status === 'fulfilled');
   const lunch = fulfilled.filter((o) => o.meal_type === 'lunch');
@@ -657,6 +664,7 @@ function DeliveryView({
               member={membersById[o.member_id]}
               onConfirm={() => onMarkDelivered(o)}
               onOpen={() => onOpenDetail(o)}
+              onShowMember={onShowMember}
             />
           ))}
         </View>
@@ -675,6 +683,7 @@ function DeliveryView({
               member={membersById[o.member_id]}
               onConfirm={() => onMarkDelivered(o)}
               onOpen={() => onOpenDetail(o)}
+              onShowMember={onShowMember}
             />
           ))}
         </View>
@@ -696,11 +705,13 @@ function DeliveryCard({
   member,
   onConfirm,
   onOpen,
+  onShowMember,
 }: {
   order: MockOrder;
   member?: MockMember;
   onConfirm: () => void;
   onOpen: () => void;
+  onShowMember: (memberId: number) => void;
 }) {
   const isWalkin = !!order.customer_name;
   const phone = member?.phone?.trim() || (isWalkin ? '' : '');
@@ -719,16 +730,19 @@ function DeliveryCard({
         <View style={prepStyles.cardContent}>
           <View style={prepStyles.cardTop}>
             <Pressable
-              onPress={() => navigateToMemberProfile(order)}
+              onPress={() => onShowMember(order.member_id)}
               style={prepStyles.nameLink}
               hitSlop={6}
             >
-              <Text style={[prepStyles.cardName, prepStyles.cardNameLink]}>
+              <Text
+                style={[prepStyles.cardName, prepStyles.cardNameLink]}
+                numberOfLines={1}
+              >
                 {order.member_nickname || order.member_name}
               </Text>
               <Ionicons
-                name="chevron-forward"
-                size={14}
+                name="information-circle-outline"
+                size={16}
                 color={IOS_COLORS.blue}
               />
             </Pressable>
@@ -803,8 +817,8 @@ function DeliveryCard({
         ]}
         onPress={onConfirm}
       >
-        <Ionicons name="checkmark-done" size={22} color="#fff" />
-        <Text style={prepStyles.sideConfirmText}>确认{'\n'}送达</Text>
+        <Ionicons name="checkmark-done" size={20} color="#fff" />
+        <Text style={prepStyles.sideConfirmText} numberOfLines={1}>确认送达</Text>
       </Pressable>
     </View>
   );
@@ -1941,19 +1955,20 @@ const prepStyles = StyleSheet.create({
 
   // 右侧确认按钮：纵向贯穿整张卡片高度
   sideConfirm: {
-    width: 96,
+    width: 88,
     backgroundColor: IOS_COLORS.blue,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
+    gap: 8,
+    paddingHorizontal: 6,
   },
   sideConfirmText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
-    lineHeight: 19,
+    lineHeight: 18,
+    letterSpacing: 0.3,
   },
 
   empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
