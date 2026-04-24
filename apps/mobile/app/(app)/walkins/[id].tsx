@@ -27,8 +27,8 @@ import { IOS_COLORS } from '../../../theme/paperTheme';
 import { AppHeader, MeshBackground } from '../../../components/ui';
 import { walkinsApi, type WalkinDetailResp } from '../../../api/walkins';
 import { cardsApi } from '../../../api/cards';
-import { usersApi } from '../../../api/users';
 import { useAuth } from '../../../hooks/useAuth';
+import { useUsersMap } from '../../../hooks/useMembersView';
 import {
   CardFlowModal,
   type CardFlowSubmitPayload,
@@ -88,17 +88,15 @@ export default function WalkinDetailScreen() {
   const [promoting, setPromoting] = useState(false);
 
   const { user: authUser } = useAuth();
-  const usersQuery = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => (await usersApi.list()).users.filter((u) => u.is_active),
-    staleTime: 5 * 60 * 1000,
-  });
+  const usersQuery = useUsersMap();
   const pickerUsers = useMemo<CardFlowUser[]>(
     () =>
-      (usersQuery.data ?? []).map((u) => ({
-        id: u.id,
-        name: u.full_name || u.username,
-      })),
+      Object.values(usersQuery.data ?? {})
+        .filter((u) => u.is_active)
+        .map((u) => ({
+          id: u.id,
+          name: u.full_name || u.username,
+        })),
     [usersQuery.data],
   );
   const defaultUserId = authUser?.id ?? pickerUsers[0]?.id ?? 0;

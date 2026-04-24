@@ -20,10 +20,12 @@ import { CARD_RENEWAL_THRESHOLD_MEALS, type SubscriptionCardCode } from '@meal/s
 import { type MockCard } from '../../../constants/mockData';
 import { cardsApi } from '../../../api/cards';
 import { membersApi } from '../../../api/members';
-import { usersApi } from '../../../api/users';
 import { useAuth } from '../../../hooks/useAuth';
-import { useMemberView, useInvalidateMembersView } from '../../../hooks/useMembersView';
-import { useQuery } from '@tanstack/react-query';
+import {
+  useMemberView,
+  useInvalidateMembersView,
+  useUsersMap,
+} from '../../../hooks/useMembersView';
 import { CardFlowModal, type CardFlowSubmitPayload, type CardFlowUser } from '../../../components/CardFlowModal';
 import { RefundCardModal, type RefundSubmitPayload } from '../../../components/RefundCardModal';
 import { MemberEditModal } from '../../../components/MemberEditModal';
@@ -40,17 +42,15 @@ export default function MemberDetailScreen() {
   const { data: member, isLoading, notFound, error } = useMemberView(memberId);
   const invalidate = useInvalidateMembersView();
   const { user: authUser } = useAuth();
-  const usersQuery = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => (await usersApi.list()).users.filter((u) => u.is_active),
-    staleTime: 5 * 60 * 1000,
-  });
+  const usersQuery = useUsersMap();
   const pickerUsers = useMemo<CardFlowUser[]>(
     () =>
-      (usersQuery.data ?? []).map((u) => ({
-        id: u.id,
-        name: u.full_name || u.username,
-      })),
+      Object.values(usersQuery.data ?? {})
+        .filter((u) => u.is_active)
+        .map((u) => ({
+          id: u.id,
+          name: u.full_name || u.username,
+        })),
     [usersQuery.data],
   );
   const defaultUserId = authUser?.id ?? pickerUsers[0]?.id ?? 0;
