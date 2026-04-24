@@ -1,0 +1,32 @@
+# 镜像构建上下文过滤。
+# 注意：Zeabur 用 monorepo 根当构建上下文，所以这里匹配的是 repo 根路径。
+
+**/node_modules
+**/dist
+**/.turbo
+**/.next
+**/.expo
+**/.vercel
+**/.DS_Store
+**/*.log
+
+# 不需要 mobile 代码参与 api 的 build
+apps/mobile
+
+# IDE / git
+.git
+.gitignore
+.vscode
+.idea
+.cursor
+
+# 测试 / 本地环境
+**/*.test.ts
+**/coverage
+.env
+.env.*
+!apps/api/.env.docker
+
+# Docs
+doc
+README.md

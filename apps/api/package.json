@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc --noEmit",
+    "build:prod": "tsc -p tsconfig.json",
     "start": "tsx src/server.ts",
+    "start:prod": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint configured'",
     "test": "vitest run",

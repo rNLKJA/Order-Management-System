@@ -1,0 +1,6 @@
+{
+  "$schema": "https://raw.githubusercontent.com/zeabur/zbpack/main/schema.json",
+  "build_command": "echo 'using Dockerfile, skip zbpack'",
+  "install_command": "echo 'using Dockerfile, skip zbpack'",
+  "start_command": "node dist/server.js"
+}
