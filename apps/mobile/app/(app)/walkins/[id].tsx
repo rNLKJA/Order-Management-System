@@ -24,7 +24,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Snackbar } from 'react-native-paper';
 import { IOS_COLORS } from '../../../theme/paperTheme';
-import { AppHeader, MeshBackground } from '../../../components/ui';
+import {
+  AppHeader,
+  MeshBackground,
+  GlassSurface,
+  SectionLabel,
+  BentoGrid,
+  Bento,
+  StatTile,
+  PressableCard,
+  IconAvatar,
+} from '../../../components/ui';
 import { walkinsApi, type WalkinDetailResp } from '../../../api/walkins';
 import { cardsApi } from '../../../api/cards';
 import { useAuth } from '../../../hooks/useAuth';
@@ -207,101 +217,71 @@ export default function WalkinDetailScreen() {
           contentContainerStyle={{ paddingBottom: 120 }}
         >
           {/* 头部 */}
-          <View style={styles.profileSection}>
-            <View style={styles.bigAvatar}>
-              <Text style={styles.bigAvatarText}>{member.name[0]}</Text>
-            </View>
-            <Text style={styles.bigName}>{member.name}</Text>
-            <View style={styles.tagRow}>
+          <View style={styles.sectionWrap}>
+            <GlassSurface padding={16} style={styles.heroCard}>
+              <IconAvatar icon="walk-outline" size={64} color={IOS_COLORS.orange} bg="#FFF4E5" />
+              <View style={styles.heroMain}>
+                <Text style={styles.bigName}>{member.name}</Text>
+                <Text style={styles.heroSub}>散客档案</Text>
+              </View>
               <View style={styles.walkinBadge}>
                 <Text style={styles.walkinBadgeText}>散客</Text>
               </View>
-            </View>
+            </GlassSurface>
             <Text style={styles.hint}>
-              散客仅按次付费，开卡后自动转为正式会员，享受院内 / 院外订阅价目。
+              布局与会员详情保持一致。散客仅按次付费，不展示升级/续卡操作。
             </Text>
           </View>
 
           {/* 统计 */}
-          <Section title="累计数据">
-            <View style={styles.statsRow}>
-              <StatCard
-                label="订单数"
-                value={`${stats.active_order_count}`}
-                unit="单"
-                color={IOS_COLORS.blue}
-              />
-              <StatCard
-                label="消费餐数"
-                value={`${stats.total_meals}`}
-                unit="份"
-                color="#34C759"
-              />
-              <StatCard
-                label="累计消费"
-                value={`¥${stats.total_spent.toFixed(0)}`}
-                unit=""
-                color="#FF9500"
-              />
-            </View>
+          <View style={styles.sectionWrap}>
+            <SectionLabel>累计数据</SectionLabel>
+            <BentoGrid gap={12}>
+              <Bento span={4} mobileSpan={6}>
+                <StatTile label="订单数" value={`${stats.active_order_count}`} icon="receipt-outline" color={IOS_COLORS.blue} tint="info" />
+              </Bento>
+              <Bento span={4} mobileSpan={6}>
+                <StatTile label="消费餐数" value={`${stats.total_meals}`} icon="restaurant-outline" color="#34C759" tint="ok" />
+              </Bento>
+              <Bento span={4} mobileSpan={12}>
+                <StatTile label="累计消费" value={`¥${stats.total_spent.toFixed(0)}`} icon="wallet-outline" color="#FF9500" tint="warn" />
+              </Bento>
+            </BentoGrid>
             {(stats.first_order_date || stats.last_order_date) && (
-              <View style={styles.rangeRow}>
+              <GlassSurface padding={12} style={styles.rangeCard}>
                 <Text style={styles.rangeText}>
-                  {stats.first_order_date
-                    ? `首单 ${stats.first_order_date}`
-                    : ''}
-                  {stats.first_order_date && stats.last_order_date
-                    ? ' · '
-                    : ''}
-                  {stats.last_order_date
-                    ? `最近 ${stats.last_order_date}`
-                    : ''}
+                  {stats.first_order_date ? `首单 ${stats.first_order_date}` : ''}
+                  {stats.first_order_date && stats.last_order_date ? ' · ' : ''}
+                  {stats.last_order_date ? `最近 ${stats.last_order_date}` : ''}
                 </Text>
-              </View>
+              </GlassSurface>
             )}
-          </Section>
+          </View>
 
           {/* 开卡按钮 */}
           <View style={styles.cardSection}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.purchaseBtn,
-                pressed && { opacity: 0.85 },
-                promoting && { opacity: 0.6 },
-              ]}
-              disabled={promoting}
+            <PressableCard
               onPress={() => setShowPurchaseModal(true)}
+              padding={14}
+              style={[styles.purchaseBtn, promoting && { opacity: 0.6 }]}
             >
-              {promoting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons
-                    name="add-circle-outline"
-                    size={20}
-                    color="#fff"
-                  />
-                  <Text style={styles.purchaseBtnText}>为 TA 开卡</Text>
-                </>
-              )}
-            </Pressable>
+              {promoting ? <ActivityIndicator color="#fff" /> : <Ionicons name="add-circle-outline" size={20} color="#fff" />}
+              <Text style={styles.purchaseBtnText}>为 TA 开卡</Text>
+            </PressableCard>
             <Text style={styles.purchaseHint}>
               开卡后自动升为正式会员，此页面会自动跳去会员详情。
             </Text>
           </View>
 
           {/* 历史订单 */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              订单历史（{orders.length}）
-            </Text>
-          </View>
+          <View style={styles.sectionWrap}>
+            <SectionLabel>{`订单历史（${orders.length}）`}</SectionLabel>
           {orders.length === 0 ? (
             <View style={styles.emptyOrders}>
               <Text style={styles.emptyOrdersText}>暂无订单</Text>
             </View>
           ) : (
-            <View style={styles.ordersList}>
+            <GlassSurface padding={0} style={styles.ordersList}>
               {orders.map((o, i) => {
                 const s = STATUS_MAP[o.status];
                 return (
@@ -343,8 +323,9 @@ export default function WalkinDetailScreen() {
                   </View>
                 );
               })}
-            </View>
+            </GlassSurface>
           )}
+          </View>
         </ScrollView>
 
         {/* 开卡 Modal —— 复用和会员详情一样的 CardFlowModal */}
@@ -414,41 +395,6 @@ function toMockMemberLite(
   };
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.sectionWrap}>
-      <Text style={styles.sectionLabel}>{title}</Text>
-      <View style={styles.sectionBody}>{children}</View>
-    </View>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  unit,
-  color,
-}: {
-  label: string;
-  value: string;
-  unit: string;
-  color: string;
-}) {
-  return (
-    <View style={styles.statCard}>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      {unit ? <Text style={styles.statUnit}>{unit}</Text> : null}
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
   center: {
@@ -474,6 +420,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 20,
   },
+  heroCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroMain: { flex: 1, minWidth: 0 },
+  heroSub: { fontSize: 13, color: IOS_COLORS.labelSecondary, marginTop: 2 },
   bigAvatar: {
     width: 70,
     height: 70,
@@ -523,7 +472,7 @@ const styles = StyleSheet.create({
   sectionBody: {
     backgroundColor: 'transparent',
   },
-  rangeRow: { marginTop: 8, alignItems: 'center' },
+  rangeCard: { marginTop: 8, alignItems: 'center' },
   rangeText: { fontSize: 12, color: IOS_COLORS.labelTertiary },
 
   statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 4 },

@@ -61,6 +61,12 @@ export const usersApi = {
     },
   ) => api.patch<{ user: ApiUser; operators: string[] }>(`/api/users/${id}/access`, input),
 
+  updatePassword: (id: number, password: string) =>
+    api.patch<{ ok: true; user: { id: number; username: string; full_name: string } }>(
+      `/api/users/${id}/password`,
+      { password },
+    ),
+
   /** 某员工录入的订单流水（按日期 + 创建时间倒序） */
   orders: (id: number, opts?: { from?: string; to?: string; status?: string; limit?: number; offset?: number }) => {
     const qs = new URLSearchParams();

@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,6 +38,10 @@ export default function AdminPermissionsScreen() {
   const [draftRole, setDraftRole] = useState<'admin' | 'staff'>('staff');
   const [draftActive, setDraftActive] = useState(true);
   const [draftCanWrite, setDraftCanWrite] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordHint, setPasswordHint] = useState<string | null>(null);
 
   const q = useQuery({
     queryKey: ['admin', 'permissions'],
@@ -55,6 +60,19 @@ export default function AdminPermissionsScreen() {
       ]);
     },
   });
+  const passwordMut = useMutation({
+    mutationFn: ({ id, password }: { id: number; password: string }) =>
+      usersApi.updatePassword(id, password),
+    onSuccess: async () => {
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordHint('密码已更新，目标账号需要重新登录。');
+      await qc.invalidateQueries({ queryKey: ['admin', 'permissions'] });
+    },
+    onError: (e) => {
+      setPasswordHint(e instanceof Error ? e.message : '密码更新失败，请重试');
+    },
+  });
 
   const users = useMemo(() => q.data?.users ?? [], [q.data?.users]);
   const activeUsers = users.filter((u) => u.is_active);
@@ -64,6 +82,10 @@ export default function AdminPermissionsScreen() {
     setDraftRole(target.role);
     setDraftActive(target.is_active);
     setDraftCanWrite(target.role === 'admin' ? true : !!target.can_data_write);
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setPasswordHint(null);
   };
 
   const saveEditor = async () => {
@@ -77,6 +99,20 @@ export default function AdminPermissionsScreen() {
       },
     });
     setEditingUser(null);
+  };
+
+  const changePassword = async () => {
+    if (!editingUser) return;
+    if (newPassword.length < 8) {
+      setPasswordHint('新密码至少 8 位。');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordHint('两次输入的密码不一致。');
+      return;
+    }
+    setPasswordHint(null);
+    await passwordMut.mutateAsync({ id: editingUser.id, password: newPassword });
   };
 
   if (user?.role !== 'admin') {
@@ -264,6 +300,57 @@ export default function AdminPermissionsScreen() {
               </View>
             </View>
 
+            <View style={styles.editorBlock}>
+              <Text style={styles.blockLabel}>修改账户密码（仅管理员）</Text>
+              <View style={styles.passwordCard}>
+                <View style={styles.inputRow}>
+                  <Ionicons name="lock-closed-outline" size={16} color={COLORS.text.tertiary} />
+                  <TextInput
+                    style={styles.input}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    placeholder="输入新密码（至少 8 位）"
+                    placeholderTextColor={COLORS.text.quaternary}
+                  />
+                </View>
+                <View style={styles.inputDivider} />
+                <View style={styles.inputRow}>
+                  <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text.tertiary} />
+                  <TextInput
+                    style={styles.input}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    placeholder="再次输入新密码"
+                    placeholderTextColor={COLORS.text.quaternary}
+                  />
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => setShowPassword((v) => !v)}
+                    style={({ pressed }) => [styles.eyeBtn, pressed && { opacity: 0.6 }]}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={16}
+                      color={COLORS.text.tertiary}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+              {passwordHint ? <Text style={styles.passwordHint}>{passwordHint}</Text> : null}
+              <View style={styles.passwordActionRow}>
+                <Button
+                  label="更新密码"
+                  variant="secondary"
+                  loading={passwordMut.isPending}
+                  onPress={() => void changePassword()}
+                />
+              </View>
+            </View>
+
             <View style={styles.modalActions}>
               <Button
                 label="取消"
@@ -382,6 +469,44 @@ const styles = StyleSheet.create({
   segmentBtnDisabled: { opacity: 0.65 },
   segmentText: { ...TYPE.footnote, color: COLORS.text.secondary, fontWeight: '600' },
   segmentTextActive: { color: COLORS.brand },
+  passwordCard: {
+    borderWidth: 1,
+    borderColor: GLASS.outline,
+    borderRadius: RADIUS.md,
+    backgroundColor: GLASS.surface2,
+    overflow: 'hidden',
+  },
+  inputRow: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
+  },
+  inputDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: GLASS.outline,
+    marginLeft: SPACING.md,
+  },
+  input: {
+    flex: 1,
+    minHeight: 30,
+    fontSize: 15,
+    color: COLORS.text.primary,
+    paddingVertical: 2,
+  },
+  eyeBtn: { padding: 2, borderRadius: 8 },
+  passwordHint: {
+    ...TYPE.footnote,
+    color: COLORS.text.secondary,
+    marginTop: 6,
+  },
+  passwordActionRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

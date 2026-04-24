@@ -5,6 +5,7 @@
  * - GET    /api/users/:id                单个用户信息（不含密码）
  * - GET    /api/users/:id/orders         该用户录入的订单列表（按 created_at 倒序）
  * - GET    /api/users/:id/order-summary  该用户录入的订单聚合统计
+ * - PATCH  /api/users/:id/password       管理员重置指定用户密码
  * - PATCH  /api/users/me/avatar          当前登录用户头像上传（data URL）
  * - DELETE /api/users/me/avatar          清空当前用户头像
  *
@@ -20,6 +21,7 @@ import { zValidator } from '@hono/zod-validator';
 import { userAvatarUpdateSchema } from '@meal/shared';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
+import { hashPassword } from '../services/password.js';
 import {
   DEFAULT_DATA_OPERATORS,
   isDataOperatorEnforced,
@@ -98,6 +100,9 @@ const updateUserAccessSchema = z
   });
 const accessIdSchema = z.object({
   id: z.string().regex(/^\d+$/, 'id 必须是整数').transform((v) => parseInt(v, 10)),
+});
+const updatePasswordSchema = z.object({
+  password: z.string().min(8, '密码至少 8 位').max(64, '密码不能超过 64 位'),
 });
 
 usersRouter.get('/permissions/data-operators', requireRole('admin'), async (c) => {
@@ -180,6 +185,49 @@ usersRouter.patch(
         can_data_write: user.role === 'admin' ? true : operators.includes(user.username.toLowerCase()),
       },
       operators,
+    });
+  },
+);
+
+usersRouter.patch(
+  '/:id/password',
+  requireRole('admin'),
+  zValidator('param', accessIdSchema),
+  zValidator('json', updatePasswordSchema),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const { password } = c.req.valid('json');
+    const db = requestDb(c);
+
+    const targetRows = await db
+      .select({
+        id: schema.users.id,
+        username: schema.users.username,
+        full_name: schema.users.full_name,
+        token_version: schema.users.token_version,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, id))
+      .limit(1);
+    const target = targetRows[0];
+    if (!target) throw new HTTPException(404, { message: '用户不存在' });
+
+    const passwordHash = await hashPassword(password);
+    await db
+      .update(schema.users)
+      .set({
+        password_hash: passwordHash,
+        token_version: target.token_version + 1,
+      })
+      .where(eq(schema.users.id, id));
+
+    return c.json({
+      ok: true,
+      user: {
+        id: target.id,
+        username: target.username,
+        full_name: target.full_name,
+      },
     });
   },
 );

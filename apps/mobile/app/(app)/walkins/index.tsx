@@ -1,27 +1,27 @@
 /**
- * 散客目录 — 和会员档案同风格，但更轻量。
- *
- * 散客 = is_walkin=true 的 member，数据由 POST /api/orders 的 customer_name 自动建。
- * 每一行显示 订单数 / 累计消费 / 最后订单日期，右上 + 号跳到"录入散餐"（会员 tab 的 adhoc 子模式）。
- * 点一行 → 散客详情页（可以开卡把他升为正式会员）。
+ * 散客目录 — 与会员档案同构布局（仅业务动作不同）。
  */
 
 import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { IOS_COLORS } from '../../../theme/paperTheme';
-import { AppHeader, MeshBackground } from '../../../components/ui';
+import { Text } from 'react-native-paper';
+import { COLORS, SPACING, TYPE } from '../../../theme/paperTheme';
+import {
+  AppHeader,
+  MeshBackground,
+  SectionLabel,
+  GlassSurface,
+  BentoGrid,
+  Bento,
+  StatTile,
+  PressableCard,
+  StatusChip,
+  IconAvatar,
+} from '../../../components/ui';
 import { walkinsApi, type WalkinRow } from '../../../api/walkins';
 
 const WALKINS_KEY = ['walkins', 'list'] as const;
@@ -48,6 +48,9 @@ export default function WalkinsScreen() {
         w.name.toLowerCase().includes(query.trim().toLowerCase()),
       )
     : walkins;
+  const withOrders = filtered.filter((w) => w.stats.active_order_count > 0).length;
+  const totalMeals = filtered.reduce((sum, w) => sum + w.stats.total_meals, 0);
+  const totalSpent = filtered.reduce((sum, w) => sum + w.stats.total_spent, 0);
 
   return (
     <View style={styles.root}>
@@ -61,76 +64,80 @@ export default function WalkinsScreen() {
               style={styles.addBtn}
               hitSlop={8}
             >
-              <Ionicons name="add" size={22} color={IOS_COLORS.blue} />
+              <Ionicons name="add" size={22} color={COLORS.brand} />
               <Text style={styles.addBtnText}>录单</Text>
             </Pressable>
           }
         />
 
-        {/* 搜索框 */}
-        <View style={styles.searchWrap}>
-          <View style={styles.searchBox}>
-            <Ionicons
-              name="search-outline"
-              size={16}
-              color={IOS_COLORS.labelSecondary}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="按散客姓名搜索..."
-              placeholderTextColor={IOS_COLORS.labelTertiary}
-              value={query}
-              onChangeText={setQuery}
-              autoCorrect={false}
-            />
-            {query ? (
-              <Pressable onPress={() => setQuery('')} hitSlop={8}>
-                <Ionicons
-                  name="close-circle"
-                  size={18}
-                  color={IOS_COLORS.labelTertiary}
-                />
-              </Pressable>
-            ) : null}
-          </View>
-          <Text style={styles.countText}>{filtered.length} 位</Text>
-        </View>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+          <View style={styles.container}>
+            <View style={styles.block}>
+              <SectionLabel>概览</SectionLabel>
+              <BentoGrid gap={SPACING.md}>
+                <Bento span={4} mobileSpan={6}>
+                  <StatTile label="散客数" value={`${filtered.length}`} icon="walk-outline" color={COLORS.warning} tint="warn" />
+                </Bento>
+                <Bento span={4} mobileSpan={6}>
+                  <StatTile label="有订单" value={`${withOrders}`} icon="receipt-outline" color={COLORS.info} tint="info" />
+                </Bento>
+                <Bento span={4} mobileSpan={12}>
+                  <StatTile label="累计消费" value={`¥${Math.round(totalSpent)}`} icon="wallet-outline" color={COLORS.success} tint="ok" />
+                </Bento>
+              </BentoGrid>
+            </View>
 
-        <FlatList
-          data={filtered}
-          keyExtractor={(w) => String(w.id)}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => <WalkinRowItem walkin={item} />}
-          refreshing={q.isLoading}
-          onRefresh={() => void q.refetch()}
-          ListEmptyComponent={
-            q.isLoading ? (
-              <View style={styles.empty}>
-                <ActivityIndicator color={IOS_COLORS.blue} />
-                <Text style={styles.emptyText}>加载中...</Text>
-              </View>
-            ) : q.error ? (
-              <View style={styles.empty}>
-                <Text style={styles.emptyIcon}>⚠︎</Text>
-                <Text style={styles.emptyText}>
-                  加载失败：{(q.error as Error).message}
-                </Text>
-                <Pressable onPress={() => void q.refetch()}>
-                  <Text style={styles.retryLink}>重试</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <View style={styles.empty}>
-                <Text style={styles.emptyIcon}>—</Text>
-                <Text style={styles.emptyText}>
-                  {walkins.length === 0
-                    ? '还没有散客记录，去「每日订餐 · 录入 · 散餐」录一条'
-                    : '没有找到匹配的散客'}
-                </Text>
-              </View>
-            )
-          }
-        />
+            <View style={styles.block}>
+              <SectionLabel>筛选</SectionLabel>
+              <GlassSurface padding={SPACING.md} style={styles.filterCard}>
+                <View style={styles.searchBox}>
+                  <Ionicons name="search-outline" size={16} color={COLORS.text.tertiary} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="按散客姓名搜索..."
+                    placeholderTextColor={COLORS.text.quaternary}
+                    value={query}
+                    onChangeText={setQuery}
+                    autoCorrect={false}
+                  />
+                  {query ? (
+                    <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                      <Ionicons name="close-circle" size={18} color={COLORS.text.quaternary} />
+                    </Pressable>
+                  ) : null}
+                </View>
+                <Text style={styles.countText}>{filtered.length} 位散客 · 累计 {totalMeals} 份</Text>
+              </GlassSurface>
+            </View>
+
+            <View style={styles.block}>
+              <SectionLabel>{`散客列表 · ${filtered.length}`}</SectionLabel>
+              {q.isLoading ? (
+                <View style={styles.empty}>
+                  <ActivityIndicator color={COLORS.brand} />
+                  <Text style={styles.emptyText}>加载中...</Text>
+                </View>
+              ) : q.error ? (
+                <GlassSurface padding={SPACING.base} tint="danger" style={styles.emptyCard}>
+                  <Text style={styles.emptyError}>加载失败：{(q.error as Error).message}</Text>
+                  <Pressable onPress={() => void q.refetch()}>
+                    <Text style={styles.retryLink}>重试</Text>
+                  </Pressable>
+                </GlassSurface>
+              ) : filtered.length === 0 ? (
+                <GlassSurface padding={SPACING.base} style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>
+                    {walkins.length === 0
+                      ? '还没有散客记录，请在每日订餐中录入散餐。'
+                      : '没有找到匹配的散客。'}
+                  </Text>
+                </GlassSurface>
+              ) : (
+                filtered.map((item) => <WalkinRowItem key={item.id} walkin={item} />)
+              )}
+            </View>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -140,25 +147,21 @@ function WalkinRowItem({ walkin }: { walkin: WalkinRow }) {
   const { stats } = walkin;
   const last = stats.last_order_date;
   return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    <PressableCard
+      style={styles.row}
       onPress={() =>
         router.push({
           pathname: '/(app)/walkins/[id]',
           params: { id: String(walkin.id) },
         })
       }
+      padding={SPACING.base}
     >
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{walkin.name[0] ?? '散'}</Text>
-      </View>
-
+      <IconAvatar icon="walk-outline" size={50} color={COLORS.warning} bg="#FFF4E5" />
       <View style={styles.rowContent}>
         <View style={styles.rowTop}>
           <Text style={styles.name}>{walkin.name}</Text>
-          <View style={styles.walkinBadge}>
-            <Text style={styles.walkinBadgeText}>散客</Text>
-          </View>
+          <StatusChip label="散客" variant="warning" />
         </View>
         <Text style={styles.sub}>
           {stats.active_order_count} 单 · {stats.total_meals} 份 · 累计 ¥
@@ -172,14 +175,22 @@ function WalkinRowItem({ walkin }: { walkin: WalkinRow }) {
       <Ionicons
         name="chevron-forward"
         size={18}
-        color={IOS_COLORS.labelTertiary}
+        color={COLORS.text.quaternary}
       />
-    </Pressable>
+    </PressableCard>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
+  root: { flex: 1, backgroundColor: COLORS.systemGrouped },
+  scroll: { paddingBottom: 32 },
+  container: {
+    width: '100%',
+    maxWidth: SPACING.maxWidth,
+    alignSelf: 'center',
+    paddingHorizontal: SPACING.page,
+  },
+  block: { marginBottom: SPACING.lg },
 
   addBtn: {
     flexDirection: 'row',
@@ -187,80 +198,38 @@ const styles = StyleSheet.create({
     gap: 2,
     paddingHorizontal: 4,
   },
-  addBtnText: { fontSize: 15, color: IOS_COLORS.blue, fontWeight: '500' },
-
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 10,
-  },
+  addBtnText: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
+  filterCard: { gap: SPACING.sm },
   searchBox: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: IOS_COLORS.fillLight,
+    backgroundColor: COLORS.systemGrouped,
     borderRadius: 10,
     paddingHorizontal: 10,
-    height: 36,
+    height: 38,
     gap: 6,
   },
-  searchInput: { flex: 1, fontSize: 15, color: IOS_COLORS.label },
-  countText: { fontSize: 13, color: IOS_COLORS.labelSecondary },
-
-  list: { paddingHorizontal: 12, paddingBottom: 32, gap: 8 },
+  searchInput: { flex: 1, ...TYPE.body, color: COLORS.text.primary },
+  countText: { ...TYPE.caption, color: COLORS.text.tertiary },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 12,
+    marginBottom: SPACING.sm,
   },
-  rowPressed: { opacity: 0.9, transform: [{ scale: 0.995 }] },
-
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF4E5',
-  },
-  avatarText: { fontSize: 20, fontWeight: '600', color: IOS_COLORS.orange },
-
-  rowContent: { flex: 1, gap: 2 },
+  rowContent: { flex: 1, gap: 2, marginLeft: SPACING.md },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { fontSize: 16, fontWeight: '600', color: IOS_COLORS.label },
-  walkinBadge: {
-    backgroundColor: '#FFF4E5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  walkinBadgeText: {
-    fontSize: 11,
-    color: IOS_COLORS.orange,
-    fontWeight: '600',
-  },
+  name: { ...TYPE.headline, color: COLORS.text.primary },
   sub: {
-    fontSize: 13,
-    color: IOS_COLORS.label,
+    ...TYPE.caption,
+    color: COLORS.text.secondary,
     fontVariant: ['tabular-nums'],
   },
-  metaRow: { fontSize: 12, color: IOS_COLORS.labelTertiary },
+  metaRow: { ...TYPE.caption, color: COLORS.text.tertiary },
 
-  empty: { alignItems: 'center', paddingTop: 80, gap: 8 },
-  emptyIcon: { fontSize: 40 },
-  emptyText: {
-    fontSize: 15,
-    color: IOS_COLORS.labelSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-    lineHeight: 22,
-  },
-  retryLink: { fontSize: 15, color: IOS_COLORS.blue },
+  empty: { alignItems: 'center', paddingVertical: 40, gap: 8 },
+  emptyCard: { alignItems: 'center', gap: 8 },
+  emptyText: { ...TYPE.body, color: COLORS.text.tertiary, textAlign: 'center' },
+  emptyError: { ...TYPE.body, color: COLORS.danger, textAlign: 'center' },
+  retryLink: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
 });

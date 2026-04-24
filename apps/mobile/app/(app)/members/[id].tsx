@@ -17,7 +17,17 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { IOS_COLORS } from '../../../theme/paperTheme';
-import { AppHeader, MeshBackground } from '../../../components/ui';
+import {
+  AppHeader,
+  MeshBackground,
+  GlassSurface,
+  SectionLabel,
+  BentoGrid,
+  Bento,
+  StatTile,
+  IconAvatar,
+  StatusChip,
+} from '../../../components/ui';
 import { CARD_RENEWAL_THRESHOLD_MEALS, type SubscriptionCardCode } from '@meal/shared';
 import { type MockCard } from '../../../constants/mockData';
 import { cardsApi } from '../../../api/cards';
@@ -233,16 +243,24 @@ export default function MemberDetailScreen() {
           }
         />
 
-        {/* 头部信息卡 */}
-        <View style={styles.profileSection}>
-          <View style={[styles.bigAvatar, { backgroundColor: member.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
-            <Text style={styles.bigAvatarText}>{member.nickname?.[0] ?? member.name[0]}</Text>
-          </View>
-          <Text style={styles.bigName}>{member.name}</Text>
-          {member.nickname && <Text style={styles.bigNickname}>"{member.nickname}"</Text>}
-          <View style={styles.tagRow}>
-            <Tag label={member.is_hospital ? '院内会员' : '院外会员'} color={IOS_COLORS.blue} />
-          </View>
+        {/* 头部信息卡：与散客详情同构 */}
+        <View style={styles.sectionWrap}>
+          <GlassSurface padding={16} style={styles.heroCard}>
+            <IconAvatar
+              icon="person-outline"
+              size={64}
+              color={member.is_hospital ? IOS_COLORS.blue : '#34C759'}
+              bg={member.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED'}
+            />
+            <View style={styles.heroMain}>
+              <Text style={styles.bigName}>{member.name}</Text>
+              {member.nickname ? <Text style={styles.bigNickname}>“{member.nickname}”</Text> : null}
+            </View>
+            <StatusChip
+              label={member.is_hospital ? '院内会员' : '院外会员'}
+              variant={member.is_hospital ? 'hospital' : 'regular'}
+            />
+          </GlassSurface>
         </View>
 
         {/* 联系信息 */}
@@ -364,14 +382,21 @@ export default function MemberDetailScreen() {
           </View>
         )}
 
-        {/* 统计 */}
-        <Section title="累计数据">
-          <View style={styles.statsRow}>
-            <StatCard label="购买餐数" value={`${member.stats.total_purchased_meals}`} unit="份" color={IOS_COLORS.blue} />
-            <StatCard label="消费餐数" value={`${member.stats.total_consumed_meals}`} unit="份" color="#34C759" />
-            <StatCard label="累计消费" value={`¥${member.stats.total_paid_amount.toLocaleString()}`} unit="" color="#FF9500" />
-          </View>
-        </Section>
+        {/* 统计：与散客详情统一 Bento 结构 */}
+        <View style={styles.sectionWrap}>
+          <SectionLabel>累计数据</SectionLabel>
+          <BentoGrid gap={12}>
+            <Bento span={4} mobileSpan={6}>
+              <StatTile label="购买餐数" value={`${member.stats.total_purchased_meals}`} icon="card-outline" color={IOS_COLORS.blue} tint="info" />
+            </Bento>
+            <Bento span={4} mobileSpan={6}>
+              <StatTile label="消费餐数" value={`${member.stats.total_consumed_meals}`} icon="restaurant-outline" color="#34C759" tint="ok" />
+            </Bento>
+            <Bento span={4} mobileSpan={12}>
+              <StatTile label="累计消费" value={`¥${member.stats.total_paid_amount.toLocaleString()}`} icon="wallet-outline" color="#FF9500" tint="warn" />
+            </Bento>
+          </BentoGrid>
+        </View>
 
         {/* 流水：Tab + Accordion */}
         <View style={styles.sectionHeader}>
@@ -563,24 +588,6 @@ function MetaItem({ label, value }: { label: string; value: string }) {
     <View style={styles.metaItem}>
       <Text style={styles.metaValue}>{value}</Text>
       <Text style={styles.metaLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function StatCard({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
-  return (
-    <View style={styles.statCard}>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      {unit ? <Text style={styles.statUnit}>{unit}</Text> : null}
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function Tag({ label, color }: { label: string; color: string }) {
-  return (
-    <View style={[styles.tag, { backgroundColor: color + '22' }]}>
-      <Text style={[styles.tagText, { color }]}>{label}</Text>
     </View>
   );
 }
@@ -812,6 +819,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', backgroundColor: IOS_COLORS.card,
     paddingTop: 24, paddingBottom: 20, marginBottom: 20,
   },
+  heroCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroMain: { flex: 1, minWidth: 0 },
   bigAvatar: {
     width: 70, height: 70, borderRadius: 35,
     alignItems: 'center', justifyContent: 'center', marginBottom: 10,

@@ -1,17 +1,28 @@
 /**
- * 会员列表 — 从 /api/members + /api/cards 拉真实数据（走 useMembersView hook）。
- * 筛选 / 搜索仍在前端做：数据量小，体验上更顺滑。
+ * 会员列表（正式会员）— v3 Glass + Bento。
  */
 
-import { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import { useMemo, useState } from 'react';
+import { View, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { IOS_COLORS } from '../../../theme/paperTheme';
+import { Text } from 'react-native-paper';
 import { type MockMember } from '../../../constants/mockData';
 import { useMembersViewWithLimit } from '../../../hooks/useMembersView';
-import { AppHeader, MeshBackground } from '../../../components/ui';
+import {
+  AppHeader,
+  MeshBackground,
+  GlassSurface,
+  SectionLabel,
+  BentoGrid,
+  Bento,
+  StatTile,
+  PressableCard,
+  StatusChip,
+  IconAvatar,
+} from '../../../components/ui';
+import { COLORS, SPACING, TYPE } from '../../../theme/paperTheme';
 
 type MemberFilter = 'all' | 'hospital' | 'regular' | 'expired';
 const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
@@ -39,114 +50,113 @@ export default function MembersScreen() {
   });
 
   const expiredCount = members.filter((m) => !m.active_card).length;
+  const hospitalCount = useMemo(() => members.filter((m) => m.is_hospital).length, [members]);
+  const regularCount = members.length - hospitalCount;
 
   return (
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-      <AppHeader
-        title="会员档案"
-        right={
-          <Pressable
-            onPress={() => router.push('/(app)/members/new')}
-            style={styles.addBtn}
-            hitSlop={8}
-          >
-            <Ionicons name="add" size={22} color={IOS_COLORS.blue} />
-            <Text style={styles.addBtnText}>新增</Text>
-          </Pressable>
-        }
-      />
-
-      {/* 搜索框 */}
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={16} color={IOS_COLORS.labelSecondary} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="搜索姓名、昵称、手机号..."
-            placeholderTextColor={IOS_COLORS.labelTertiary}
-            value={query}
-            onChangeText={setQuery}
-            autoCorrect={false}
-          />
-          {query ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color={IOS_COLORS.labelTertiary} />
+        <AppHeader
+          title="会员档案"
+          right={
+            <Pressable onPress={() => router.push('/(app)/members/new')} style={styles.addBtn} hitSlop={8}>
+              <Ionicons name="add" size={22} color={COLORS.brand} />
+              <Text style={styles.addBtnText}>新增</Text>
             </Pressable>
-          ) : null}
-        </View>
-      </View>
+          }
+        />
 
-      {/* 筛选标签 */}
-      <View style={styles.filterRow}>
-        {(['all', 'hospital', 'regular', 'expired'] as const).map((f) => (
-          <Pressable
-            key={f}
-            style={[styles.filterChip, filter === f && styles.filterChipActive]}
-            onPress={() => setFilter(f)}
-          >
-            <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
-              {f === 'all'
-                ? '全部'
-                : f === 'hospital'
-                ? '院内'
-                : f === 'regular'
-                ? '院外'
-                : `已过期${expiredCount > 0 ? ` ${expiredCount}` : ''}`}
-            </Text>
-          </Pressable>
-        ))}
-        <Text style={styles.filterCount}>{filtered.length} 位</Text>
-      </View>
-      <View style={styles.limitRow}>
-        <Text style={styles.limitLabel}>每次加载</Text>
-        {LIMIT_OPTIONS.map((n) => (
-          <Pressable
-            key={n}
-            style={[styles.limitChip, limit === n && styles.limitChipActive]}
-            onPress={() => setLimit(n)}
-          >
-            <Text style={[styles.limitChipText, limit === n && styles.limitChipTextActive]}>
-              {n}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}
+          refreshControl={undefined}
+        >
+          <View style={styles.container}>
+            <View style={styles.block}>
+              <SectionLabel>概览</SectionLabel>
+              <BentoGrid gap={SPACING.md}>
+                <Bento span={3} mobileSpan={6}>
+                  <StatTile label="总会员" value={`${members.length}`} icon="people-outline" color={COLORS.brand} tint="info" />
+                </Bento>
+                <Bento span={3} mobileSpan={6}>
+                  <StatTile label="院内" value={`${hospitalCount}`} icon="business-outline" color={COLORS.info} tint="warn" />
+                </Bento>
+                <Bento span={3} mobileSpan={6}>
+                  <StatTile label="院外" value={`${regularCount}`} icon="home-outline" color={COLORS.success} tint="ok" />
+                </Bento>
+                <Bento span={3} mobileSpan={6}>
+                  <StatTile label="需续卡" value={`${expiredCount}`} icon="alert-circle-outline" color={COLORS.warning} tint="danger" />
+                </Bento>
+              </BentoGrid>
+            </View>
 
-      {/* 列表 */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(m) => String(m.id)}
-        contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        renderItem={({ item }) => <MemberRow member={item} />}
-        refreshing={isLoading}
-        onRefresh={() => void refetch()}
-        ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.empty}>
-              <ActivityIndicator color={IOS_COLORS.blue} />
-              <Text style={styles.emptyText}>加载中...</Text>
+            <View style={styles.block}>
+              <SectionLabel>筛选</SectionLabel>
+              <GlassSurface padding={SPACING.md} style={styles.filterCard}>
+                <View style={styles.searchBox}>
+                  <Ionicons name="search-outline" size={16} color={COLORS.text.tertiary} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="搜索姓名、昵称、手机号..."
+                    placeholderTextColor={COLORS.text.quaternary}
+                    value={query}
+                    onChangeText={setQuery}
+                    autoCorrect={false}
+                  />
+                  {query ? (
+                    <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                      <Ionicons name="close-circle" size={18} color={COLORS.text.quaternary} />
+                    </Pressable>
+                  ) : null}
+                </View>
+                <View style={styles.filterRow}>
+                  {(['all', 'hospital', 'regular', 'expired'] as const).map((f) => (
+                    <Pressable key={f} style={[styles.filterChip, filter === f && styles.filterChipActive]} onPress={() => setFilter(f)}>
+                      <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
+                        {f === 'all' ? '全部' : f === 'hospital' ? '院内' : f === 'regular' ? '院外' : '需续卡'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.limitRow}>
+                  <Text style={styles.limitLabel}>每次加载</Text>
+                  {LIMIT_OPTIONS.map((n) => (
+                    <Pressable key={n} style={[styles.limitChip, limit === n && styles.limitChipActive]} onPress={() => setLimit(n)}>
+                      <Text style={[styles.limitChipText, limit === n && styles.limitChipTextActive]}>{n}</Text>
+                    </Pressable>
+                  ))}
+                  <Text style={styles.filterCount}>{filtered.length} 位</Text>
+                </View>
+              </GlassSurface>
             </View>
-          ) : error ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>⚠︎</Text>
-              <Text style={styles.emptyText}>加载失败：{error.message}</Text>
-              <Pressable onPress={() => void refetch()}>
-                <Text style={{ color: IOS_COLORS.blue, fontSize: 15 }}>重试</Text>
-              </Pressable>
+
+            <View style={styles.block}>
+              <SectionLabel>{`会员列表 · ${filtered.length}`}</SectionLabel>
+              {isLoading ? (
+                <View style={styles.empty}>
+                  <ActivityIndicator color={COLORS.brand} />
+                  <Text style={styles.emptyText}>加载中...</Text>
+                </View>
+              ) : error ? (
+                <GlassSurface padding={SPACING.base} tint="danger" style={styles.emptyCard}>
+                  <Text style={styles.emptyError}>加载失败：{error.message}</Text>
+                  <Pressable onPress={() => void refetch()}>
+                    <Text style={styles.retryLink}>重试</Text>
+                  </Pressable>
+                </GlassSurface>
+              ) : filtered.length === 0 ? (
+                <GlassSurface padding={SPACING.base} style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>
+                    {members.length === 0 ? '还没有会员，点击右上角“新增”开始。' : '没有找到匹配的会员。'}
+                  </Text>
+                </GlassSurface>
+              ) : (
+                filtered.map((item) => <MemberRow key={item.id} member={item} />)
+              )}
             </View>
-          ) : (
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>—</Text>
-              <Text style={styles.emptyText}>
-                {members.length === 0 ? '还没有会员，点击右上「新增」开始' : '没有找到匹配的会员'}
-              </Text>
-            </View>
-          )
-        }
-      />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -161,177 +171,89 @@ function MemberRow({ member }: { member: MockMember }) {
   const lastCard = member.card_history[member.card_history.length - 1];
 
   return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    <PressableCard
+      style={styles.row}
       onPress={() => router.push(`/(app)/members/${member.id}` as never)}
+      padding={SPACING.base}
     >
-      {/* 头像 */}
-      <View
-        style={[
-          styles.avatar,
-          {
-            backgroundColor: expired
-              ? '#F2F2F7'
-              : member.is_hospital
-              ? IOS_COLORS.blueLight
-              : '#E8F8ED',
-          },
-        ]}
-      >
-        <Text style={[styles.avatarText, expired && { color: IOS_COLORS.labelTertiary }]}>
-          {member.nickname?.[0] ?? member.name[0]}
-        </Text>
-      </View>
-
-      {/* 主信息 */}
+      <IconAvatar
+        icon="person-outline"
+        size={50}
+        bg={expired ? COLORS.systemGrouped : member.is_hospital ? COLORS.brandSoft : '#E8F8ED'}
+        color={expired ? COLORS.text.tertiary : member.is_hospital ? COLORS.brand : COLORS.success}
+      />
       <View style={styles.rowContent}>
         <View style={styles.rowTop}>
           <Text style={styles.memberName}>
             {member.nickname ? `${member.nickname}` : member.name}
           </Text>
-          {member.is_hospital && (
-            <View style={styles.hospitalBadge}><Text style={styles.hospitalText}>院内</Text></View>
-          )}
-          {expired && (
-            <View style={styles.expiredBadge}><Text style={styles.expiredText}>已过期</Text></View>
-          )}
-          {renewal && (
-            <View style={styles.renewalBadge}><Text style={styles.renewalText}>续卡</Text></View>
-          )}
+          <StatusChip label={member.is_hospital ? '院内' : '院外'} variant={member.is_hospital ? 'hospital' : 'regular'} />
+          {expired ? <StatusChip label="需续卡" variant="warning" /> : null}
+          {renewal ? <StatusChip label="临界" variant="danger" /> : null}
         </View>
-
         <Text style={styles.memberSub}>{member.name} · {member.phone}</Text>
-
-        {/* 卡片进度 / 过期状态 */}
         {card ? (
-          <View style={styles.cardBar}>
-            <Text style={styles.cardLabel} numberOfLines={1}>
-              {card.card_name}
-            </Text>
-            <View style={styles.progress}>
-              <View style={[styles.progressFill, { width: `${progressPct}%` as any, backgroundColor: progressColor }]} />
-            </View>
-            <Text
-              style={[styles.cardRemain, { color: progressColor }]}
-              numberOfLines={1}
-            >
-              剩 {card.remaining_meals} 餐
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.noCard}>
-            {lastCard
-              ? `上次：${lastCard.card_name} · 已用完`
-              : '暂无购卡记录'}
+          <Text style={styles.cardInfo}>
+            {card.card_name} · 剩余 {card.remaining_meals}/{card.total_meals} 份
           </Text>
+        ) : (
+          <Text style={styles.noCard}>{lastCard ? `上次：${lastCard.card_name} · 已用完` : '暂无购卡记录'}</Text>
         )}
       </View>
-
-      <Ionicons name="chevron-forward" size={18} color={IOS_COLORS.labelTertiary} style={styles.rowArrow} />
-    </Pressable>
+      <Ionicons name="chevron-forward" size={18} color={COLORS.text.quaternary} style={styles.rowArrow} />
+    </PressableCard>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
-
+  root: { flex: 1, backgroundColor: COLORS.systemGrouped },
+  scroll: { paddingBottom: 32 },
+  container: {
+    width: '100%',
+    maxWidth: SPACING.maxWidth,
+    alignSelf: 'center',
+    paddingHorizontal: SPACING.page,
+  },
+  block: { marginBottom: SPACING.lg },
   addBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, gap: 2 },
-  addBtnText: { fontSize: 15, color: IOS_COLORS.blue, fontWeight: '500' },
+  addBtnText: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
 
-  searchWrap: { paddingHorizontal: 16, paddingVertical: 10 },
+  filterCard: { gap: SPACING.sm },
   searchBox: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: IOS_COLORS.fillLight,
-    borderRadius: 10, paddingHorizontal: 10, height: 36, gap: 6,
-  },
-  searchIcon: { marginRight: 2 },
-  searchInput: { flex: 1, fontSize: 15, color: IOS_COLORS.label },
-  clearBtn: { fontSize: 16, color: IOS_COLORS.labelSecondary, padding: 4 },
-
-  filterRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 16, paddingVertical: 10,
-  },
-  filterChip: {
-    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
-    backgroundColor: IOS_COLORS.fillLight,
-  },
-  filterChipActive: { backgroundColor: IOS_COLORS.blue },
-  filterChipText: { fontSize: 13, color: IOS_COLORS.labelSecondary },
-  filterChipTextActive: { color: '#fff', fontWeight: '600' },
-  filterCount: { marginLeft: 'auto', fontSize: 13, color: IOS_COLORS.labelSecondary },
-  limitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  limitLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginRight: 2 },
-  limitChip: {
+    backgroundColor: COLORS.systemGrouped,
+    borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
-    backgroundColor: IOS_COLORS.fillLight,
+    height: 38,
+    gap: 6,
   },
-  limitChipActive: { backgroundColor: IOS_COLORS.blueLight },
-  limitChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
-  limitChipTextActive: { color: IOS_COLORS.blue },
+  searchInput: { flex: 1, ...TYPE.body, color: COLORS.text.primary },
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: COLORS.systemGrouped },
+  filterChipActive: { backgroundColor: COLORS.brand },
+  filterChipText: { ...TYPE.caption, color: COLORS.text.tertiary, fontWeight: '600' },
+  filterChipTextActive: { color: '#fff' },
+  limitRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  limitLabel: { ...TYPE.caption, color: COLORS.text.tertiary, marginRight: 4 },
+  limitChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, backgroundColor: COLORS.systemGrouped },
+  limitChipActive: { backgroundColor: COLORS.brandSoft },
+  limitChipText: { ...TYPE.caption, color: COLORS.text.tertiary, fontWeight: '600' },
+  limitChipTextActive: { color: COLORS.brand },
+  filterCount: { marginLeft: 'auto', ...TYPE.caption, color: COLORS.text.tertiary },
 
-  list: { paddingBottom: 32, paddingHorizontal: 12, gap: 8 },
-  separator: { height: 0 },
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
+  rowContent: { flex: 1, gap: 4, minWidth: 0, marginLeft: SPACING.md },
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  memberName: { ...TYPE.headline, color: COLORS.text.primary },
+  memberSub: { ...TYPE.caption, color: COLORS.text.tertiary },
+  cardInfo: { ...TYPE.caption, color: COLORS.text.secondary, fontVariant: ['tabular-nums'] },
+  noCard: { ...TYPE.caption, color: COLORS.text.quaternary },
+  rowArrow: { marginLeft: 4 },
 
-  row: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderRadius: 14,
-    paddingHorizontal: 14, paddingVertical: 12, gap: 12,
-  },
-  rowPressed: { opacity: 0.9, transform: [{ scale: 0.995 }] },
-  avatar: {
-    width: 50, height: 50, borderRadius: 25,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  avatarText: { fontSize: 20, fontWeight: '600', color: IOS_COLORS.blue },
-  rowContent: { flex: 1, gap: 3 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  memberName: { fontSize: 16, fontWeight: '600', color: IOS_COLORS.label },
-  hospitalBadge: {
-    backgroundColor: IOS_COLORS.blueLight,
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
-  },
-  hospitalText: { fontSize: 11, color: IOS_COLORS.blue, fontWeight: '600' },
-  renewalBadge: {
-    backgroundColor: '#FFF4E5',
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
-  },
-  renewalText: { fontSize: 11, color: IOS_COLORS.orange, fontWeight: '600' },
-  expiredBadge: {
-    backgroundColor: '#F2F2F7',
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
-  },
-  expiredText: { fontSize: 11, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
-  memberSub: { fontSize: 13, color: IOS_COLORS.labelSecondary },
-  cardBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  cardLabel: {
-    fontSize: 12,
-    color: IOS_COLORS.labelSecondary,
-    flexShrink: 0,
-    maxWidth: 80,
-  },
-  progress: { flex: 1, height: 4, backgroundColor: IOS_COLORS.fillMedium, borderRadius: 2, overflow: 'hidden' },
-  progressFill: { height: 4, borderRadius: 2 },
-  cardRemain: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'right',
-    flexShrink: 0,
-    minWidth: 52,
-  },
-  noCard: { fontSize: 13, color: IOS_COLORS.labelTertiary },
-  rowArrow: { marginLeft: 2 },
-
-  empty: { alignItems: 'center', paddingTop: 80, gap: 8 },
-  emptyIcon: { fontSize: 40 },
-  emptyText: { fontSize: 16, color: IOS_COLORS.labelSecondary },
+  empty: { alignItems: 'center', paddingVertical: 40, gap: 8 },
+  emptyCard: { alignItems: 'center', gap: 8 },
+  emptyText: { ...TYPE.body, color: COLORS.text.tertiary, textAlign: 'center' },
+  emptyError: { ...TYPE.body, color: COLORS.danger, textAlign: 'center' },
+  retryLink: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
 });
