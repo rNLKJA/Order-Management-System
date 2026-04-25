@@ -30,7 +30,20 @@ export default function RemindersScreen() {
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={styles.container}>
-          <AppHeader title="余餐不足提醒" subtitle={`共 ${list.length} 人需跟进`} />
+          <AppHeader title="余餐不足提醒" />
+
+          <GlassSurface padding={SPACING.base} style={styles.summaryCard}>
+            <IconAvatar
+              icon="notifications-outline"
+              color={COLORS.warning}
+              bg="rgba(255,149,0,0.16)"
+              size={38}
+            />
+            <View style={styles.summaryMain}>
+              <Text style={styles.summaryTitle}>{list.length} 人需跟进</Text>
+              <Text style={styles.summarySub}>建议优先联系剩餐较少的会员续卡</Text>
+            </View>
+          </GlassSurface>
 
           <GlassSurface
             tint="warn"
@@ -141,6 +154,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: SPACING.page,
   },
+  summaryCard: {
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  summaryMain: { flex: 1, minWidth: 0 },
+  summaryTitle: { ...TYPE.headline, color: COLORS.text.primary },
+  summarySub: { ...TYPE.footnote, color: COLORS.text.tertiary, marginTop: 2 },
   hint: { marginTop: SPACING.sm, marginBottom: SPACING.md },
   hintRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   hintText: { ...TYPE.footnote, color: COLORS.text.secondary, flex: 1 },
