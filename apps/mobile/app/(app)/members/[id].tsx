@@ -342,33 +342,30 @@ export default function MemberDetailScreen() {
               ) : null}
             </View>
 
-            {/* 余餐告急时优先续卡：不再引导升级 */}
+            {/* 续卡与升级均可操作，保留低余餐提醒 */}
             <View style={styles.actionRow}>
-              {renewal ? (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    styles.actionBtnFull,
-                    styles.renewBtn,
-                    pressed && { opacity: 0.8 },
-                  ]}
-                  onPress={() => setShowRenewModal(true)}
-                >
-                  <Text style={styles.renewBtnText}>续卡</Text>
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    styles.actionBtnFull,
-                    styles.upgradeBtn,
-                    pressed && { opacity: 0.8 },
-                  ]}
-                  onPress={() => setShowUpgradeModal(true)}
-                >
-                  <Text style={styles.upgradeBtnText}>升级卡片</Text>
-                </Pressable>
-              )}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionBtn,
+                  styles.actionBtnFlex,
+                  styles.renewBtn,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => setShowRenewModal(true)}
+              >
+                <Text style={styles.renewBtnText}>续卡</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionBtn,
+                  styles.actionBtnFlex,
+                  styles.upgradeBtn,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => setShowUpgradeModal(true)}
+              >
+                <Text style={styles.upgradeBtnText}>升级卡片</Text>
+              </Pressable>
             </View>
 
           </View>
