@@ -32,6 +32,9 @@ import {
   StatTile,
   SectionLabel,
   DatePicker,
+  IconAvatar,
+  PressableCard,
+  StatusChip,
 } from '../../../components/ui';
 import {
   FINANCE_CATEGORY_LABEL,
@@ -81,6 +84,19 @@ function mondayOfWeek(): string {
   return formatDate(now);
 }
 
+function daysAgoISO(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return formatDate(d);
+}
+
+function daysAgoFrom(baseISO: string, days: number): string {
+  const d = new Date(`${baseISO}T00:00:00`);
+  if (!Number.isFinite(d.getTime())) return daysAgoISO(days);
+  d.setDate(d.getDate() - days);
+  return formatDate(d);
+}
+
 export default function FinanceScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -93,6 +109,7 @@ export default function FinanceScreen() {
   const [categoryMenuVisible, setCategoryMenuVisible] = useState(false);
 
   const [data, setData] = useState<FinanceListResponse | null>(null);
+  const [detailItems, setDetailItems] = useState<FinanceEntryDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -111,6 +128,9 @@ export default function FinanceScreen() {
   );
 
   const today = todayISO();
+  const detailWindowTo = to || today;
+  const detailWindowFromRaw = daysAgoFrom(detailWindowTo, 7);
+  const detailWindowFrom = from && from > detailWindowFromRaw ? from : detailWindowFromRaw;
   const weekStart = mondayOfWeek();
   const monthStart = firstOfMonth();
   const selectedQuickRange =
@@ -128,21 +148,31 @@ export default function FinanceScreen() {
       else setRefreshing(true);
       setFetchError(null);
       try {
-        const res = await listFinance(params);
+        const [res, detailRes] = await Promise.all([
+          listFinance(params),
+          listFinance({
+            ...params,
+            from: detailWindowFrom,
+            to: detailWindowTo,
+            limit: 200,
+          }),
+        ]);
         setData(res);
+        setDetailItems(detailRes.items);
       } catch (e) {
         setData({
           items: [],
           total: 0,
           summary: { income: 0, expense: 0, net: 0, byCategory: {} },
         });
+        setDetailItems([]);
         setFetchError(e instanceof Error ? e.message : '加载失败');
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [params],
+    [params, detailWindowFrom, detailWindowTo],
   );
 
   useEffect(() => {
@@ -174,6 +204,28 @@ export default function FinanceScreen() {
   };
 
   const summary = data?.summary;
+  const structureGroups = useMemo(() => {
+    const incomeMap = new Map<string, number>();
+    const expenseMap = new Map<string, number>();
+    for (const item of data?.items ?? []) {
+      if (item.voided) continue;
+      const target = item.type === 'income' ? incomeMap : expenseMap;
+      target.set(item.category, (target.get(item.category) ?? 0) + item.amount);
+    }
+    const toSortedList = (source: Map<string, number>) =>
+      Array.from(source.entries())
+        .map(([cat, amt]) => ({
+          key: cat,
+          label: FINANCE_CATEGORY_LABEL[cat as FinanceCategory] ?? cat,
+          amount: amt,
+        }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 5);
+    return {
+      income: toSortedList(incomeMap),
+      expense: toSortedList(expenseMap),
+    };
+  }, [data?.items]);
 
   return (
     <View style={styles.root}>
@@ -181,6 +233,16 @@ export default function FinanceScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader
           title="财务记账"
+          subtitle={`${from} ~ ${to}`}
+          right={
+            <Pressable
+              onPress={() => setModalVisible(true)}
+              style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
+            >
+              <Ionicons name="add-circle-outline" size={16} color={COLORS.brand} />
+              <Text style={styles.headerActionText}>新增支出</Text>
+            </Pressable>
+          }
         />
 
         <ScrollView
@@ -194,15 +256,18 @@ export default function FinanceScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.block}>
-            <GlassSurface padding={SPACING.base} style={styles.heroRow}>
+            <GlassSurface padding={SPACING.base} style={styles.heroCard}>
+              <IconAvatar
+                icon="wallet-outline"
+                color={COLORS.warning}
+                bg={COLORS.warningSoft}
+                size={42}
+              />
               <View style={styles.heroMain}>
                 <Text style={styles.heroTitle}>财务总览</Text>
-                <Text style={styles.heroSub}>{from} ~ {to}</Text>
+                <Text style={styles.heroSub}>支持按任意时间段筛选与核对</Text>
               </View>
-              <Pressable onPress={() => setModalVisible(true)} style={styles.heroAction}>
-                <Ionicons name="add-circle-outline" size={18} color={COLORS.brand} />
-                <Text style={styles.heroActionText}>新增支出</Text>
-              </Pressable>
+              <StatusChip label={`${data?.total ?? 0} 条`} variant="neutral" />
             </GlassSurface>
           </View>
 
@@ -249,6 +314,26 @@ export default function FinanceScreen() {
                   }
                   color={(summary?.net ?? 0) >= 0 ? COLORS.success : COLORS.danger}
                   tint={(summary?.net ?? 0) >= 0 ? 'ok' : 'danger'}
+                />
+              </Bento>
+            </BentoGrid>
+          </View>
+
+          <View style={styles.block}>
+            <SectionLabel>结构分布</SectionLabel>
+            <BentoGrid gap={SPACING.md}>
+              <Bento span={6} mobileSpan={12}>
+                <CategoryBars
+                  title="收入结构"
+                  items={structureGroups.income}
+                  color={COLORS.success}
+                />
+              </Bento>
+              <Bento span={6} mobileSpan={12}>
+                <CategoryBars
+                  title="支出结构"
+                  items={structureGroups.expense}
+                  color={COLORS.danger}
                 />
               </Bento>
             </BentoGrid>
@@ -339,25 +424,27 @@ export default function FinanceScreen() {
                   ))}
                 </Menu>
 
-                <Pressable
+                <PressableCard
                   onPress={() => setIncludeVoided((v) => !v)}
-                  style={[styles.toggle, includeVoided && styles.toggleActive]}
+                  style={styles.toggle}
+                  tint={includeVoided ? 'info' : undefined}
+                  padding={SPACING.sm}
                 >
                   <Ionicons
                     name={includeVoided ? 'eye-outline' : 'eye-off-outline'}
                     size={14}
-                    color={includeVoided ? '#fff' : COLORS.text.secondary}
+                    color={includeVoided ? COLORS.brand : COLORS.text.secondary}
                     style={{ marginRight: 4 }}
                   />
                   <Text
                     style={[
                       styles.toggleText,
-                      includeVoided && styles.toggleTextActive,
+                      includeVoided && { color: COLORS.brand },
                     ]}
                   >
                     含已冲销
                   </Text>
-                </Pressable>
+                </PressableCard>
               </View>
 
               <View style={styles.quickRangeRow}>
@@ -383,44 +470,21 @@ export default function FinanceScreen() {
             </GlassSurface>
           </View>
 
-          {/* 按分类小计（仅当有数据时） */}
-          {summary && Object.keys(summary.byCategory).length > 0 && (
-            <View style={styles.block}>
-              <SectionLabel>按分类</SectionLabel>
-              <GlassSurface padding={SPACING.md}>
-                {Object.entries(summary.byCategory).map(([cat, amt], idx, arr) => (
-                  <View
-                    key={cat}
-                    style={[
-                      styles.catRow,
-                      idx === arr.length - 1 && { borderBottomWidth: 0 },
-                    ]}
-                  >
-                    <Text style={styles.catLabel}>
-                      {FINANCE_CATEGORY_LABEL[cat as FinanceCategory] ?? cat}
-                    </Text>
-                    <Text style={styles.catValue}>{formatCNY(amt)}</Text>
-                  </View>
-                ))}
-              </GlassSurface>
-            </View>
-          )}
-
           {/* 明细 */}
           <View style={styles.block}>
             <View style={styles.listHeaderRow}>
-              <SectionLabel>{`明细（${data?.total ?? 0} 条）`}</SectionLabel>
+              <SectionLabel>{`最近7天明细（${detailWindowFrom} ~ ${detailWindowTo}）`}</SectionLabel>
             </View>
             {loading && !data ? (
               <View style={{ paddingVertical: 40, alignItems: 'center' }}>
                 <ActivityIndicator />
               </View>
-            ) : (data?.items ?? []).length === 0 ? (
+            ) : detailItems.length === 0 ? (
               <GlassSurface padding={SPACING.lg}>
                 <Text style={styles.emptyText}>当前筛选条件下没有记录</Text>
               </GlassSurface>
             ) : (
-              (data?.items ?? []).map((item) => (
+              detailItems.map((item) => (
                 <EntryCard
                   key={item.id}
                   entry={item}
@@ -439,6 +503,52 @@ export default function FinanceScreen() {
         />
       </SafeAreaView>
     </View>
+  );
+}
+
+function CategoryBars({
+  title,
+  items,
+  color,
+}: {
+  title: string;
+  items: Array<{ key: string; label: string; amount: number }>;
+  color: string;
+}) {
+  const categoryMax = Math.max(1, ...items.map((c) => c.amount));
+  return (
+    <GlassSurface padding={SPACING.md}>
+      <Text style={styles.groupTitle}>{title}</Text>
+      {items.length === 0 ? (
+        <Text style={styles.emptyText}>当前筛选条件下没有记录</Text>
+      ) : (
+        items.map((item, idx) => (
+          <View
+            key={item.key}
+            style={[
+              styles.chartRow,
+              idx === items.length - 1 && { marginBottom: 0 },
+            ]}
+          >
+            <Text style={styles.chartLabel} numberOfLines={1}>
+              {item.label}
+            </Text>
+            <View style={styles.chartTrack}>
+              <View
+                style={[
+                  styles.chartFill,
+                  {
+                    width: `${Math.max((item.amount / categoryMax) * 100, 8)}%`,
+                    backgroundColor: color,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={styles.chartValue}>{formatCNY(item.amount)}</Text>
+          </View>
+        ))
+      )}
+    </GlassSurface>
   );
 }
 
@@ -527,12 +637,21 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   block: { marginBottom: SPACING.lg },
-  heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pressed: { opacity: 0.65 },
+  headerAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,122,255,0.08)',
+  },
+  headerActionText: { ...TYPE.footnote, color: COLORS.brand, fontWeight: '600' },
+  heroCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.base },
   heroMain: { flex: 1, minWidth: 0 },
   heroTitle: { ...TYPE.headline, color: COLORS.text.primary },
-  heroSub: { ...TYPE.footnote, color: COLORS.text.tertiary, marginTop: 2, fontVariant: ['tabular-nums'] },
-  heroAction: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6 },
-  heroActionText: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
+  heroSub: { ...TYPE.footnote, color: COLORS.text.tertiary, marginTop: 2 },
 
   errorBanner: {
     borderRadius: RADIUS.md,
@@ -581,14 +700,10 @@ const styles = StyleSheet.create({
   toggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(118,118,128,0.12)',
+    backgroundColor: 'transparent',
     borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
   },
-  toggleActive: { backgroundColor: COLORS.info },
   toggleText: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '500' },
-  toggleTextActive: { color: '#fff', fontWeight: '600' },
   quickRangeRow: { flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' },
   quickRange: {
     backgroundColor: 'rgba(0,122,255,0.08)',
@@ -605,20 +720,36 @@ const styles = StyleSheet.create({
   quickRangeText: { ...TYPE.caption, color: COLORS.brand, fontWeight: '600' },
   quickRangeTextActive: { color: COLORS.brand, fontWeight: '700' },
 
-  // 按分类
-  catRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.06)',
-  },
-  catLabel: { ...TYPE.body, color: COLORS.text.primary },
-  catValue: {
+  groupTitle: {
     ...TYPE.body,
     color: COLORS.text.primary,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginBottom: SPACING.sm,
+  },
+  chartRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  chartLabel: { ...TYPE.footnote, color: COLORS.text.primary, width: 84 },
+  chartTrack: {
+    flex: 1,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    overflow: 'hidden',
+  },
+  chartFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: COLORS.brand,
+  },
+  chartValue: {
+    ...TYPE.caption,
+    color: COLORS.text.secondary,
+    width: 84,
+    textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
 

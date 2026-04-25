@@ -44,6 +44,14 @@ export interface AdminPermissionState {
   users: ApiUser[];
 }
 
+export interface CreateStaffInput {
+  username: string;
+  full_name: string;
+  password: string;
+  is_active?: boolean;
+  can_data_write?: boolean;
+}
+
 export const usersApi = {
   list: () => api.get<{ users: ApiUser[] }>('/api/users'),
 
@@ -66,6 +74,9 @@ export const usersApi = {
       `/api/users/${id}/password`,
       { password },
     ),
+
+  createStaff: (input: CreateStaffInput) =>
+    api.post<{ user: ApiUser }>('/api/users/staff', input),
 
   /** 某员工录入的订单流水（按日期 + 创建时间倒序） */
   orders: (id: number, opts?: { from?: string; to?: string; status?: string; limit?: number; offset?: number }) => {

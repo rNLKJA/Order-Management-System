@@ -162,7 +162,6 @@ export default function ProfileScreen() {
                   />
                 </View>
               </View>
-              <Text style={styles.avatarHint}>点击头像或编辑按钮可更新照片</Text>
             </GlassSurface>
 
             <View style={styles.section}>
@@ -357,7 +356,6 @@ const styles = StyleSheet.create({
   fullName: { ...TYPE.title2, color: COLORS.text.primary, marginBottom: 2 },
   username: { ...TYPE.footnote, color: COLORS.text.tertiary, marginBottom: SPACING.sm },
   roleChip: { alignSelf: 'flex-start' },
-  avatarHint: { ...TYPE.caption, color: COLORS.text.tertiary },
 
   menuOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
   menuWrap: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: SPACING.page, paddingBottom: 24 },

@@ -156,33 +156,35 @@ export default function UserDetailScreen() {
             </View>
           </GlassSurface>
 
-          <SectionLabel>账户概览</SectionLabel>
-          <BentoGrid>
-            <Bento span={4}>
-              <StatTile
-                label="累计录单"
-                value={String(stats?.total_orders ?? '—')}
-                icon="receipt-outline"
-                color={COLORS.brand}
-              />
-            </Bento>
-            <Bento span={4}>
-              <StatTile
-                label="餐数"
-                value={String(stats?.total_meals ?? '—')}
-                icon="restaurant-outline"
-                color={COLORS.warning}
-              />
-            </Bento>
-            <Bento span={4}>
-              <StatTile
-                label="累计金额"
-                value={stats ? `¥${Number(stats.total_amount ?? 0).toFixed(0)}` : '—'}
-                icon="cash-outline"
-                color={COLORS.success}
-              />
-            </Bento>
-          </BentoGrid>
+          <View style={styles.overviewSection}>
+            <SectionLabel>账户概览</SectionLabel>
+            <BentoGrid>
+              <Bento span={4} mobileSpan={6}>
+                <StatTile
+                  label="累计录单"
+                  value={String(stats?.total_orders ?? '—')}
+                  icon="receipt-outline"
+                  color={COLORS.brand}
+                />
+              </Bento>
+              <Bento span={4} mobileSpan={6}>
+                <StatTile
+                  label="餐数"
+                  value={String(stats?.total_meals ?? '—')}
+                  icon="restaurant-outline"
+                  color={COLORS.warning}
+                />
+              </Bento>
+              <Bento span={4} mobileSpan={12}>
+                <StatTile
+                  label="累计金额"
+                  value={stats ? `¥${Number(stats.total_amount ?? 0).toFixed(0)}` : '—'}
+                  icon="cash-outline"
+                  color={COLORS.success}
+                />
+              </Bento>
+            </BentoGrid>
+          </View>
 
           {stats ? (
             <GlassSurface padding={SPACING.sm} style={styles.breakdownRow}>
@@ -193,56 +195,58 @@ export default function UserDetailScreen() {
             </GlassSurface>
           ) : null}
 
-          <SectionLabel>订单流水</SectionLabel>
-          <GlassSurface padding={SPACING.base} style={styles.filterCard}>
-            <Text style={styles.filterLabel}>状态筛选</Text>
-            <View style={styles.filterBar}>
-              {(['all', 'pending', 'fulfilled', 'delivered', 'cancelled'] as const).map((s) => {
-                const active = statusFilter === s;
-                const label =
-                  s === 'all'
-                    ? '全部'
-                    : s === 'pending'
-                      ? '待出餐'
-                      : s === 'fulfilled'
-                        ? '已出餐'
-                        : s === 'delivered'
-                          ? '已送达'
-                          : '已取消';
-                return (
+          <View style={styles.ordersSection}>
+            <SectionLabel>订单流水</SectionLabel>
+            <GlassSurface padding={SPACING.base} style={styles.filterCard}>
+              <Text style={styles.filterLabel}>状态筛选</Text>
+              <View style={styles.filterBar}>
+                {(['all', 'pending', 'fulfilled', 'delivered', 'cancelled'] as const).map((s) => {
+                  const active = statusFilter === s;
+                  const label =
+                    s === 'all'
+                      ? '全部'
+                      : s === 'pending'
+                        ? '待出餐'
+                        : s === 'fulfilled'
+                          ? '已出餐'
+                          : s === 'delivered'
+                            ? '已送达'
+                            : '已取消';
+                  return (
+                    <PressableCard
+                      key={s}
+                      padding={8}
+                      tint={active ? 'info' : undefined}
+                      level={1}
+                      onPress={() => setStatusFilter(s)}
+                      style={styles.filterChip}
+                    >
+                      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                        {label}
+                      </Text>
+                    </PressableCard>
+                  );
+                })}
+              </View>
+              <Text style={[styles.filterLabel, { marginTop: SPACING.sm }]}>每次加载</Text>
+              <View style={styles.filterBar}>
+                {LIMIT_OPTIONS.map((n) => (
                   <PressableCard
-                    key={s}
+                    key={n}
                     padding={8}
-                    tint={active ? 'info' : undefined}
+                    tint={limit === n ? 'info' : undefined}
                     level={1}
-                    onPress={() => setStatusFilter(s)}
-                    style={styles.filterChip}
+                    onPress={() => setLimit(n)}
+                    style={styles.limitChip}
                   >
-                    <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                      {label}
+                    <Text style={[styles.filterChipText, limit === n && styles.filterChipTextActive]}>
+                      {n}
                     </Text>
                   </PressableCard>
-                );
-              })}
-            </View>
-            <Text style={[styles.filterLabel, { marginTop: SPACING.sm }]}>每次加载</Text>
-            <View style={styles.filterBar}>
-              {LIMIT_OPTIONS.map((n) => (
-                <PressableCard
-                  key={n}
-                  padding={8}
-                  tint={limit === n ? 'info' : undefined}
-                  level={1}
-                  onPress={() => setLimit(n)}
-                  style={styles.limitChip}
-                >
-                  <Text style={[styles.filterChipText, limit === n && styles.filterChipTextActive]}>
-                    {n}
-                  </Text>
-                </PressableCard>
-              ))}
-            </View>
-          </GlassSurface>
+                ))}
+              </View>
+            </GlassSurface>
+          </View>
 
           {ordQ.isLoading ? (
             <View style={styles.center}>
@@ -255,8 +259,8 @@ export default function UserDetailScreen() {
               <Text style={styles.messageSub}>可先回到订餐页面录入后再查看。</Text>
             </GlassSurface>
           ) : (
-            byDate.map(([date, list]) => (
-              <View key={date} style={styles.dayBlock}>
+            byDate.map(([date, list], dayIdx) => (
+              <View key={date} style={[styles.dayBlock, dayIdx === 0 && styles.dayBlockFirst]}>
                 <Text style={styles.dayHeader}>
                   {date}
                   <Text style={styles.dayCount}> · {list.length} 单</Text>
@@ -338,14 +342,21 @@ const styles = StyleSheet.create({
   heroTitleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' },
   heroTitle: { ...TYPE.title3, color: COLORS.text.primary },
   heroSub: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 2 },
+  overviewSection: { marginHorizontal: SPACING.page },
   breakdownRow: {
     flexDirection: 'row',
     gap: 8,
     marginHorizontal: SPACING.page,
-    marginTop: SPACING.sm,
+    marginTop: SPACING.base,
+    marginBottom: SPACING.base,
     flexWrap: 'wrap',
   },
-  filterCard: { marginHorizontal: SPACING.page },
+  ordersSection: {
+    marginHorizontal: SPACING.page,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.base,
+  },
+  filterCard: {},
   filterLabel: { ...TYPE.caption, color: COLORS.text.tertiary },
   filterBar: {
     flexDirection: 'row',
@@ -357,7 +368,8 @@ const styles = StyleSheet.create({
   limitChip: { minWidth: 54, alignItems: 'center' },
   filterChipText: { ...TYPE.caption, color: COLORS.text.secondary, fontWeight: '600' },
   filterChipTextActive: { color: COLORS.brand },
-  dayBlock: { paddingHorizontal: SPACING.page, marginBottom: SPACING.sm },
+  dayBlock: { paddingHorizontal: SPACING.page, marginBottom: SPACING.base },
+  dayBlockFirst: { marginTop: SPACING.xs },
   dayHeader: {
     ...TYPE.callout,
     fontWeight: '700',

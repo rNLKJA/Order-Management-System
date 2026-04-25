@@ -903,6 +903,8 @@ describe('Orders API /api/orders', () => {
           lunch_qty: 2,
           customer_name: '张叔叔',
           customer_phone: '13800001111',
+          customer_wechat: 'zhang_shushu',
+          customer_address: '江北区测试路 66 号',
           adhoc_unit_price: 40,
           notes: '不要辣',
         }),
@@ -981,6 +983,46 @@ describe('Orders API /api/orders', () => {
     expect(res.status).toBe(400);
   });
 
+  it('POST 散客 walk-in 缺微信号 → 400', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({
+          order_date: '2026-04-24',
+          lunch_qty: 1,
+          customer_name: '没填微信',
+          customer_phone: '13888889999',
+          customer_address: '江北区测试路 3 号',
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('POST 散客 walk-in 缺地址 → 400', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({
+          order_date: '2026-04-24',
+          lunch_qty: 1,
+          customer_name: '没填地址',
+          customer_phone: '13877776666',
+          customer_wechat: 'nofill_address',
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('POST 散客附带手机+地址：写回 walk-in member，下次留空不被洗掉', async () => {
     const post = (body: Record<string, unknown>) =>
       app.fetch(
@@ -1000,6 +1042,7 @@ describe('Orders API /api/orders', () => {
       lunch_qty: 1,
       customer_name: '刘大爷',
       customer_phone: '13800008888',
+      customer_wechat: 'liu_daye',
       customer_address: '江北区测试路 1 号',
     });
     expect(r1.status).toBe(201);
@@ -1011,6 +1054,7 @@ describe('Orders API /api/orders', () => {
       .from(schema.members)
       .where(eq(schema.members.id, memberId));
     expect(rows[0]!.phone).toBe('13800008888');
+    expect(rows[0]!.wechat_id).toBe('liu_daye');
     expect(rows[0]!.address).toBe('江北区测试路 1 号');
     expect(rows[0]!.is_walkin).toBe(true);
 
@@ -1020,6 +1064,8 @@ describe('Orders API /api/orders', () => {
       dinner_qty: 1,
       customer_name: '刘大爷',
       customer_phone: '13800008888',
+      customer_wechat: 'liu_daye',
+      customer_address: '江北区测试路 1 号',
     });
     expect(r2.status).toBe(201);
     rows = await db
@@ -1027,6 +1073,7 @@ describe('Orders API /api/orders', () => {
       .from(schema.members)
       .where(eq(schema.members.id, memberId));
     expect(rows[0]!.phone).toBe('13800008888');
+    expect(rows[0]!.wechat_id).toBe('liu_daye');
     expect(rows[0]!.address).toBe('江北区测试路 1 号');
 
     // 第三次：同名，只改地址 → 手机保留，地址更新
@@ -1035,6 +1082,7 @@ describe('Orders API /api/orders', () => {
       lunch_qty: 1,
       customer_name: '刘大爷',
       customer_phone: '13800008888',
+      customer_wechat: 'liu_daye_new',
       customer_address: '新地址 88 号',
     });
     expect(r3.status).toBe(201);
@@ -1043,6 +1091,7 @@ describe('Orders API /api/orders', () => {
       .from(schema.members)
       .where(eq(schema.members.id, memberId));
     expect(rows[0]!.phone).toBe('13800008888');
+    expect(rows[0]!.wechat_id).toBe('liu_daye_new');
     expect(rows[0]!.address).toBe('新地址 88 号');
   });
 
@@ -1060,6 +1109,8 @@ describe('Orders API /api/orders', () => {
             lunch_qty: 1,
             customer_name: name,
             customer_phone: '13900002222',
+            customer_wechat: `${name}_wx`,
+            customer_address: `${name}测试地址 1 号`,
           }),
         }),
       );
@@ -1117,6 +1168,8 @@ describe('Orders API /api/orders', () => {
             lunch_qty: 2,
             customer_name: name,
             customer_phone: phones[phoneIdx++]!,
+            customer_wechat: `${name}_wx`,
+            customer_address: `${name}测试路 2 号`,
             adhoc_unit_price: 35,
           }),
         }),

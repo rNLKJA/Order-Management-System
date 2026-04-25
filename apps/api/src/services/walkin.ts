@@ -27,6 +27,8 @@ export function walkinUid(name: string): string {
 export interface WalkinContact {
   /** 散客手机号（可选） */
   phone?: string;
+  /** 散客微信号（可选） */
+  wechat_id?: string;
   /** 送餐地址（可选） */
   address?: string;
   /** 是否算院内订单（散客模式默认 false，前端可覆盖） */
@@ -57,6 +59,7 @@ export async function getOrCreateWalkinMember(
   }
 
   const phone = (contact.phone ?? '').trim();
+  const wechatId = (contact.wechat_id ?? '').trim();
   const address = (contact.address ?? '').trim();
   const isHospital = contact.is_hospital ?? false;
   const uid = walkinUid(name);
@@ -74,6 +77,7 @@ export async function getOrCreateWalkinMember(
     // 合并更新：非空新值 或 旧值为空时的默认值
     const patch: Partial<typeof schema.members.$inferInsert> = {};
     if (phone && phone !== hit.phone) patch.phone = phone;
+    if (wechatId && wechatId !== hit.wechat_id) patch.wechat_id = wechatId;
     if (address && address !== hit.address) patch.address = address;
     if (isHospital !== hit.is_hospital) patch.is_hospital = isHospital;
     if (Object.keys(patch).length > 0) {
@@ -95,7 +99,7 @@ export async function getOrCreateWalkinMember(
       name,
       nickname: '',
       phone,
-      wechat_id: '',
+      wechat_id: wechatId,
       address,
       dietary_notes: '',
       is_hospital: isHospital,

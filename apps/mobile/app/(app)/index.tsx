@@ -3,7 +3,7 @@
  * 布局：欢迎卡（左图标右文案）→ 速览 4 连格 → 余餐提醒 → 快捷操作分层。
  */
 
-import { StyleSheet, ScrollView, View } from 'react-native';
+import { StyleSheet, ScrollView, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
@@ -40,6 +40,13 @@ type EntryDef = {
   route: string;
 };
 
+const ICON_OPTICAL_NUDGE: Partial<
+  Record<EntryDef['icon'], { x?: number; y?: number }>
+> = {
+  'wallet-outline': { x: 0.5, y: -0.5 },
+  'bar-chart-outline': { x: 0.5, y: -1 },
+};
+
 function todayISO(): string {
   const d = new Date();
   const y = d.getFullYear();
@@ -51,6 +58,8 @@ function todayISO(): string {
 export default function HomeScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isCompactPhone = width <= 430;
   const hour = new Date().getHours();
   const timeGreeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
 
@@ -106,35 +115,48 @@ export default function HomeScreen() {
       route: '/(app)/walkins',
     },
     {
-      key: 'orders',
-      title: '每日订餐',
+      key: 'orders-manage',
+      title: '录入 / 总览',
       subtitle: ordersToday.isLoading
         ? '加载中...'
         : `${totalCount} 份 · 待出 ${pendingCount}`,
       icon: 'restaurant-outline',
       color: COLORS.success,
       bg: COLORS.successSoft,
-      route: '/(app)/orders',
+      route: '/(app)/orders?group=manage',
     },
     {
-      key: 'orders-stats',
-      title: '订单统计',
-      subtitle: '按日期范围查看份数 / 状态 / Top 会员',
-      icon: 'bar-chart-outline',
+      key: 'orders-fulfillment',
+      title: '出餐 / 配送',
+      subtitle: ordersToday.isLoading
+        ? '加载中...'
+        : `待出 ${pendingCount} 份 · 配送执行`,
+      icon: 'bicycle-outline',
       color: COLORS.info,
       bg: COLORS.infoSoft,
-      route: '/(app)/orders/stats',
+      route: '/(app)/orders?group=fulfillment',
     },
     {
       key: 'finance',
-      title: '财务记账',
+      title: '财务流水',
       subtitle: financeToday.isLoading
         ? '加载中...'
-        : `今日净额 ¥${fin.net.toLocaleString()}`,
+        : `今日净额 ¥${fin.net.toLocaleString()} · 可新增支出`,
       icon: 'wallet-outline',
       color: COLORS.warning,
       bg: COLORS.warningSoft,
       route: '/(app)/finance',
+    },
+    {
+      key: 'orders-stats',
+      title: '订餐数据',
+      subtitle: ordersToday.isLoading
+        ? '加载中...'
+        : `按日期分析全员订餐 · 今日 ${totalCount} 份`,
+      icon: 'bar-chart-outline',
+      color: COLORS.info,
+      bg: COLORS.infoSoft,
+      route: '/(app)/orders/stats',
     },
     {
       key: 'users',
@@ -278,7 +300,7 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            {/* 快捷操作（Bento：左 2 行 1 列 + 右侧 2 行高主卡） */}
+            {/* 快捷操作 */}
             <View style={styles.block}>
               <SectionLabel>快捷操作</SectionLabel>
               <BentoGrid gap={SPACING.md}>
@@ -289,20 +311,23 @@ export default function HomeScreen() {
                   </View>
                 </Bento>
                 <Bento span={6} mobileSpan={12}>
-                  {entriesByKey.orders ? <QuickEntryCard entry={entriesByKey.orders} tall /> : null}
+                  <View style={styles.primaryColumn}>
+                    {entriesByKey['orders-manage'] ? <QuickEntryCard entry={entriesByKey['orders-manage']} compactPhone={isCompactPhone} /> : null}
+                    {entriesByKey['orders-fulfillment'] ? <QuickEntryCard entry={entriesByKey['orders-fulfillment']} compactPhone={isCompactPhone} /> : null}
+                  </View>
                 </Bento>
 
-                {['orders-stats', 'finance', 'users', 'admin']
+                {['finance', 'orders-stats', 'users', 'admin']
                   .filter((key) => Boolean(entriesByKey[key]))
                   .map((key) => (
                     <Bento key={key} span={6} mobileSpan={12}>
-                      <QuickEntryCard entry={entriesByKey[key]!} compact />
+                      <QuickEntryCard entry={entriesByKey[key]!} compact compactPhone={isCompactPhone} />
                     </Bento>
                   ))}
 
                 {entriesByKey.profile ? (
                   <Bento span={12}>
-                    <QuickEntryCard entry={entriesByKey.profile} />
+                    <QuickEntryCard entry={entriesByKey.profile} compactPhone={isCompactPhone} />
                   </Bento>
                 ) : null}
               </BentoGrid>
@@ -317,29 +342,50 @@ function QuickEntryCard({
   entry,
   compact,
   tall,
+  compactPhone,
 }: {
   entry: EntryDef;
   compact?: boolean;
   tall?: boolean;
+  compactPhone?: boolean;
 }) {
+  const iconSize = compact ? 40 : 42;
+  const nudge = ICON_OPTICAL_NUDGE[entry.icon];
   return (
     <PressableCard
       padding={compact ? SPACING.base : SPACING.lg}
       onPress={() => router.push(entry.route as never)}
-      style={[styles.entryCard, compact && styles.entryCardCompact, tall && styles.entryCardTall]}
+      style={[
+        styles.entryCard,
+        compact && styles.entryCardCompact,
+        tall && styles.entryCardTall,
+        compactPhone && styles.entryCardPhone,
+        tall && compactPhone && styles.entryCardTallPhone,
+      ]}
     >
-      <IconAvatar icon={entry.icon} color={entry.color} bg={entry.bg} size={compact ? 40 : 46} />
+      <View style={styles.entryIconSlot}>
+        <IconAvatar
+          icon={entry.icon}
+          color={entry.color}
+          bg={entry.bg}
+          size={iconSize}
+          iconOffsetX={nudge?.x ?? 0}
+          iconOffsetY={nudge?.y ?? 0}
+        />
+      </View>
       <View style={styles.entryText}>
         <Text style={styles.entryTitle}>{entry.title}</Text>
         <Text style={styles.entrySubtitle} numberOfLines={compact ? 1 : 2}>
           {entry.subtitle}
         </Text>
       </View>
-      <Ionicons
-        name="chevron-forward"
-        size={18}
-        color={COLORS.text.quaternary}
-      />
+      <View style={styles.entryChevronSlot}>
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={COLORS.text.quaternary}
+        />
+      </View>
     </PressableCard>
   );
 }
@@ -403,7 +449,18 @@ const styles = StyleSheet.create({
     minHeight: 84,
   },
   entryCardTall: { minHeight: 192 },
-  entryText: { flex: 1, marginLeft: SPACING.md },
+  entryCardPhone: { borderRadius: 14 },
+  entryCardTallPhone: { minHeight: 160 },
+  entryIconSlot: {
+    width: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  entryText: { flex: 1, marginLeft: SPACING.sm },
+  entryChevronSlot: {
+    width: 20,
+    alignItems: 'flex-end',
+  },
   entryTitle: { ...TYPE.title3, color: COLORS.text.primary, marginBottom: 4 },
   entrySubtitle: { ...TYPE.footnote, color: COLORS.text.secondary },
 });

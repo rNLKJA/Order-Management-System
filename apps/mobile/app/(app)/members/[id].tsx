@@ -342,24 +342,13 @@ export default function MemberDetailScreen() {
               ) : null}
             </View>
 
-            {/* 升级 / 续卡按钮：同一行并排，剩餐足够时只显示升级（占满） */}
+            {/* 余餐告急时优先续卡：不再引导升级 */}
             <View style={styles.actionRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  styles.actionBtnFlex,
-                  styles.upgradeBtn,
-                  pressed && { opacity: 0.8 },
-                ]}
-                onPress={() => setShowUpgradeModal(true)}
-              >
-                <Text style={styles.upgradeBtnText}>升级卡片</Text>
-              </Pressable>
               {renewal ? (
                 <Pressable
                   style={({ pressed }) => [
                     styles.actionBtn,
-                    styles.actionBtnFlex,
+                    styles.actionBtnFull,
                     styles.renewBtn,
                     pressed && { opacity: 0.8 },
                   ]}
@@ -367,7 +356,19 @@ export default function MemberDetailScreen() {
                 >
                   <Text style={styles.renewBtnText}>续卡</Text>
                 </Pressable>
-              ) : null}
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    styles.actionBtnFull,
+                    styles.upgradeBtn,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={() => setShowUpgradeModal(true)}
+                >
+                  <Text style={styles.upgradeBtnText}>升级卡片</Text>
+                </Pressable>
+              )}
             </View>
 
           </View>
@@ -969,6 +970,7 @@ const styles = StyleSheet.create({
     height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
   },
   actionBtnFlex: { flex: 1 },
+  actionBtnFull: { width: '100%' },
   upgradeBtn: { backgroundColor: IOS_COLORS.blue },
   upgradeBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
   renewBtn: { backgroundColor: '#FF9500' },

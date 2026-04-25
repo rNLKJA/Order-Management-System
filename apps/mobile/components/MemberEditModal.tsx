@@ -72,6 +72,7 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
   );
 
   const validation = useMemo(() => memberCreateSchema.safeParse(candidate), [candidate]);
+  const isWalkin = !!member.is_walkin;
 
   const dirty =
     candidate.name !== member.name ||
@@ -93,6 +94,15 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
       }
       setErrors(next);
       return;
+    }
+    if (isWalkin) {
+      const next: Record<string, string> = {};
+      if (!candidate.wechat_id.trim()) next.wechat_id = '散客微信号必填';
+      if (!candidate.address.trim()) next.address = '散客地址必填';
+      if (Object.keys(next).length > 0) {
+        setErrors(next);
+        return;
+      }
     }
     setErrors({});
     setSubmitError(null);

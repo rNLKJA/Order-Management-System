@@ -237,9 +237,6 @@ export default function WalkinDetailScreen() {
                 <Text style={styles.walkinBadgeText}>散客</Text>
               </View>
             </GlassSurface>
-            <Text style={styles.hint}>
-              布局与会员详情保持一致。散客仅按次付费，不展示升级/续卡操作。
-            </Text>
           </View>
 
           {/* 统计 */}
@@ -277,9 +274,6 @@ export default function WalkinDetailScreen() {
               {promoting ? <ActivityIndicator color="#fff" /> : <Ionicons name="add-circle-outline" size={20} color="#fff" />}
               <Text style={styles.purchaseBtnText}>为 TA 开卡</Text>
             </PressableCard>
-            <Text style={styles.purchaseHint}>
-              开卡后自动升为正式会员，此页面会自动跳去会员详情。
-            </Text>
           </View>
 
           {/* 历史订单 */}
@@ -394,6 +388,7 @@ function toMockMemberLite(
     address: member.address ?? '',
     dietary_notes: member.dietary_notes ?? '',
     is_hospital: member.is_hospital,
+    is_walkin: true,
     active_card: null,
     card_history: [],
     stats: {
@@ -460,13 +455,6 @@ const styles = StyleSheet.create({
     color: IOS_COLORS.orange,
     fontWeight: '600',
   },
-  hint: {
-    fontSize: 12,
-    color: IOS_COLORS.labelSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: 2,
-  },
 
   sectionWrap: { paddingHorizontal: 20, marginBottom: 16 },
   sectionLabel: {
@@ -505,7 +493,6 @@ const styles = StyleSheet.create({
   cardSection: {
     paddingHorizontal: 20,
     marginBottom: 24,
-    gap: 8,
   },
   purchaseBtn: {
     height: 50,
@@ -522,11 +509,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   purchaseBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  purchaseHint: {
-    fontSize: 12,
-    color: IOS_COLORS.labelTertiary,
-    textAlign: 'center',
-  },
 
   sectionHeader: {
     paddingHorizontal: 24,
@@ -541,7 +523,6 @@ const styles = StyleSheet.create({
   },
 
   ordersList: {
-    marginHorizontal: 20,
     backgroundColor: IOS_COLORS.card,
     borderRadius: 14,
     overflow: 'hidden',
@@ -579,7 +560,6 @@ const styles = StyleSheet.create({
   orderNote: { fontSize: 12, color: IOS_COLORS.orange },
 
   emptyOrders: {
-    marginHorizontal: 20,
     padding: 24,
     borderRadius: 14,
     backgroundColor: IOS_COLORS.card,

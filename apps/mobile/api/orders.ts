@@ -56,6 +56,7 @@ export interface CreateOrderInput {
   customer_name?: string;
   /** 散客联系方式（可选，留空就不覆盖现有档案） */
   customer_phone?: string;
+  customer_wechat?: string;
   customer_address?: string;
   customer_is_hospital?: boolean;
   /** 散客模式自定义单价（覆盖 ad_hoc_price） */

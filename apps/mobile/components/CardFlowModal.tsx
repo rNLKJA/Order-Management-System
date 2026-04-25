@@ -19,6 +19,7 @@ import {
   TextInput,
   View,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -100,6 +101,8 @@ export function CardFlowModal(props: CardFlowModalProps) {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { width } = useWindowDimensions();
+  const isCompactPhone = width <= 430;
 
   const nameById = useMemo(() => {
     const m = new Map<number, string>();
@@ -354,6 +357,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
                   onPress={() => setSelectedCode(opt.code)}
                   style={[
                     styles.cardOption,
+                    isCompactPhone && styles.cardOptionCompact,
                     active && styles.cardOptionActive,
                     !enabled && styles.cardOptionDisabled,
                   ]}
@@ -371,6 +375,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
                         <Text
                           style={[
                             styles.cardOptionName,
+                            isCompactPhone && styles.cardOptionNameCompact,
                             !enabled && styles.cardOptionTextDisabled,
                           ]}
                         >
@@ -389,6 +394,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
                     <Text
                       style={[
                         styles.cardOptionPrice,
+                        isCompactPhone && styles.cardOptionPriceCompact,
                         !enabled && styles.cardOptionTextDisabled,
                       ]}
                     >
@@ -461,7 +467,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
         </ScrollView>
 
         {/* 底部汇总条 */}
-        <View style={styles.summary}>
+        <View style={[styles.summary, isCompactPhone && styles.summaryCompact]}>
           {selectedSpec ? (
             <View style={{ flex: 1 }}>
               {mode === 'purchase' ? (
@@ -508,7 +514,11 @@ export function CardFlowModal(props: CardFlowModalProps) {
           )}
 
           <Pressable
-            style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
+            style={[
+              styles.primaryBtn,
+              isCompactPhone && styles.primaryBtnCompact,
+              !canSubmit && styles.primaryBtnDisabled,
+            ]}
             disabled={!canSubmit}
             onPress={handleConfirm}
           >
@@ -655,6 +665,11 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
   },
+  cardOptionCompact: {
+    flexBasis: '100%',
+    minWidth: 0,
+    padding: 12,
+  },
   cardOptionActive: { borderColor: IOS_COLORS.blue, backgroundColor: IOS_COLORS.blueLight },
   cardOptionDisabled: { backgroundColor: IOS_COLORS.fillLight, opacity: 0.55 },
   cardOptionTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
@@ -669,8 +684,10 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   cardOptionName: { fontSize: 18, fontWeight: '700', color: IOS_COLORS.label },
+  cardOptionNameCompact: { fontSize: 16 },
   cardOptionMeals: { fontSize: 13, color: IOS_COLORS.labelSecondary, marginTop: 1 },
   cardOptionPrice: { fontSize: 34, fontWeight: '700', color: IOS_COLORS.blue, lineHeight: 36, textAlign: 'right' },
+  cardOptionPriceCompact: { fontSize: 28, lineHeight: 30 },
   cardOptionUnit: { fontSize: 12, color: IOS_COLORS.labelSecondary, textAlign: 'right' },
   cardOptionTextDisabled: { color: IOS_COLORS.labelTertiary },
   disabledReason: { fontSize: 11, color: IOS_COLORS.red, marginTop: 2 },
@@ -704,6 +721,11 @@ const styles = StyleSheet.create({
     backgroundColor: IOS_COLORS.card,
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: IOS_COLORS.separatorLight,
   },
+  summaryCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+  },
   summaryMain: { fontSize: 15, color: IOS_COLORS.label },
   summaryAmount: { fontSize: 20, fontWeight: '700', color: IOS_COLORS.blue },
   summarySub: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
@@ -713,6 +735,10 @@ const styles = StyleSheet.create({
     height: 44, minWidth: 120, paddingHorizontal: 18,
     borderRadius: 12, backgroundColor: IOS_COLORS.blue,
     alignItems: 'center', justifyContent: 'center',
+  },
+  primaryBtnCompact: {
+    width: '100%',
+    minWidth: 0,
   },
   primaryBtnDisabled: { backgroundColor: IOS_COLORS.labelTertiary },
   primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },

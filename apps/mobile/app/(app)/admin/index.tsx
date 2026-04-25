@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -33,6 +33,12 @@ import {
 
 export default function AdminPermissionsScreen() {
   const { user } = useAuth();
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      router.replace('/(app)');
+    }
+  }, [user]);
+
   const qc = useQueryClient();
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
   const [draftRole, setDraftRole] = useState<'admin' | 'staff'>('staff');
@@ -42,6 +48,13 @@ export default function AdminPermissionsScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwordHint, setPasswordHint] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [staffUsername, setStaffUsername] = useState('');
+  const [staffFullName, setStaffFullName] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [staffPassword2, setStaffPassword2] = useState('');
+  const [staffCanWrite, setStaffCanWrite] = useState(false);
+  const [staffHint, setStaffHint] = useState<string | null>(null);
 
   const q = useQuery({
     queryKey: ['admin', 'permissions'],
@@ -73,6 +86,26 @@ export default function AdminPermissionsScreen() {
       setPasswordHint(e instanceof Error ? e.message : '密码更新失败，请重试');
     },
   });
+  const createMut = useMutation({
+    mutationFn: usersApi.createStaff,
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['admin', 'permissions'] }),
+        qc.invalidateQueries({ queryKey: ['users', 'list-full'] }),
+        qc.invalidateQueries({ queryKey: ['users'] }),
+      ]);
+      setShowCreateModal(false);
+      setStaffUsername('');
+      setStaffFullName('');
+      setStaffPassword('');
+      setStaffPassword2('');
+      setStaffCanWrite(false);
+      setStaffHint(null);
+    },
+    onError: (e) => {
+      setStaffHint(e instanceof Error ? e.message : '新增员工失败，请稍后重试');
+    },
+  });
 
   const users = useMemo(() => q.data?.users ?? [], [q.data?.users]);
   const activeUsers = users.filter((u) => u.is_active);
@@ -87,6 +120,7 @@ export default function AdminPermissionsScreen() {
     setShowPassword(false);
     setPasswordHint(null);
   };
+  const isPrimaryAdmin = (name?: string) => (name ?? '').trim().toLowerCase() === 'rnlkja';
 
   const saveEditor = async () => {
     if (!editingUser) return;
@@ -114,26 +148,22 @@ export default function AdminPermissionsScreen() {
     setPasswordHint(null);
     await passwordMut.mutateAsync({ id: editingUser.id, password: newPassword });
   };
+  const createStaff = async () => {
+    if (!staffUsername.trim()) return setStaffHint('请输入用户名。');
+    if (!staffFullName.trim()) return setStaffHint('请输入员工姓名。');
+    if (staffPassword.length < 8) return setStaffHint('初始密码至少 8 位。');
+    if (staffPassword !== staffPassword2) return setStaffHint('两次输入的密码不一致。');
+    setStaffHint(null);
+    await createMut.mutateAsync({
+      username: staffUsername.trim(),
+      full_name: staffFullName.trim(),
+      password: staffPassword,
+      can_data_write: staffCanWrite,
+      is_active: true,
+    });
+  };
 
-  if (user?.role !== 'admin') {
-    return (
-      <View style={styles.root}>
-        <MeshBackground />
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-          <AppHeader title="权限管理" onBack={() => router.back()} />
-          <View style={styles.center}>
-            <GlassSurface tint="danger" padding={SPACING.md} style={styles.errCard}>
-              <Ionicons name="alert-circle-outline" size={16} color={COLORS.danger} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.errTitle}>仅管理员可访问</Text>
-                <Text style={styles.err}>请使用管理员账号登录后再编辑权限。</Text>
-              </View>
-            </GlassSurface>
-          </View>
-        </SafeAreaView>
-      </View>
-    );
-  }
+  if (user?.role !== 'admin') return null;
 
   return (
     <View style={styles.root}>
@@ -168,12 +198,23 @@ export default function AdminPermissionsScreen() {
                   color={COLORS.brand}
                   bg="rgba(0,122,255,0.12)"
                 />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.tipTitle}>点击“编辑权限”即可修改</Text>
+                <View style={styles.tipMain}>
+                  <View style={styles.tipHeadRow}>
+                    <Text style={styles.tipTitle}>点击“编辑权限”即可修改</Text>
+                    <Button
+                      label="新增员工"
+                      style={styles.tipActionButton}
+                      onPress={() => {
+                        setStaffHint(null);
+                        setShowCreateModal(true);
+                      }}
+                    />
+                  </View>
                   <Text style={styles.tipText}>
                     当前写操作开关：
                     {q.data?.enforcement ? '已开启' : '测试模式（未开启）'}。即使未开启，也可以先分配写权限。
                   </Text>
+                  <Text style={styles.tipText}>管理员固定为 rNLKJA，其余账号均为员工权限。</Text>
                 </View>
               </View>
             </GlassSurface>
@@ -244,7 +285,19 @@ export default function AdminPermissionsScreen() {
                 {(['staff', 'admin'] as const).map((role) => (
                   <Pressable
                     key={role}
-                    style={[styles.segmentBtn, draftRole === role && styles.segmentBtnActive]}
+                    disabled={
+                      !editingUser ||
+                      (role === 'admin' && !isPrimaryAdmin(editingUser.username)) ||
+                      (role === 'staff' && isPrimaryAdmin(editingUser.username))
+                    }
+                    style={[
+                      styles.segmentBtn,
+                      draftRole === role && styles.segmentBtnActive,
+                      (!editingUser ||
+                        (role === 'admin' && !isPrimaryAdmin(editingUser.username)) ||
+                        (role === 'staff' && isPrimaryAdmin(editingUser.username))) &&
+                        styles.segmentBtnDisabled,
+                    ]}
                     onPress={() => {
                       setDraftRole(role);
                       if (role === 'admin') setDraftCanWrite(true);
@@ -256,6 +309,7 @@ export default function AdminPermissionsScreen() {
                   </Pressable>
                 ))}
               </View>
+              <Text style={styles.lockHint}>系统限制：仅 rNLKJA 保持管理员。</Text>
             </View>
 
             <View style={styles.editorBlock}>
@@ -366,6 +420,94 @@ export default function AdminPermissionsScreen() {
           </GlassSurface>
         </View>
       </Modal>
+
+      <Modal
+        transparent
+        visible={showCreateModal}
+        animationType="fade"
+        onRequestClose={() => setShowCreateModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowCreateModal(false)} />
+        <View style={styles.modalWrap}>
+          <GlassSurface padding={SPACING.lg} style={styles.modalCard}>
+            <Text style={styles.modalTitle}>新增员工</Text>
+            <Text style={styles.modalSub}>创建员工账号（管理员固定为 rNLKJA）</Text>
+
+            <View style={styles.editorBlock}>
+              <Text style={styles.blockLabel}>用户名</Text>
+              <TextInput
+                style={styles.simpleInput}
+                value={staffUsername}
+                onChangeText={setStaffUsername}
+                autoCapitalize="none"
+                placeholder="例如 zhangsan"
+                placeholderTextColor={COLORS.text.quaternary}
+              />
+            </View>
+            <View style={styles.editorBlock}>
+              <Text style={styles.blockLabel}>姓名</Text>
+              <TextInput
+                style={styles.simpleInput}
+                value={staffFullName}
+                onChangeText={setStaffFullName}
+                placeholder="输入员工姓名"
+                placeholderTextColor={COLORS.text.quaternary}
+              />
+            </View>
+            <View style={styles.editorBlock}>
+              <Text style={styles.blockLabel}>初始密码</Text>
+              <TextInput
+                style={styles.simpleInput}
+                value={staffPassword}
+                onChangeText={setStaffPassword}
+                secureTextEntry
+                autoCapitalize="none"
+                placeholder="至少 8 位"
+                placeholderTextColor={COLORS.text.quaternary}
+              />
+              <View style={{ height: 8 }} />
+              <TextInput
+                style={styles.simpleInput}
+                value={staffPassword2}
+                onChangeText={setStaffPassword2}
+                secureTextEntry
+                autoCapitalize="none"
+                placeholder="再次输入密码"
+                placeholderTextColor={COLORS.text.quaternary}
+              />
+            </View>
+            <View style={styles.editorBlock}>
+              <Text style={styles.blockLabel}>写权限</Text>
+              <View style={styles.segmented}>
+                {(['readonly', 'write'] as const).map((mode) => {
+                  const active = mode === 'write' ? staffCanWrite : !staffCanWrite;
+                  return (
+                    <Pressable
+                      key={mode}
+                      style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+                      onPress={() => setStaffCanWrite(mode === 'write')}
+                    >
+                      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                        {mode === 'write' ? '允许写操作' : '只读'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            {staffHint ? <Text style={styles.passwordHint}>{staffHint}</Text> : null}
+
+            <View style={styles.modalActions}>
+              <Button label="取消" variant="ghost" onPress={() => setShowCreateModal(false)} />
+              <Button
+                label="创建员工"
+                loading={createMut.isPending}
+                onPress={() => void createStaff()}
+              />
+            </View>
+          </GlassSurface>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -396,7 +538,10 @@ const styles = StyleSheet.create({
   errTitle: { ...TYPE.body, color: COLORS.danger, fontWeight: '700' },
   err: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 2 },
   tip: { borderWidth: 1, borderColor: GLASS.border },
-  tipRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
+  tipMain: { flex: 1, minWidth: 0 },
+  tipHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: SPACING.sm },
+  tipActionButton: { minWidth: 96 },
   tipTitle: { ...TYPE.body, color: COLORS.text.primary, fontWeight: '700' },
   tipText: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 2, lineHeight: 18 },
   row: { borderWidth: 1, borderColor: GLASS.border, gap: 10 },
@@ -469,6 +614,21 @@ const styles = StyleSheet.create({
   segmentBtnDisabled: { opacity: 0.65 },
   segmentText: { ...TYPE.footnote, color: COLORS.text.secondary, fontWeight: '600' },
   segmentTextActive: { color: COLORS.brand },
+  lockHint: {
+    ...TYPE.caption,
+    color: COLORS.text.tertiary,
+    marginTop: 6,
+  },
+  simpleInput: {
+    minHeight: 40,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: GLASS.outline,
+    backgroundColor: GLASS.surface2,
+    color: COLORS.text.primary,
+    paddingHorizontal: SPACING.md,
+    fontSize: 15,
+  },
   passwordCard: {
     borderWidth: 1,
     borderColor: GLASS.outline,

@@ -15,7 +15,7 @@
  *    录入 Tab 的「散餐」子模式仍显示，但提交时会提示未接入。
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   View,
@@ -31,7 +31,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { IOS_COLORS } from '../../../theme/paperTheme';
 import { type MockMember, type MockOrder } from '../../../constants/mockData';
 import { ordersApi } from '../../../api/orders';
@@ -66,6 +66,7 @@ function todayStr(): string {
 // Tabs
 // ============================================================
 type TabKey = 'entry' | 'overview' | 'prep' | 'delivery' | 'courier';
+type PrimaryTab = 'manage' | 'fulfillment';
 const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
 type LimitOption = (typeof LIMIT_OPTIONS)[number];
 
@@ -73,20 +74,21 @@ const TABS: {
   key: TabKey;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
-  hint: string;
 }[] = [
-  { key: 'entry',    label: '录入', icon: 'add-circle-outline',      hint: '快速录单' },
-  { key: 'overview', label: '总览', icon: 'list-outline',            hint: '全部订单' },
-  { key: 'prep',     label: '出餐', icon: 'fast-food-outline',       hint: '打包备餐' },
-  { key: 'delivery', label: '送餐', icon: 'bicycle-outline',         hint: '员工自送' },
-  { key: 'courier',  label: '快递', icon: 'cube-outline',            hint: '外包快递' },
+  { key: 'overview', label: '总览', icon: 'list-outline' },
+  { key: 'entry', label: '录入', icon: 'add-circle-outline' },
+  { key: 'prep', label: '出餐', icon: 'fast-food-outline' },
+  { key: 'delivery', label: '送餐', icon: 'bicycle-outline' },
+  { key: 'courier', label: '快递', icon: 'cube-outline' },
 ];
 
 // ============================================================
 // Main screen
 // ============================================================
 export default function OrdersScreen() {
+  const { group } = useLocalSearchParams<{ group?: string }>();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [activePrimary, setActivePrimary] = useState<PrimaryTab>('manage');
   const [displayLimit, setDisplayLimit] = useState<LimitOption>(50);
   const [activeOrder, setActiveOrder] = useState<MockOrder | null>(null);
   const [quickInfoMember, setQuickInfoMember] = useState<MockMember | null>(null);
@@ -126,6 +128,21 @@ export default function OrdersScreen() {
     setTimeout(() => setToast(null), 2400);
   }, []);
 
+  const jumpToOrderProfile = useCallback((order: MockOrder) => {
+    const isWalkin = !!order.customer_name;
+    if (isWalkin) {
+      router.push({
+        pathname: '/(app)/walkins/[id]',
+        params: { id: String(order.member_id) },
+      });
+      return;
+    }
+    router.push({
+      pathname: '/(app)/members/[id]',
+      params: { id: String(order.member_id) },
+    });
+  }, []);
+
   const handleAddMemberOrder = useCallback(
     async (payload: {
       memberId: number;
@@ -160,6 +177,7 @@ export default function OrdersScreen() {
     async (payload: {
       customerName: string;
       customerPhone?: string;
+      customerWechat?: string;
       customerAddress?: string;
       customerIsHospital: boolean;
       orderDate: string;
@@ -178,6 +196,7 @@ export default function OrdersScreen() {
           notes: payload.notes ?? '',
           customer_name: payload.customerName,
           customer_phone: payload.customerPhone,
+          customer_wechat: payload.customerWechat,
           customer_address: payload.customerAddress,
           customer_is_hospital: payload.customerIsHospital,
           adhoc_unit_price: payload.unitPrice,
@@ -263,41 +282,47 @@ export default function OrdersScreen() {
 
   const now = new Date();
 
+  useEffect(() => {
+    if (group === 'fulfillment') {
+      setActivePrimary('fulfillment');
+      setActiveTab('prep');
+      return;
+    }
+    setActivePrimary('manage');
+    setActiveTab('overview');
+  }, [group]);
+
   return (
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <AppHeader
-        title="每日订餐"
+        title={activePrimary === 'manage' ? '录入 / 总览' : '出餐 / 配送'}
         subtitle={`今日 ${now.getMonth() + 1}月${now.getDate()}日`}
-        right={
-          <Pressable
-            onPress={() => router.push('/(app)/orders/stats' as never)}
-            hitSlop={8}
-            style={styles.headerStatsBtn}
-          >
-            <Ionicons name="bar-chart-outline" size={18} color={IOS_COLORS.blue} />
-            <Text style={styles.headerStatsText}>统计</Text>
-          </Pressable>
-        }
       />
 
-      {/* 二级导航 */}
-      <OrderTabBar activeTab={activeTab} onChange={setActiveTab} />
-      <View style={styles.limitRow}>
-        <Text style={styles.limitLabel}>每次加载</Text>
-        {LIMIT_OPTIONS.map((n) => (
-          <Pressable
-            key={n}
-            style={[styles.limitChip, displayLimit === n && styles.limitChipActive]}
-            onPress={() => setDisplayLimit(n)}
-          >
-            <Text style={[styles.limitChipText, displayLimit === n && styles.limitChipTextActive]}>
-              {n}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      {/* 当前分组内的功能筛选 */}
+      <OrderTabBar
+        activePrimary={activePrimary}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
+      {activeTab !== 'entry' ? (
+        <View style={styles.limitRow}>
+          <Text style={styles.limitLabel}>每次加载</Text>
+          {LIMIT_OPTIONS.map((n) => (
+            <Pressable
+              key={n}
+              style={[styles.limitChip, displayLimit === n && styles.limitChipActive]}
+              onPress={() => setDisplayLimit(n)}
+            >
+              <Text style={[styles.limitChipText, displayLimit === n && styles.limitChipTextActive]}>
+                {n}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       {/* —— 总览 —— */}
       {activeTab === 'overview' && (
@@ -329,6 +354,7 @@ export default function OrdersScreen() {
             renderItem={({ item, index, section }) => (
               <OrderRow
                 order={item}
+                member={membersById[item.member_id]}
                 isLast={index === section.data.length - 1}
                 onPress={() => setActiveOrder(item)}
               />
@@ -408,6 +434,7 @@ export default function OrdersScreen() {
           onUpdate={handleUpdateStatus}
           onMarkFulfilled={handleMarkFulfilled}
           onMarkDelivered={handleMarkDelivered}
+          onOpenProfile={jumpToOrderProfile}
         />
       )}
 
@@ -445,20 +472,26 @@ export default function OrdersScreen() {
 // OrderTabBar — 二级导航
 // ============================================================
 function OrderTabBar({
+  activePrimary,
   activeTab,
-  onChange,
+  onTabChange,
 }: {
+  activePrimary: PrimaryTab;
   activeTab: TabKey;
-  onChange: (t: TabKey) => void;
+  onTabChange: (t: TabKey) => void;
 }) {
+  const secondTabs = activePrimary === 'manage'
+    ? TABS.filter((t) => t.key === 'overview' || t.key === 'entry')
+    : TABS.filter((t) => t.key === 'prep' || t.key === 'delivery' || t.key === 'courier');
+
   return (
     <View style={styles.tabBar}>
-      {TABS.map((t) => {
+      {secondTabs.map((t) => {
         const active = activeTab === t.key;
         return (
           <Pressable
             key={t.key}
-            onPress={() => onChange(t.key)}
+            onPress={() => onTabChange(t.key)}
             style={[styles.tabItem, active && styles.tabItemActive]}
           >
             <Ionicons
@@ -910,12 +943,16 @@ function SummaryItem({ label, value, color }: { label: string; value: string; co
 // OrderRow
 // ============================================================
 function OrderRow({
-  order, isLast, onPress,
+  order, member, isLast, onPress,
 }: {
-  order: MockOrder; isLast: boolean; onPress: () => void;
+  order: MockOrder;
+  member?: MockMember;
+  isLast: boolean;
+  onPress: () => void;
 }) {
   const s = STATUS_MAP[order.status];
   const isAdhoc = order.card_type === null;
+  const remainingMeals = member?.active_card?.remaining_meals;
 
   return (
     <Pressable
@@ -947,7 +984,14 @@ function OrderRow({
           {isAdhoc ? (
             <Text style={styles.adhocTag}>散餐 ¥{order.amount}</Text>
           ) : (
-            <Text style={styles.cardTag}>{order.card_type}</Text>
+            <>
+              <Text style={styles.cardTag}>{order.card_type}</Text>
+              {typeof remainingMeals === 'number' ? (
+                <Text style={styles.remainingTag}>剩 {remainingMeals} 份</Text>
+              ) : (
+                <Text style={styles.noCardTag}>无有效卡</Text>
+              )}
+            </>
           )}
           <Text style={styles.orderQty}>{order.quantity} 份</Text>
         </View>
@@ -995,6 +1039,7 @@ function EntryPanel({
   onAddWalkinOrder: (payload: {
     customerName: string;
     customerPhone?: string;
+    customerWechat?: string;
     customerAddress?: string;
     customerIsHospital: boolean;
     orderDate: string;
@@ -1024,6 +1069,7 @@ function EntryPanel({
   // 散餐 state
   const [adhocName,       setAdhocName]       = useState('');
   const [adhocPhone,      setAdhocPhone]      = useState('');
+  const [adhocWechat,     setAdhocWechat]     = useState('');
   const [adhocAddress,    setAdhocAddress]    = useState('');
   const [adhocLunchQty,   setAdhocLunchQty]   = useState(0);
   const [adhocDinnerQty,  setAdhocDinnerQty]  = useState(0);
@@ -1050,6 +1096,7 @@ function EntryPanel({
     setMemberQuery(''); setSelectedMember(null);
     setLunchQty(0); setDinnerQty(0); setMemberNotes('');
     setAdhocName(''); setAdhocPhone(''); setAdhocAddress('');
+    setAdhocWechat('');
     setAdhocLunchQty(0); setAdhocDinnerQty(0);
     setAdhocPrice(String(ADHOC_DEFAULT_PRICE)); setAdhocHospital(false); setAdhocNotes('');
     setDeliveryChannel('self'); setCourierRef('');
@@ -1096,6 +1143,14 @@ function EntryPanel({
       flashToast('请填写正确的 11 位手机号');
       return;
     }
+    if (!adhocWechat.trim()) {
+      flashToast('请填写微信号');
+      return;
+    }
+    if (!adhocAddress.trim()) {
+      flashToast('请填写送餐地址');
+      return;
+    }
     if (adhocTotalQty < 1) {
       flashToast('午餐和晚餐份数至少有一项 > 0');
       return;
@@ -1106,7 +1161,8 @@ function EntryPanel({
       await onAddWalkinOrder({
         customerName: name,
         customerPhone: phone,
-        customerAddress: adhocAddress.trim() || undefined,
+        customerWechat: adhocWechat.trim(),
+        customerAddress: adhocAddress.trim(),
         customerIsHospital: adhocHospital,
         orderDate: todayStr(),
         lunchQty: adhocLunchQty,
@@ -1155,7 +1211,7 @@ function EntryPanel({
             </Pressable>
           ))}
         </View>
-        <Text style={eStyles.modeHint}>
+        <Text style={eStyles.modeHint} numberOfLines={1}>
           {mode === 'member' ? '从会员档案中选择，自动扣卡' : '无需会员账户，现金收费'}
         </Text>
       </View>
@@ -1289,9 +1345,7 @@ function EntryPanel({
                     </View>
                   )
                 ) : (
-                  <Text style={eStyles.searchHint}>
-                    输入姓名、昵称或手机号开始搜索
-                  </Text>
+                  <View style={eStyles.searchHintSpacer} />
                 )}
 
                 <View style={eStyles.divider} />
@@ -1358,12 +1412,26 @@ function EntryPanel({
                     <Text style={eStyles.fieldLabel}>送餐地址</Text>
                     <TextInput
                       style={[eStyles.fieldInput, eStyles.fieldInputMulti]}
-                      placeholder="选填，送餐/自取都建议填写"
+                      placeholder="必填：送餐地址 / 科室"
                       placeholderTextColor={IOS_COLORS.labelTertiary}
                       value={adhocAddress}
                       onChangeText={setAdhocAddress}
                       multiline
                       numberOfLines={2}
+                    />
+                  </View>
+                  <View style={eStyles.fieldDivider} />
+                  <View style={eStyles.fieldRow}>
+                    <Text style={eStyles.fieldLabel}>
+                      微信号 <Text style={eStyles.fieldRequired}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={eStyles.fieldInput}
+                      placeholder="必填"
+                      placeholderTextColor={IOS_COLORS.labelTertiary}
+                      value={adhocWechat}
+                      onChangeText={setAdhocWechat}
+                      autoCapitalize="none"
                     />
                   </View>
                   <View style={eStyles.fieldDivider} />
@@ -1385,7 +1453,7 @@ function EntryPanel({
                   </View>
                 </View>
                 <Text style={eStyles.hintUnderCard}>
-                  手机号必填（每次录单都要带），同名散客的手机/地址会自动合并到档案。
+                  散客手机号、微信号、地址均为必填，同名散客会自动合并并更新这些资料。
                 </Text>
 
                 <Text style={[eStyles.sectionLabel, { marginTop: 20 }]}>份数</Text>
@@ -1594,7 +1662,7 @@ const STATUS_FLOW = [
 ];
 
 function StatusSheet({
-  order, onClose, onUpdate, onMarkFulfilled, onMarkDelivered,
+  order, onClose, onUpdate, onMarkFulfilled, onMarkDelivered, onOpenProfile,
 }: {
   order: MockOrder;
   onClose: () => void;
@@ -1602,6 +1670,7 @@ function StatusSheet({
   /** 点"已出餐"/"已送达"时走二次确认；状态网格里这两个 chip 都会先弹 Modal。 */
   onMarkFulfilled: (o: MockOrder) => void;
   onMarkDelivered: (o: MockOrder) => void;
+  onOpenProfile: (o: MockOrder) => void;
 }) {
   const isAdhoc = order.card_type === null;
   const cur = STATUS_MAP[order.status];
@@ -1620,99 +1689,118 @@ function StatusSheet({
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={sStyles.overlay} onPress={onClose} />
       <View style={sStyles.sheet}>
-        {/* 拖拽指示条 */}
-        <View style={sStyles.handle} />
+        <View style={sStyles.sheetCard}>
+          {/* 拖拽指示条 */}
+          <View style={sStyles.handle} />
 
-        {/* 订单信息 */}
-        <View style={sStyles.orderInfo}>
-          <View style={sStyles.orderInfoLeft}>
-            <View style={[sStyles.orderAvatar, { backgroundColor: order.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
-              <Text style={sStyles.orderAvatarText}>
-                {(order.member_nickname || order.member_name)[0]}
-              </Text>
-            </View>
-            <View>
-              <Text style={sStyles.orderName}>{order.member_nickname || order.member_name}</Text>
-              <Text style={sStyles.orderSub}>
-                {order.meal_type === 'lunch' ? '午餐' : '晚餐'} · {order.quantity} 份
-                {' · '}{isAdhoc ? `散餐 ¥${order.amount}` : order.card_type}
-                {order.is_hospital ? ' · 院内' : ''}
-              </Text>
-            </View>
-          </View>
-          <View style={[sStyles.curStatusBadge, { backgroundColor: cur.bg }]}>
-            <Text style={[sStyles.curStatusText, { color: cur.color }]}>{cur.label}</Text>
-          </View>
-        </View>
-
-        {order.dietary_notes || order.notes ? (
-          <View style={sStyles.notesRow}>
-            {order.dietary_notes ? (
-              <Text style={sStyles.notesText}>
-                <Text style={sStyles.notesLabel}>个人忌口：</Text>
-                {order.dietary_notes}
-              </Text>
-            ) : null}
-            {order.notes ? (
-              <Text style={sStyles.notesText}>
-                <Text style={sStyles.notesLabel}>订单备注：</Text>
-                {order.notes}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-
-        <View style={sStyles.divider} />
-        <Text style={sStyles.sectionLabel}>
-          {locked
-            ? order.status === 'delivered'
-              ? '订单已送达，状态已锁定'
-              : '订单已取消，状态不可变更'
-            : '更新出餐状态'}
-        </Text>
-
-        <View style={sStyles.statusGrid}>
-          {STATUS_FLOW.map((s) => {
-            const isCurrent = order.status === s.key;
-            const isAllowed = allowedNext.has(s.key);
-            const disabled = isCurrent || !isAllowed;
-            return (
+          {/* 订单信息 */}
+          <View style={sStyles.orderInfo}>
+            <View style={sStyles.orderInfoLeft}>
               <Pressable
-                key={s.key}
-                disabled={disabled}
-                style={({ pressed }) => [
-                  sStyles.statusBtn,
-                  { backgroundColor: s.bg, borderColor: isCurrent ? s.color : 'transparent' },
-                  isCurrent && sStyles.statusBtnCurrent,
-                  disabled && !isCurrent && { opacity: 0.35 },
-                  !disabled && pressed && { opacity: 0.75 },
-                ]}
                 onPress={() => {
-                  // 先关弹层再弹确认，避免两个 Modal 叠在一起遮挡
-                  if (s.key === 'delivered') {
-                    onClose();
-                    onMarkDelivered(order);
-                  } else if (s.key === 'fulfilled' && order.status === 'pending') {
-                    // pending → fulfilled 也走一次确认（只在 pending→fulfilled，
-                    // 回退 delivered→fulfilled 是 UI 回滚，不需要再确认）
-                    onClose();
-                    onMarkFulfilled(order);
-                  } else {
-                    onUpdate(order.id, s.key);
-                  }
+                  onClose();
+                  onOpenProfile(order);
                 }}
+                style={({ pressed }) => [
+                  sStyles.orderAvatarPress,
+                  pressed && { opacity: 0.75 },
+                ]}
+                hitSlop={8}
               >
-                <Ionicons name={s.icon} size={20} color={s.color} style={sStyles.statusBtnIcon} />
-                <Text style={[sStyles.statusBtnLabel, { color: s.color }]}>{s.label}</Text>
-                {isCurrent && <Text style={[sStyles.statusBtnCurDot, { color: s.color }]}>当前</Text>}
+                <View style={[sStyles.orderAvatar, { backgroundColor: order.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+                  <Text style={sStyles.orderAvatarText}>
+                    {(order.member_nickname || order.member_name)[0]}
+                  </Text>
+                </View>
+                <Ionicons
+                  name="open-outline"
+                  size={12}
+                  color={IOS_COLORS.blue}
+                  style={sStyles.orderAvatarLink}
+                />
               </Pressable>
-            );
-          })}
-        </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={sStyles.orderName}>{order.member_nickname || order.member_name}</Text>
+                <Text style={sStyles.orderSub}>
+                  {order.meal_type === 'lunch' ? '午餐' : '晚餐'} · {order.quantity} 份
+                  {' · '}{isAdhoc ? `散餐 ¥${order.amount}` : order.card_type}
+                  {order.is_hospital ? ' · 院内' : ''}
+                </Text>
+              </View>
+            </View>
+            <View style={[sStyles.curStatusBadge, { backgroundColor: cur.bg }]}>
+              <Text style={[sStyles.curStatusText, { color: cur.color }]}>{cur.label}</Text>
+            </View>
+          </View>
 
-        <Pressable style={sStyles.closeBtn} onPress={onClose}>
-          <Text style={sStyles.closeBtnText}>取消</Text>
-        </Pressable>
+          {order.dietary_notes || order.notes ? (
+            <View style={sStyles.notesRow}>
+              {order.dietary_notes ? (
+                <Text style={sStyles.notesText}>
+                  <Text style={sStyles.notesLabel}>个人忌口：</Text>
+                  {order.dietary_notes}
+                </Text>
+              ) : null}
+              {order.notes ? (
+                <Text style={sStyles.notesText}>
+                  <Text style={sStyles.notesLabel}>订单备注：</Text>
+                  {order.notes}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          <Text style={sStyles.sectionLabel}>
+            {locked
+              ? order.status === 'delivered'
+                ? '订单已送达，状态已锁定'
+                : '订单已取消，状态不可变更'
+              : '更新出餐状态'}
+          </Text>
+
+          <View style={sStyles.statusGrid}>
+            {STATUS_FLOW.map((s) => {
+              const isCurrent = order.status === s.key;
+              const isAllowed = allowedNext.has(s.key);
+              const disabled = isCurrent || !isAllowed;
+              return (
+                <Pressable
+                  key={s.key}
+                  disabled={disabled}
+                  style={({ pressed }) => [
+                    sStyles.statusBtn,
+                    { backgroundColor: s.bg, borderColor: isCurrent ? s.color : 'transparent' },
+                    isCurrent && sStyles.statusBtnCurrent,
+                    disabled && !isCurrent && { opacity: 0.35 },
+                    !disabled && pressed && { opacity: 0.75 },
+                  ]}
+                  onPress={() => {
+                    // 先关弹层再弹确认，避免两个 Modal 叠在一起遮挡
+                    if (s.key === 'delivered') {
+                      onClose();
+                      onMarkDelivered(order);
+                    } else if (s.key === 'fulfilled' && order.status === 'pending') {
+                      // pending → fulfilled 也走一次确认（只在 pending→fulfilled，
+                      // 回退 delivered→fulfilled 是 UI 回滚，不需要再确认）
+                      onClose();
+                      onMarkFulfilled(order);
+                    } else {
+                      onUpdate(order.id, s.key);
+                    }
+                  }}
+                >
+                  <Ionicons name={s.icon} size={20} color={s.color} style={sStyles.statusBtnIcon} />
+                  <Text style={[sStyles.statusBtnLabel, { color: s.color }]}>{s.label}</Text>
+                  {isCurrent && <Text style={[sStyles.statusBtnCurDot, { color: s.color }]}>当前</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Pressable style={sStyles.closeBtn} onPress={onClose}>
+            <Text style={sStyles.closeBtnText}>取消</Text>
+          </Pressable>
+        </View>
       </View>
     </Modal>
   );
@@ -1724,20 +1812,16 @@ function StatusSheet({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
 
-  headerAction: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
-  headerActionText: { fontSize: 15, color: IOS_COLORS.blue, fontWeight: '500' },
-  headerStatsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 4 },
-  headerStatsText: { fontSize: 15, color: IOS_COLORS.blue, fontWeight: '500' },
-
-  // ======= 二级导航 Tab Bar =======
+  // ======= 当前分组功能 Tab =======
   tabBar: {
     flexDirection: 'row',
-    marginHorizontal: 12,
-    marginTop: 4,
-    marginBottom: 8,
     backgroundColor: 'rgba(255,255,255,0.72)',
     borderRadius: 14,
-    padding: 4,
+    padding: 5,
+    gap: 4,
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 10,
   },
   tabItem: {
     flex: 1,
@@ -1745,13 +1829,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 10,
   },
   tabItemActive: {
     backgroundColor: IOS_COLORS.blueLight,
   },
-  tabLabel: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+  tabLabel: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
   tabLabelActive: { color: IOS_COLORS.blue, fontWeight: '700' },
   limitRow: {
     flexDirection: 'row',
@@ -1764,7 +1848,7 @@ const styles = StyleSheet.create({
   limitLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
   limitChip: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 14,
     backgroundColor: IOS_COLORS.fillLight,
   },
@@ -1774,10 +1858,12 @@ const styles = StyleSheet.create({
 
   summaryBar: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 16,
     marginHorizontal: 12, marginBottom: 10,
     paddingVertical: 14, paddingHorizontal: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(17,17,17,0.08)',
   },
   summaryItem:    { flex: 1, alignItems: 'center', gap: 2 },
   summaryValue:   { fontSize: 18, fontWeight: '700' },
@@ -1833,10 +1919,12 @@ const styles = StyleSheet.create({
 
   orderRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: 16,
     marginHorizontal: 12, marginBottom: 8,
     paddingHorizontal: 14, paddingVertical: 12, gap: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(17,17,17,0.08)',
   },
   orderRowLast: {},
   orderAvatar: {
@@ -1853,6 +1941,24 @@ const styles = StyleSheet.create({
   statusText:      { fontSize: 11, fontWeight: '600' },
   orderMeta:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardTag:  { fontSize: 12, color: IOS_COLORS.labelSecondary, backgroundColor: IOS_COLORS.fillLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  remainingTag: {
+    fontSize: 12,
+    color: IOS_COLORS.blue,
+    backgroundColor: IOS_COLORS.blueLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    fontWeight: '600',
+  },
+  noCardTag: {
+    fontSize: 12,
+    color: IOS_COLORS.red,
+    backgroundColor: '#FFE5E5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    fontWeight: '600',
+  },
   adhocTag: { fontSize: 12, color: '#FF9500', backgroundColor: '#FFF4E5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   orderQty: { fontSize: 14, fontWeight: '600', color: IOS_COLORS.label },
   orderNote: { fontSize: 13, color: IOS_COLORS.orange, lineHeight: 18 },
@@ -1899,10 +2005,12 @@ const eStyles = StyleSheet.create({
   confirm: { fontSize: 17, color: IOS_COLORS.blue, fontWeight: '600' },
 
   modeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: IOS_COLORS.card,
     paddingHorizontal: 16, paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
-    gap: 6,
+    gap: 10,
   },
   modeGroup: {
     flexDirection: 'row',
@@ -1912,7 +2020,7 @@ const eStyles = StyleSheet.create({
   modeBtnActive:   { backgroundColor: IOS_COLORS.card },
   modeBtnText:     { fontSize: 15, color: IOS_COLORS.labelSecondary },
   modeBtnTextActive: { color: IOS_COLORS.label, fontWeight: '600' },
-  modeHint: { fontSize: 12, color: IOS_COLORS.labelTertiary },
+  modeHint: { flex: 1, fontSize: 12, color: IOS_COLORS.labelTertiary },
 
   scroll: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
 
@@ -1966,11 +2074,7 @@ const eStyles = StyleSheet.create({
     padding: 14, marginBottom: 4,
   },
 
-  searchHint: {
-    fontSize: 13, color: IOS_COLORS.labelTertiary,
-    paddingHorizontal: 14, paddingVertical: 14,
-    textAlign: 'center',
-  },
+  searchHintSpacer: { height: 4 },
   dropdownEmpty: {
     backgroundColor: IOS_COLORS.card, borderRadius: 14,
     paddingHorizontal: 14, paddingVertical: 18,
@@ -2217,29 +2321,50 @@ const prepStyles = StyleSheet.create({
 const sStyles = StyleSheet.create({
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   sheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: IOS_COLORS.systemGrouped,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingBottom: 34,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+  sheetCard: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 20,
+    paddingBottom: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.08)',
   },
   handle: {
     width: 36, height: 4, borderRadius: 2,
     backgroundColor: IOS_COLORS.fillMedium,
-    alignSelf: 'center', marginTop: 10, marginBottom: 6,
+    alignSelf: 'center', marginTop: 10, marginBottom: 10,
   },
 
   orderInfo: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: IOS_COLORS.card, gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12,
+    marginHorizontal: 10,
+    marginBottom: 8,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.06)',
+    gap: 10,
   },
   orderInfoLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  orderAvatarPress: { position: 'relative' },
   orderAvatar: {
     width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  orderAvatarLink: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 1,
   },
   orderAvatarText: { fontSize: 16, fontWeight: '700', color: IOS_COLORS.blue },
   orderName: { fontSize: 16, fontWeight: '600', color: IOS_COLORS.label },
@@ -2248,17 +2373,18 @@ const sStyles = StyleSheet.create({
   curStatusText:  { fontSize: 12, fontWeight: '600' },
 
   notesRow: {
-    paddingHorizontal: 16, paddingVertical: 8,
-    backgroundColor: IOS_COLORS.card,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: IOS_COLORS.separatorLight,
+    paddingHorizontal: 14, paddingVertical: 10,
+    marginHorizontal: 10,
+    marginBottom: 4,
+    borderRadius: 12,
+    backgroundColor: '#FFF8E6',
   },
-  notesText: { fontSize: 13, color: IOS_COLORS.orange, lineHeight: 18 },
+  notesText: { fontSize: 13, color: '#8A5A00', lineHeight: 18 },
   notesLabel: { fontWeight: '700' },
 
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginTop: 8 },
   sectionLabel: {
     fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary,
-    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10,
+    paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10,
     textTransform: 'uppercase', letterSpacing: 0.4,
   },
 
@@ -2268,9 +2394,9 @@ const sStyles = StyleSheet.create({
   },
   statusBtn: {
     flex: 1, minWidth: 130,
-    paddingVertical: 16, paddingHorizontal: 12,
+    paddingVertical: 14, paddingHorizontal: 12,
     borderRadius: 14, alignItems: 'center', gap: 4,
-    borderWidth: 2,
+    borderWidth: 1.5,
   },
   statusBtnCurrent: { borderWidth: 2 },
   statusBtnIcon:    { marginBottom: 2 },
@@ -2278,9 +2404,9 @@ const sStyles = StyleSheet.create({
   statusBtnCurDot:  { fontSize: 11, fontWeight: '500', opacity: 0.8 },
 
   closeBtn: {
-    marginHorizontal: 16, marginTop: 10,
-    backgroundColor: IOS_COLORS.card, borderRadius: 14,
+    marginHorizontal: 16, marginTop: 8,
+    backgroundColor: 'rgba(118,118,128,0.12)', borderRadius: 14,
     paddingVertical: 16, alignItems: 'center',
   },
-  closeBtnText: { fontSize: 17, color: IOS_COLORS.label },
+  closeBtnText: { fontSize: 17, color: IOS_COLORS.label, fontWeight: '600' },
 });

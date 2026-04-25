@@ -54,7 +54,7 @@ export function DatePicker({
             const next = e.target.value;
             if (next === '' || isValidDate(next)) onChange(next);
           },
-          style: [webInputStyle, label ? webInputStyleInline : null],
+          style: label ? { ...webInputStyle, ...webInputStyleInline } : webInputStyle,
         })}
       </View>
     );

@@ -203,6 +203,7 @@ const createOrderSchema = z
     customer_name: z.string().max(64).optional().default(''),
     /** 散客联系方式；第一次录单时把这些写到 walk-in member 上，送餐卡片就能看到 */
     customer_phone: z.string().max(32).optional().default(''),
+    customer_wechat: z.string().max(64).optional().default(''),
     customer_address: z.string().max(256).optional().default(''),
     customer_is_hospital: z.boolean().optional(),
     /** 散客模式下指定单价（覆盖 settings.ad_hoc_price） */
@@ -229,6 +230,28 @@ const createOrderSchema = z
     {
       message: '散客手机号必填，11 位且以 1 开头',
       path: ['customer_phone'],
+    },
+  )
+  .refine(
+    (d) => {
+      const isWalkin = !d.member_id && (d.customer_name ?? '').trim().length > 0;
+      if (!isWalkin) return true;
+      return (d.customer_wechat ?? '').trim().length > 0;
+    },
+    {
+      message: '散客微信号必填',
+      path: ['customer_wechat'],
+    },
+  )
+  .refine(
+    (d) => {
+      const isWalkin = !d.member_id && (d.customer_name ?? '').trim().length > 0;
+      if (!isWalkin) return true;
+      return (d.customer_address ?? '').trim().length > 0;
+    },
+    {
+      message: '散客地址必填',
+      path: ['customer_address'],
     },
   );
 
@@ -287,6 +310,7 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
       ? (
           await getOrCreateWalkinMember(tx, customerName, createdByUserId, {
             phone: input.customer_phone,
+            wechat_id: input.customer_wechat,
             address: input.customer_address,
             is_hospital: input.customer_is_hospital,
           })

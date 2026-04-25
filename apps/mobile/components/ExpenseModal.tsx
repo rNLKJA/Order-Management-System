@@ -19,6 +19,7 @@ import {
 import { expenseCreateSchema, formatDate } from '@meal/shared';
 import { createExpense } from '../api/finance';
 import { DatePicker } from './ui';
+import { COLORS, SPACING, TYPE } from '../theme/paperTheme';
 
 interface Props {
   visible: boolean;
@@ -48,6 +49,7 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
   const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(entryDate);
   const descValid = description.trim().length > 0;
   const canSubmit = amountValid && dateValid && descValid && !submitting;
+  const quickAmounts = [35, 50, 100, 200] as const;
 
   const handleSave = async () => {
     setError(null);
@@ -99,13 +101,27 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
           </HelperText>
         )}
 
+        <View style={styles.quickAmountRow}>
+          {quickAmounts.map((amt) => (
+            <Button
+              key={amt}
+              mode="text"
+              compact
+              style={styles.quickAmountBtn}
+              onPress={() => setAmountText(String(amt))}
+            >
+              ¥{amt}
+            </Button>
+          ))}
+        </View>
+
         <TextInput
           label="金额（¥）"
           mode="outlined"
           value={amountText}
           onChangeText={(t) => setAmountText(t.replace(/[^0-9.]/g, ''))}
           keyboardType={Platform.OS === 'ios' ? 'decimal-pad' : 'numeric'}
-          placeholder="如 45.50"
+          placeholder="例如 45.50"
           style={styles.field}
         />
         {!amountValid && amountText.length > 0 && (
@@ -121,7 +137,7 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
           onChangeText={setDescription}
           multiline
           numberOfLines={3}
-          placeholder="例：买一次性餐盒 / 交水电"
+          placeholder="请写清用途，例如：餐盒、调料、清洁用品"
           style={styles.field}
         />
 
@@ -158,18 +174,33 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
 const styles = StyleSheet.create({
   modal: {
     marginHorizontal: 20,
-    padding: 20,
-    borderRadius: 12,
+    padding: 18,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.08)',
   },
   title: {
-    fontWeight: '600',
-    marginBottom: 16,
+    ...TYPE.title2,
+    fontWeight: '700',
+    marginBottom: 14,
+    color: COLORS.text.primary,
   },
   field: {
-    marginBottom: 4,
+    marginBottom: 2,
+  },
+  quickAmountRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  quickAmountBtn: {
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,122,255,0.08)',
   },
   actions: {
-    marginTop: 16,
+    marginTop: SPACING.base,
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 8,

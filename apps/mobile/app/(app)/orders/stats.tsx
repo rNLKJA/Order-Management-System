@@ -18,34 +18,21 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Text } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { formatDate } from '@meal/shared';
 import {
   AppHeader,
   Bento,
   BentoGrid,
-  DatePicker,
   GlassSurface,
   MeshBackground,
   SectionLabel,
   StatTile,
 } from '../../../components/ui';
 import { ordersApi, type DailyOrder } from '../../../api/orders';
-import { useMembersView } from '../../../hooks/useMembersView';
 import { COLORS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
 
-type ZoneFilter = 'all' | 'hospital' | 'regular';
-const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
-type LimitOption = (typeof LIMIT_OPTIONS)[number];
-
-function firstOfMonth(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = `${now.getMonth() + 1}`.padStart(2, '0');
-  return `${y}-${m}-01`;
-}
+type ChartRange = 'week' | 'month' | 'year';
 
 function diffDaysInclusive(from: string, to: string): number {
   const f = new Date(`${from}T00:00:00`);
@@ -53,6 +40,14 @@ function diffDaysInclusive(from: string, to: string): number {
   const ms = t.getTime() - f.getTime();
   if (!Number.isFinite(ms) || ms < 0) return 1;
   return Math.floor(ms / 86_400_000) + 1;
+}
+
+function startOfRange(range: ChartRange, endDate: string): string {
+  const d = new Date(`${endDate}T00:00:00`);
+  if (range === 'week') d.setDate(d.getDate() - 6);
+  if (range === 'month') d.setDate(d.getDate() - 29);
+  if (range === 'year') d.setFullYear(d.getFullYear() - 1);
+  return formatDate(d);
 }
 
 interface Totals {
@@ -95,84 +90,52 @@ function emptyTotals(): Totals {
 }
 
 export default function OrdersStatsScreen() {
-  const [from, setFrom] = useState(firstOfMonth());
+  const [chartRange, setChartRange] = useState<ChartRange>('month');
+  const [from, setFrom] = useState(() => startOfRange('month', formatDate(new Date())));
   const [to, setTo] = useState(() => formatDate(new Date()));
-  const [zone, setZone] = useState<ZoneFilter>('all');
-  const [limit, setLimit] = useState<LimitOption>(50);
 
   const [orders, setOrders] = useState<DailyOrder[]>([]);
-  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const membersView = useMembersView();
-
-  const memberZoneById = useMemo(() => {
-    const map: Record<number, 'hospital' | 'regular'> = {};
-    for (const m of membersView.data ?? []) {
-      map[m.id] = m.is_hospital ? 'hospital' : 'regular';
-    }
-    return map;
-  }, [membersView.data]);
-
-  const memberNameById = useMemo(() => {
-    const map: Record<number, string> = {};
-    for (const m of membersView.data ?? []) {
-      map[m.id] = m.nickname || m.name;
-    }
-    return map;
-  }, [membersView.data]);
-
   const fetchOrders = useCallback(
     async (mode: 'load' | 'refresh' = 'load') => {
-      if (mode === 'load') setLoading(true);
-      else setRefreshing(true);
+      if (mode === 'refresh') setRefreshing(true);
       setError(null);
       try {
         const res = await ordersApi.list({
           from,
           to,
           status: 'all',
-          limit,
+          limit: 200,
         });
         setOrders(res.orders);
       } catch (e) {
         setOrders([]);
         setError(e instanceof Error ? e.message : '加载失败');
       } finally {
-        setLoading(false);
         setRefreshing(false);
       }
     },
-    [from, to, limit],
+    [from, to],
   );
 
   useEffect(() => {
     void fetchOrders();
   }, [fetchOrders]);
 
-  const filtered = useMemo(() => {
-    if (zone === 'all') return orders;
-    return orders.filter((o) => {
-      const isWalkin = (o.customer_name ?? '').trim().length > 0;
-      if (isWalkin) return zone === 'regular';
-      return memberZoneById[o.member_id] === zone;
-    });
-  }, [orders, zone, memberZoneById]);
+  const applyChartRange = useCallback((range: ChartRange) => {
+    const end = formatDate(new Date());
+    setChartRange(range);
+    setTo(end);
+    setFrom(startOfRange(range, end));
+  }, []);
 
-  const { totals, byDay, byMember } = useMemo(() => {
+  const filtered = useMemo(() => orders, [orders]);
+
+  const { totals, byDay, statusSnapshot } = useMemo(() => {
     const t = emptyTotals();
     const dayMap = new Map<string, DailyBucket>();
-    const memberMap = new Map<
-      number | string,
-      {
-        key: number | string;
-        label: string;
-        meals: number;
-        walkin: boolean;
-        member_id: number;
-      }
-    >();
 
     for (const o of filtered) {
       const isWalkin = (o.customer_name ?? '').trim().length > 0;
@@ -214,35 +177,60 @@ export default function OrdersStatsScreen() {
         if (isWalkin) day.walkin += o.quantity;
         else day.member += o.quantity;
         dayMap.set(o.order_date, day);
-
-        const key = isWalkin ? `walkin:${o.member_id}` : o.member_id;
-        const label = isWalkin
-          ? (o.customer_name || '散客')
-          : (memberNameById[o.member_id] ?? `会员 #${o.member_id}`);
-        const cur = memberMap.get(key) ?? { key, label, meals: 0, walkin: isWalkin, member_id: o.member_id };
-        cur.meals += o.quantity;
-        memberMap.set(key, cur);
       }
     }
 
     const byDay = Array.from(dayMap.values()).sort((a, b) =>
       a.date < b.date ? 1 : -1,
     );
-    const byMember = Array.from(memberMap.values())
-      .sort((a, b) => b.meals - a.meals)
-      .slice(0, 10);
 
-    return { totals: t, byDay, byMember };
-  }, [filtered, memberNameById]);
+    const fromMs = new Date(`${from}T00:00:00`).getTime();
+    const toMs = new Date(`${to}T23:59:59.999`).getTime();
+    const inWindow = (ts?: string | null) => {
+      if (!ts) return false;
+      const ms = new Date(ts).getTime();
+      return Number.isFinite(ms) && ms >= fromMs && ms <= toMs;
+    };
+    const snapshot = { pending: 0, fulfilled: 0, delivered: 0, cancelled: 0 };
+    for (const o of filtered) {
+      if (inWindow(o.created_at)) snapshot.pending += o.quantity;
+      if (inWindow(o.fulfilled_at)) snapshot.fulfilled += o.quantity;
+      if (inWindow(o.delivered_at)) snapshot.delivered += o.quantity;
+      if (inWindow(o.cancelled_at)) snapshot.cancelled += o.quantity;
+    }
+
+    return { totals: t, byDay, statusSnapshot: snapshot };
+  }, [filtered, from, to]);
 
   const days = diffDaysInclusive(from, to);
   const avgPerDay = days > 0 ? (totals.meals / days).toFixed(1) : '0';
+  const trendBars = useMemo(() => {
+    if (chartRange === 'year') {
+      const monthMap = new Map<string, number>();
+      for (const d of byDay) {
+        const key = d.date.slice(0, 7);
+        monthMap.set(key, (monthMap.get(key) ?? 0) + d.meals);
+      }
+      return Array.from(monthMap.entries())
+        .sort((a, b) => (a[0] > b[0] ? 1 : -1))
+        .slice(-12)
+        .map(([date, meals]) => ({ date, meals }));
+    }
+    const visibleDays = chartRange === 'week' ? 7 : 30;
+    return byDay.slice(0, visibleDays).reverse().map((d) => ({ date: d.date, meals: d.meals }));
+  }, [byDay, chartRange]);
+  const trendMaxMeals = useMemo(
+    () => Math.max(1, ...trendBars.map((d) => d.meals)),
+    [trendBars],
+  );
+  const lunchRatio = totals.meals > 0 ? totals.lunch / totals.meals : 0;
+  const dinnerRatio = totals.meals > 0 ? totals.dinner / totals.meals : 0;
 
   return (
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <AppHeader title="订单统计" subtitle={`${from} ~ ${to}`} />
+        <AppHeader title="订餐数据" subtitle={`${from} ~ ${to}`} />
 
         <ScrollView
           contentContainerStyle={styles.container}
@@ -261,65 +249,6 @@ export default function OrdersStatsScreen() {
               </View>
             </View>
           ) : null}
-
-          {/* 筛选 */}
-          <View style={styles.block}>
-            <SectionLabel>筛选</SectionLabel>
-            <GlassSurface padding={SPACING.md} style={styles.filterCard}>
-              <View style={styles.dateRow}>
-                <DatePicker
-                  label="起"
-                  value={from}
-                  onChange={setFrom}
-                  max={to || undefined}
-                  style={styles.dateField}
-                />
-                <DatePicker
-                  label="止"
-                  value={to}
-                  onChange={setTo}
-                  min={from || undefined}
-                  style={styles.dateField}
-                />
-              </View>
-
-              <View style={styles.segmentedBar}>
-                {(['all', 'hospital', 'regular'] as const).map((v) => {
-                  const active = zone === v;
-                  return (
-                    <Pressable
-                      key={v}
-                      style={[styles.segment, active && styles.segmentActive]}
-                      onPress={() => setZone(v)}
-                    >
-                      <Text
-                        style={[
-                          styles.segmentText,
-                          active && styles.segmentTextActive,
-                        ]}
-                      >
-                        {v === 'all' ? '全部' : v === 'hospital' ? '院内' : '院外'}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <View style={styles.limitRow}>
-                <Text style={styles.limitLabel}>每次加载</Text>
-                {LIMIT_OPTIONS.map((n) => (
-                  <Pressable
-                    key={n}
-                    style={[styles.limitChip, limit === n && styles.limitChipActive]}
-                    onPress={() => setLimit(n)}
-                  >
-                    <Text style={[styles.limitChipText, limit === n && styles.limitChipTextActive]}>
-                      {n}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </GlassSurface>
-          </View>
 
           {/* 汇总速览（4 格） */}
           <View style={styles.block}>
@@ -366,28 +295,105 @@ export default function OrdersStatsScreen() {
             </BentoGrid>
           </View>
 
+          {/* 图表速览 */}
+          <View style={styles.block}>
+            <SectionLabel>图表速览</SectionLabel>
+            <BentoGrid gap={SPACING.md}>
+              <Bento span={8} mobileSpan={12}>
+                <GlassSurface padding={SPACING.md} style={styles.chartCard}>
+                  <View style={styles.chartHead}>
+                    <Text style={styles.chartTitle}>每日订餐趋势</Text>
+                    <Text style={styles.chartHint}>
+                      {chartRange === 'week' ? '最近 7 天' : chartRange === 'month' ? '最近 30 天' : '最近 12 个月'}
+                    </Text>
+                  </View>
+                  <View style={styles.chartRangeRow}>
+                    {(['week', 'month', 'year'] as const).map((r) => (
+                      <Pressable
+                        key={r}
+                        style={[styles.chartRangeChip, chartRange === r && styles.chartRangeChipActive]}
+                        onPress={() => applyChartRange(r)}
+                      >
+                        <Text style={[styles.chartRangeText, chartRange === r && styles.chartRangeTextActive]}>
+                          {r === 'week' ? '一周' : r === 'month' ? '一个月' : '一年'}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {trendBars.length === 0 ? (
+                    <Text style={styles.emptyText}>当前筛选条件下没有数据</Text>
+                  ) : (
+                    <View style={styles.trendChart}>
+                      {trendBars.map((d) => {
+                        const barHeight = Math.max(6, Math.round((d.meals / trendMaxMeals) * 96));
+                        return (
+                          <View key={d.date} style={styles.trendCol}>
+                            <View style={styles.trendBarTrack}>
+                              <View style={[styles.trendBar, { height: barHeight }]} />
+                            </View>
+                            <Text style={styles.trendLabel}>
+                              {chartRange === 'year' ? d.date.slice(2).replace('-', '/') : d.date.slice(5)}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </GlassSurface>
+              </Bento>
+
+              <Bento span={4} mobileSpan={12}>
+                <GlassSurface padding={SPACING.md} style={styles.chartCard}>
+                  <View style={styles.chartHead}>
+                    <Text style={styles.chartTitle}>午晚餐占比</Text>
+                  </View>
+                  {totals.meals === 0 ? (
+                    <Text style={styles.emptyText}>当前筛选条件下没有数据</Text>
+                  ) : (
+                    <>
+                      <View style={styles.ratioBar}>
+                        <View style={[styles.ratioLunch, { flex: Math.max(lunchRatio, 0.04) }]} />
+                        <View style={[styles.ratioDinner, { flex: Math.max(dinnerRatio, 0.04) }]} />
+                      </View>
+                      <View style={styles.ratioLegend}>
+                        <View style={styles.ratioLegendRow}>
+                          <View style={[styles.ratioDot, { backgroundColor: COLORS.warning }]} />
+                          <Text style={styles.ratioText}>{`午餐 ${totals.lunch} 份`}</Text>
+                        </View>
+                        <View style={styles.ratioLegendRow}>
+                          <View style={[styles.ratioDot, { backgroundColor: COLORS.info }]} />
+                          <Text style={styles.ratioText}>{`晚餐 ${totals.dinner} 份`}</Text>
+                        </View>
+                      </View>
+                    </>
+                  )}
+                </GlassSurface>
+              </Bento>
+            </BentoGrid>
+          </View>
+
           {/* 状态分布 */}
           <View style={styles.block}>
-            <SectionLabel>状态分布（份数）</SectionLabel>
+            <SectionLabel>状态分布快照（按状态发生时间）</SectionLabel>
             <GlassSurface padding={SPACING.md}>
               <StatusRow
                 label="待出餐"
-                value={totals.pending}
+                value={statusSnapshot.pending}
                 color={COLORS.warning}
               />
               <StatusRow
                 label="已出餐"
-                value={totals.fulfilled}
+                value={statusSnapshot.fulfilled}
                 color={COLORS.brand}
               />
               <StatusRow
                 label="已送达"
-                value={totals.delivered}
+                value={statusSnapshot.delivered}
                 color={COLORS.success}
               />
               <StatusRow
                 label="已取消"
-                value={totals.cancelled}
+                value={statusSnapshot.cancelled}
                 color={COLORS.text.tertiary}
                 isLast
               />
@@ -421,88 +427,6 @@ export default function OrdersStatsScreen() {
             </BentoGrid>
           </View>
 
-          {/* TOP 10 会员 / 散客 */}
-          <View style={styles.block}>
-            <SectionLabel>点单最多（Top 10）</SectionLabel>
-            {byMember.length === 0 ? (
-              <GlassSurface padding={SPACING.lg}>
-                <Text style={styles.emptyText}>当前筛选条件下没有订单</Text>
-              </GlassSurface>
-            ) : (
-              <GlassSurface padding={SPACING.md}>
-                {byMember.map((r, idx) => (
-                  <Pressable
-                    key={String(r.key)}
-                    onPress={() =>
-                      router.push(
-                        (r.walkin
-                          ? { pathname: '/(app)/walkins/[id]', params: { id: String(r.member_id) } }
-                          : { pathname: '/(app)/members/[id]', params: { id: String(r.member_id) } }) as never,
-                      )
-                    }
-                    style={[
-                      styles.rankRow,
-                      idx === byMember.length - 1 && { borderBottomWidth: 0 },
-                    ]}
-                  >
-                    <View style={styles.rankLeft}>
-                      <View style={[styles.rankBadge, rankBadgeColor(idx)]}>
-                        <Text style={styles.rankBadgeText}>{idx + 1}</Text>
-                      </View>
-                      <Text style={styles.rankName} numberOfLines={1}>
-                        {r.label}
-                      </Text>
-                      {r.walkin ? (
-                        <View style={styles.walkinTag}>
-                          <Text style={styles.walkinTagText}>散客</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text style={styles.rankValue}>{r.meals} 份</Text>
-                  </Pressable>
-                ))}
-              </GlassSurface>
-            )}
-          </View>
-
-          {/* 按日明细 */}
-          <View style={styles.block}>
-            <SectionLabel>{`按日明细（${byDay.length} 天）`}</SectionLabel>
-            {loading && orders.length === 0 ? (
-              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-                <ActivityIndicator />
-              </View>
-            ) : byDay.length === 0 ? (
-              <GlassSurface padding={SPACING.lg}>
-                <Text style={styles.emptyText}>当前筛选条件下没有订单</Text>
-              </GlassSurface>
-            ) : (
-              byDay.map((d) => (
-                <GlassSurface
-                  key={d.date}
-                  padding={SPACING.md}
-                  style={styles.dayCard}
-                >
-                  <View style={styles.dayHeader}>
-                    <Text style={styles.dayDate}>{d.date}</Text>
-                    <Text style={styles.dayTotal}>{d.meals} 份</Text>
-                  </View>
-                  <View style={styles.dayBreakdown}>
-                    <Pill icon="sunny-outline" label={`午 ${d.lunch}`} color={COLORS.warning} />
-                    <Pill icon="moon-outline" label={`晚 ${d.dinner}`} color={COLORS.info} />
-                    <Pill icon="people-outline" label={`会员 ${d.member}`} color={COLORS.brand} />
-                    {d.walkin > 0 ? (
-                      <Pill
-                        icon="walk-outline"
-                        label={`散客 ${d.walkin}`}
-                        color={COLORS.warning}
-                      />
-                    ) : null}
-                  </View>
-                </GlassSurface>
-              ))
-            )}
-          </View>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -535,30 +459,6 @@ function StatusRow({
   );
 }
 
-function Pill({
-  icon,
-  label,
-  color,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  color: string;
-}) {
-  return (
-    <View style={[styles.pill, { borderColor: color + '55' }]}>
-      <Ionicons name={icon} size={12} color={color} />
-      <Text style={[styles.pillText, { color }]}>{label}</Text>
-    </View>
-  );
-}
-
-function rankBadgeColor(idx: number): { backgroundColor: string } {
-  if (idx === 0) return { backgroundColor: COLORS.warning };
-  if (idx === 1) return { backgroundColor: COLORS.brand };
-  if (idx === 2) return { backgroundColor: COLORS.success };
-  return { backgroundColor: 'rgba(118,118,128,0.2)' };
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.systemGrouped },
   container: {
@@ -579,48 +479,69 @@ const styles = StyleSheet.create({
   },
   errorBannerText: { ...TYPE.footnote, color: COLORS.danger },
 
-  filterCard: { gap: SPACING.md },
-  dateRow: { flexDirection: 'row', gap: SPACING.sm },
-  dateField: { flex: 1 },
-
-  segmentedBar: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(118,118,128,0.12)',
-    borderRadius: 10,
-    padding: 2,
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  segmentActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  segmentText: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '500' },
-  segmentTextActive: { color: COLORS.text.primary, fontWeight: '600' },
-  limitRow: {
+  chartCard: { minHeight: 172 },
+  chartHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+    gap: SPACING.sm,
   },
-  limitLabel: { fontSize: 12, color: COLORS.text.secondary, marginRight: 2 },
-  limitChip: {
+  chartTitle: { ...TYPE.headline, color: COLORS.text.primary },
+  chartHint: { ...TYPE.caption, color: COLORS.text.tertiary },
+  chartRangeRow: { flexDirection: 'row', gap: 8, marginBottom: SPACING.sm },
+  chartRangeChip: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
+    paddingVertical: 5,
+    borderRadius: 12,
     backgroundColor: 'rgba(118,118,128,0.12)',
   },
-  limitChipActive: { backgroundColor: 'rgba(0,122,255,0.16)' },
-  limitChipText: { fontSize: 12, color: COLORS.text.secondary, fontWeight: '600' },
-  limitChipTextActive: { color: COLORS.brand },
+  chartRangeChipActive: { backgroundColor: 'rgba(0,122,255,0.16)' },
+  chartRangeText: { ...TYPE.caption, color: COLORS.text.secondary, fontWeight: '600' },
+  chartRangeTextActive: { color: COLORS.brand },
+  trendChart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+    minHeight: 126,
+  },
+  trendCol: { flex: 1, alignItems: 'center', minWidth: 14 },
+  trendBarTrack: {
+    width: '100%',
+    maxWidth: 16,
+    height: 98,
+    justifyContent: 'flex-end',
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    overflow: 'hidden',
+  },
+  trendBar: {
+    width: '100%',
+    borderRadius: 8,
+    backgroundColor: COLORS.brand,
+  },
+  trendLabel: {
+    marginTop: 6,
+    ...TYPE.caption,
+    color: COLORS.text.tertiary,
+    fontVariant: ['tabular-nums'],
+  },
+  ratioBar: {
+    flexDirection: 'row',
+    width: '100%',
+    height: 16,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    overflow: 'hidden',
+    marginTop: 2,
+  },
+  ratioLunch: { backgroundColor: COLORS.warning },
+  ratioDinner: { backgroundColor: COLORS.info },
+  ratioLegend: { marginTop: SPACING.sm, gap: 8 },
+  ratioLegendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ratioDot: { width: 8, height: 8, borderRadius: 4 },
+  ratioText: { ...TYPE.footnote, color: COLORS.text.secondary },
+
 
   // status rows
   statusRow: {
@@ -640,80 +561,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
-
-  // rank
-  rankRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.06)',
-    gap: SPACING.sm,
-  },
-  rankLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  rankBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#fff',
-    fontVariant: ['tabular-nums'],
-  },
-  rankName: { ...TYPE.body, color: COLORS.text.primary, flexShrink: 1 },
-  rankValue: {
-    ...TYPE.body,
-    color: COLORS.text.primary,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-  },
-  walkinTag: {
-    backgroundColor: 'rgba(255,149,0,0.12)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  walkinTagText: { fontSize: 11, color: COLORS.warning, fontWeight: '600' },
-
-  // day cards
-  dayCard: { marginBottom: SPACING.sm, gap: SPACING.sm },
-  dayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dayDate: {
-    ...TYPE.headline,
-    color: COLORS.text.primary,
-    fontVariant: ['tabular-nums'],
-  },
-  dayTotal: {
-    ...TYPE.title3,
-    color: COLORS.brand,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  dayBreakdown: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  pillText: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
-
   emptyText: {
     ...TYPE.body,
     color: COLORS.text.secondary,
