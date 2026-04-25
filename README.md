@@ -2,14 +2,14 @@
 
 一个面向小型订餐工作室的会员 + 卡券 + 订餐 + 出餐 + 财务管理系统。手机（iOS / Android）+ 电脑（Web）三端共用一套数据。
 
-> **当前阶段**：Phase 0–3 已上线（会员 / 卡 / 订餐 / 出餐 / 财务 / 记录编辑全量 / 生产部署到 Vercel + EAS），正进入 Phase 4+（次日接龙汇总、收工报表、Summary、导出、备份、自有域名等）。详见 [实施阶段](#实施阶段)。
+> **当前阶段**：Phase 0–4 已上线（会员 / 卡 / 订餐 / 出餐 / 财务 / 记录编辑全量 / 生产部署到 Vercel），正进入 Phase 4+（次日接龙汇总、收工报表、Summary、导出、备份、自有域名等）。详见 [实施阶段](#实施阶段)。
 
 ## 技术栈
 
 | 层 | 选型 |
 | --- | --- |
 | 仓库编排 | pnpm workspace + Turborepo |
-| 前端 | Expo SDK 52 + Expo Router + React Native Paper |
+| 前端 | Expo SDK 51 + Expo Router + React Native Paper |
 | 后端 | Hono + TypeScript on Vercel（`sin1`） |
 | 数据库 | Turso（libSQL / SQLite 兼容，主 `nrt` + 副 `sin`） |
 | ORM | Drizzle |
@@ -64,6 +64,37 @@ pnpm lint             # 全仓 lint
 pnpm build            # 全仓构建
 pnpm format           # Prettier 格式化
 ```
+
+## 线上地址（当前）
+
+- Mobile Web（Vercel）：[https://meal-mobile.vercel.app](https://meal-mobile.vercel.app)
+- API（Vercel）：[https://meal-api-nu.vercel.app](https://meal-api-nu.vercel.app)
+
+## App 打包（EAS）说明
+
+当前仓库已完成 EAS 配置（`apps/mobile/eas.json`），并补充了 iOS 出口合规字段：
+
+- `ios.infoPlist.ITSAppUsesNonExemptEncryption = false`
+
+首次打包前，请先完成签名凭证初始化（本地交互执行一次）：
+
+```bash
+cd apps/mobile
+eas credentials:configure-build -p android -e production
+eas credentials:configure-build -p ios -e production
+```
+
+然后即可发起云构建：
+
+```bash
+eas build --platform android --profile production --no-wait
+eas build --platform ios --profile production --no-wait
+```
+
+说明：
+
+- 若 Apple Developer Membership 过期，iOS 凭证注册会失败（403），但 **Web 端可继续正常发布和使用**。
+- Android 生产包在无 keystore 的情况下，必须先完成上述 `credentials` 初始化。
 
 ## 贡献流程
 
