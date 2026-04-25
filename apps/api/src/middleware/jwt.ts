@@ -17,9 +17,13 @@ import type { AuthTokenPayload, UserRole } from '@meal/shared';
 
 export const PRIMARY_ADMIN_USERNAME = 'rnlkja';
 
-export function resolveEffectiveRole(username: string, role: UserRole): UserRole {
-  if (username.trim().toLowerCase() === PRIMARY_ADMIN_USERNAME) return 'admin';
-  return role === 'admin' ? 'staff' : role;
+export function isSuperAdminUsername(username: string): boolean {
+  return username.trim().toLowerCase() === PRIMARY_ADMIN_USERNAME;
+}
+
+export function resolveEffectiveRole(_username: string, role: UserRole): UserRole {
+  // 角色保持数据库原值：支持普通 admin + staff；superadmin 由独立标记表达。
+  return role;
 }
 
 export interface AuthUserCtx {
@@ -27,6 +31,7 @@ export interface AuthUserCtx {
   username: string;
   full_name: string;
   role: UserRole;
+  is_superadmin: boolean;
 }
 
 export type AuthVariables = {
@@ -91,6 +96,7 @@ export function requireAuth(): MiddlewareHandler<{
       username: u.username,
       full_name: u.full_name,
       role: resolveEffectiveRole(u.username, u.role),
+      is_superadmin: isSuperAdminUsername(u.username),
     });
 
     await next();

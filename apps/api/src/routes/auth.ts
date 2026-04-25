@@ -19,7 +19,12 @@ import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import { verifyPassword } from '../services/password.js';
 import { signToken } from '../services/jwt.js';
-import { requireAuth, resolveEffectiveRole, type AuthVariables } from '../middleware/jwt.js';
+import {
+  isSuperAdminUsername,
+  requireAuth,
+  resolveEffectiveRole,
+  type AuthVariables,
+} from '../middleware/jwt.js';
 import { rateLimit } from '../middleware/rate-limit.js';
 
 export const authRouter = new Hono<{ Variables: AuthVariables }>();
@@ -70,6 +75,7 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
       username: user.username,
       full_name: user.full_name,
       role: resolveEffectiveRole(user.username, user.role),
+      is_superadmin: isSuperAdminUsername(user.username),
       avatar_url: user.avatar_url,
     },
   };
@@ -97,6 +103,7 @@ authRouter.get('/me', requireAuth(), async (c) => {
     user: {
       ...row,
       role: resolveEffectiveRole(row.username, row.role),
+      is_superadmin: isSuperAdminUsername(row.username),
     },
   });
 });

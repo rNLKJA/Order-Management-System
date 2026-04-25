@@ -24,8 +24,8 @@ import { requestDb } from '../db/request-db.js';
 import { hashPassword } from '../services/password.js';
 import {
   DEFAULT_DATA_OPERATORS,
+  isSuperAdminUsername,
   isDataOperatorEnforced,
-  PRIMARY_ADMIN_USERNAME,
   requireAuth,
   requireRole,
   resolveEffectiveRole,
@@ -92,6 +92,7 @@ usersRouter.get('/', async (c) => {
     users: rows.map((u) => ({
       ...u,
       role: resolveEffectiveRole(u.username, u.role),
+      is_superadmin: isSuperAdminUsername(u.username),
     })),
   });
 });
@@ -143,6 +144,7 @@ usersRouter.get('/permissions/data-operators', requireRole('admin'), async (c) =
     users: users.map((u) => ({
       ...u,
       role: resolveEffectiveRole(u.username, u.role),
+      is_superadmin: isSuperAdminUsername(u.username),
       can_data_write:
         resolveEffectiveRole(u.username, u.role) === 'admin' || operators.includes(u.username.toLowerCase()),
     })),
@@ -206,6 +208,7 @@ usersRouter.post(
       user: {
         ...row,
         role: resolveEffectiveRole(row.username, row.role),
+        is_superadmin: isSuperAdminUsername(row.username),
         can_data_write: !!input.can_data_write,
       },
     });
@@ -234,14 +237,10 @@ usersRouter.patch(
       .limit(1);
     const target = targetRows[0];
     if (!target) throw new HTTPException(404, { message: '用户不存在' });
-    const targetIsPrimaryAdmin = target.username.toLowerCase() === PRIMARY_ADMIN_USERNAME;
 
     const patch: { role?: 'admin' | 'staff'; is_active?: boolean } = {};
     if (input.role !== undefined) {
-      if (input.role === 'admin' && !targetIsPrimaryAdmin) {
-        throw new HTTPException(422, { message: '仅 rNLKJA 可以设为管理员' });
-      }
-      if (input.role === 'staff' && targetIsPrimaryAdmin) {
+      if (input.role === 'staff' && isSuperAdminUsername(target.username)) {
         throw new HTTPException(422, { message: 'rNLKJA 不能降级为员工' });
       }
       patch.role = input.role;
@@ -277,6 +276,7 @@ usersRouter.patch(
       user: {
         ...user,
         role: effectiveRole,
+        is_superadmin: isSuperAdminUsername(user.username),
         can_data_write: effectiveRole === 'admin' ? true : operators.includes(user.username.toLowerCase()),
       },
       operators,
@@ -352,6 +352,7 @@ usersRouter.patch(
         ? {
             ...updated[0],
             role: resolveEffectiveRole(updated[0].username, updated[0].role),
+            is_superadmin: isSuperAdminUsername(updated[0].username),
           }
         : undefined,
     });
@@ -379,6 +380,7 @@ usersRouter.delete('/me/avatar', async (c) => {
       ? {
           ...updated[0],
           role: resolveEffectiveRole(updated[0].username, updated[0].role),
+          is_superadmin: isSuperAdminUsername(updated[0].username),
         }
       : undefined,
   });
@@ -412,6 +414,7 @@ usersRouter.get('/:id', zValidator('param', idParamSchema), async (c) => {
     user: {
       ...rows[0],
       role: resolveEffectiveRole(rows[0].username, rows[0].role),
+      is_superadmin: isSuperAdminUsername(rows[0].username),
     },
   });
 });

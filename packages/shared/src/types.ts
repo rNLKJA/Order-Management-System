@@ -108,6 +108,8 @@ export interface AuthUser {
   username: string;
   full_name: string;
   role: UserRole;
+  /** rNLKJA 专属最高权限标记 */
+  is_superadmin?: boolean;
   /** data URL；无头像为 null */
   avatar_url?: string | null;
 }
