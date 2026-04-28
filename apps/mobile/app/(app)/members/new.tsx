@@ -7,7 +7,8 @@
  */
 
 import { useState } from 'react';
-import { SafeAreaView, View } from 'react-native';
+import { View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Dialog, Portal, Text, Button, Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,7 +29,7 @@ export default function NewMemberScreen() {
   return (
     <View style={{ flex: 1 }}>
       <MeshBackground />
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader title="新增会员" onBack={() => router.back()} />
         <View style={{ flex: 1 }}>
       <MemberForm

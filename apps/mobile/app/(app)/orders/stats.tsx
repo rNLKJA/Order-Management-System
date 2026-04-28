@@ -24,6 +24,7 @@ import {
   AppHeader,
   Bento,
   BentoGrid,
+  DatePicker,
   GlassSurface,
   MeshBackground,
   SectionLabel,
@@ -32,7 +33,7 @@ import {
 import { ordersApi, type DailyOrder } from '../../../api/orders';
 import { COLORS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
 
-type ChartRange = 'week' | 'month' | 'year';
+type ChartRange = 'today' | 'week' | 'month' | 'year' | 'custom';
 
 function diffDaysInclusive(from: string, to: string): number {
   const f = new Date(`${from}T00:00:00`);
@@ -44,6 +45,7 @@ function diffDaysInclusive(from: string, to: string): number {
 
 function startOfRange(range: ChartRange, endDate: string): string {
   const d = new Date(`${endDate}T00:00:00`);
+  if (range === 'today') return endDate;
   if (range === 'week') d.setDate(d.getDate() - 6);
   if (range === 'month') d.setDate(d.getDate() - 29);
   if (range === 'year') d.setFullYear(d.getFullYear() - 1);
@@ -98,14 +100,19 @@ export default function OrdersStatsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { effectiveFrom, effectiveTo } = useMemo(() => {
+    if (from <= to) return { effectiveFrom: from, effectiveTo: to };
+    return { effectiveFrom: to, effectiveTo: from };
+  }, [from, to]);
+
   const fetchOrders = useCallback(
     async (mode: 'load' | 'refresh' = 'load') => {
       if (mode === 'refresh') setRefreshing(true);
       setError(null);
       try {
         const res = await ordersApi.list({
-          from,
-          to,
+          from: effectiveFrom,
+          to: effectiveTo,
           status: 'all',
           limit: 200,
         });
@@ -117,7 +124,7 @@ export default function OrdersStatsScreen() {
         setRefreshing(false);
       }
     },
-    [from, to],
+    [effectiveFrom, effectiveTo],
   );
 
   useEffect(() => {
@@ -129,6 +136,16 @@ export default function OrdersStatsScreen() {
     setChartRange(range);
     setTo(end);
     setFrom(startOfRange(range, end));
+  }, []);
+
+  const onChangeFrom = useCallback((next: string) => {
+    setChartRange('custom');
+    setFrom(next);
+  }, []);
+
+  const onChangeTo = useCallback((next: string) => {
+    setChartRange('custom');
+    setTo(next);
   }, []);
 
   const filtered = useMemo(() => orders, [orders]);
@@ -184,8 +201,8 @@ export default function OrdersStatsScreen() {
       a.date < b.date ? 1 : -1,
     );
 
-    const fromMs = new Date(`${from}T00:00:00`).getTime();
-    const toMs = new Date(`${to}T23:59:59.999`).getTime();
+    const fromMs = new Date(`${effectiveFrom}T00:00:00`).getTime();
+    const toMs = new Date(`${effectiveTo}T23:59:59.999`).getTime();
     const inWindow = (ts?: string | null) => {
       if (!ts) return false;
       const ms = new Date(ts).getTime();
@@ -200,9 +217,9 @@ export default function OrdersStatsScreen() {
     }
 
     return { totals: t, byDay, statusSnapshot: snapshot };
-  }, [filtered, from, to]);
+  }, [filtered, effectiveFrom, effectiveTo]);
 
-  const days = diffDaysInclusive(from, to);
+  const days = diffDaysInclusive(effectiveFrom, effectiveTo);
   const avgPerDay = days > 0 ? (totals.meals / days).toFixed(1) : '0';
   const trendBars = useMemo(() => {
     if (chartRange === 'year') {
@@ -216,9 +233,20 @@ export default function OrdersStatsScreen() {
         .slice(-12)
         .map(([date, meals]) => ({ date, meals }));
     }
+    if (chartRange === 'custom' && days > 62) {
+      const monthMap = new Map<string, number>();
+      for (const d of byDay) {
+        const key = d.date.slice(0, 7);
+        monthMap.set(key, (monthMap.get(key) ?? 0) + d.meals);
+      }
+      return Array.from(monthMap.entries())
+        .sort((a, b) => (a[0] > b[0] ? 1 : -1))
+        .map(([date, meals]) => ({ date, meals }));
+    }
     const visibleDays = chartRange === 'week' ? 7 : 30;
-    return byDay.slice(0, visibleDays).reverse().map((d) => ({ date: d.date, meals: d.meals }));
-  }, [byDay, chartRange]);
+    const base = chartRange === 'custom' ? byDay.slice().reverse() : byDay.slice(0, visibleDays).reverse();
+    return base.map((d) => ({ date: d.date, meals: d.meals }));
+  }, [byDay, chartRange, days]);
   const trendMaxMeals = useMemo(
     () => Math.max(1, ...trendBars.map((d) => d.meals)),
     [trendBars],
@@ -230,7 +258,7 @@ export default function OrdersStatsScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <AppHeader title="订餐数据" subtitle={`${from} ~ ${to}`} />
+        <AppHeader title="订餐数据" subtitle={`${effectiveFrom} ~ ${effectiveTo}`} />
 
         <ScrollView
           contentContainerStyle={styles.container}
@@ -249,6 +277,43 @@ export default function OrdersStatsScreen() {
               </View>
             </View>
           ) : null}
+
+          {/* 时间范围 */}
+          <View style={styles.block}>
+            <SectionLabel>时间范围</SectionLabel>
+            <GlassSurface padding={SPACING.md}>
+              <View style={styles.rangeRow}>
+                <DatePicker
+                  value={from}
+                  onChange={onChangeFrom}
+                  label="起"
+                  max={to || undefined}
+                  style={styles.rangePicker}
+                />
+                <Text style={styles.rangeDash}>至</Text>
+                <DatePicker
+                  value={to}
+                  onChange={onChangeTo}
+                  label="止"
+                  min={from || undefined}
+                  style={styles.rangePicker}
+                />
+              </View>
+              <View style={styles.chartRangeRow}>
+                {(['today', 'week', 'month', 'year'] as const).map((r) => (
+                  <Pressable
+                    key={r}
+                    style={[styles.chartRangeChip, chartRange === r && styles.chartRangeChipActive]}
+                    onPress={() => applyChartRange(r)}
+                  >
+                    <Text style={[styles.chartRangeText, chartRange === r && styles.chartRangeTextActive]}>
+                      {r === 'today' ? '今天' : r === 'week' ? '近7天' : r === 'month' ? '近30天' : '近一年'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </GlassSurface>
+          </View>
 
           {/* 汇总速览（4 格） */}
           <View style={styles.block}>
@@ -304,21 +369,18 @@ export default function OrdersStatsScreen() {
                   <View style={styles.chartHead}>
                     <Text style={styles.chartTitle}>每日订餐趋势</Text>
                     <Text style={styles.chartHint}>
-                      {chartRange === 'week' ? '最近 7 天' : chartRange === 'month' ? '最近 30 天' : '最近 12 个月'}
+                      {chartRange === 'today'
+                        ? '今天'
+                        : chartRange === 'week'
+                          ? '最近 7 天'
+                          : chartRange === 'month'
+                            ? '最近 30 天'
+                            : chartRange === 'year'
+                              ? '最近 12 个月'
+                              : days > 62
+                                ? '自定义区间（按月）'
+                                : '自定义区间（按日）'}
                     </Text>
-                  </View>
-                  <View style={styles.chartRangeRow}>
-                    {(['week', 'month', 'year'] as const).map((r) => (
-                      <Pressable
-                        key={r}
-                        style={[styles.chartRangeChip, chartRange === r && styles.chartRangeChipActive]}
-                        onPress={() => applyChartRange(r)}
-                      >
-                        <Text style={[styles.chartRangeText, chartRange === r && styles.chartRangeTextActive]}>
-                          {r === 'week' ? '一周' : r === 'month' ? '一个月' : '一年'}
-                        </Text>
-                      </Pressable>
-                    ))}
                   </View>
                   {trendBars.length === 0 ? (
                     <Text style={styles.emptyText}>当前筛选条件下没有数据</Text>
@@ -332,7 +394,9 @@ export default function OrdersStatsScreen() {
                               <View style={[styles.trendBar, { height: barHeight }]} />
                             </View>
                             <Text style={styles.trendLabel}>
-                              {chartRange === 'year' ? d.date.slice(2).replace('-', '/') : d.date.slice(5)}
+                              {chartRange === 'year' || (chartRange === 'custom' && days > 62)
+                                ? d.date.slice(2).replace('-', '/')
+                                : d.date.slice(5)}
                             </Text>
                           </View>
                         );
@@ -489,6 +553,14 @@ const styles = StyleSheet.create({
   },
   chartTitle: { ...TYPE.headline, color: COLORS.text.primary },
   chartHint: { ...TYPE.caption, color: COLORS.text.tertiary },
+  rangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: SPACING.sm,
+  },
+  rangePicker: { flex: 1 },
+  rangeDash: { ...TYPE.caption, color: COLORS.text.tertiary, fontWeight: '600' },
   chartRangeRow: { flexDirection: 'row', gap: 8, marginBottom: SPACING.sm },
   chartRangeChip: {
     paddingHorizontal: 10,

@@ -72,6 +72,12 @@ function firstOfMonth(): string {
   return `${y}-${m}-01`;
 }
 
+function firstOfYear(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  return `${y}-01-01`;
+}
+
 function todayISO(): string {
   return formatDate(new Date());
 }
@@ -133,6 +139,7 @@ export default function FinanceScreen() {
   const detailWindowFrom = from && from > detailWindowFromRaw ? from : detailWindowFromRaw;
   const weekStart = mondayOfWeek();
   const monthStart = firstOfMonth();
+  const yearStart = firstOfYear();
   const selectedQuickRange =
     from === today && to === today
       ? 'today'
@@ -140,7 +147,32 @@ export default function FinanceScreen() {
         ? 'week'
         : from === monthStart && to === today
           ? 'month'
+          : from === yearStart && to === today
+            ? 'year'
           : null;
+
+  const applyQuickRange = useCallback(
+    (range: 'today' | 'week' | 'month' | 'year') => {
+      if (range === 'today') {
+        setFrom(today);
+        setTo(today);
+        return;
+      }
+      if (range === 'week') {
+        setFrom(weekStart);
+        setTo(today);
+        return;
+      }
+      if (range === 'month') {
+        setFrom(monthStart);
+        setTo(today);
+        return;
+      }
+      setFrom(yearStart);
+      setTo(today);
+    },
+    [today, weekStart, monthStart, yearStart],
+  );
 
   const fetchData = useCallback(
     async (mode: 'load' | 'refresh' = 'load') => {
@@ -450,21 +482,27 @@ export default function FinanceScreen() {
               <View style={styles.quickRangeRow}>
                 <Pressable
                   style={[styles.quickRange, selectedQuickRange === 'today' && styles.quickRangeActive]}
-                  onPress={() => { setFrom(today); setTo(today); }}
+                  onPress={() => applyQuickRange('today')}
                 >
                   <Text style={[styles.quickRangeText, selectedQuickRange === 'today' && styles.quickRangeTextActive]}>今天</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.quickRange, selectedQuickRange === 'week' && styles.quickRangeActive]}
-                  onPress={() => { setFrom(weekStart); setTo(today); }}
+                  onPress={() => applyQuickRange('week')}
                 >
                   <Text style={[styles.quickRangeText, selectedQuickRange === 'week' && styles.quickRangeTextActive]}>本周</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.quickRange, selectedQuickRange === 'month' && styles.quickRangeActive]}
-                  onPress={() => { setFrom(monthStart); setTo(today); }}
+                  onPress={() => applyQuickRange('month')}
                 >
                   <Text style={[styles.quickRangeText, selectedQuickRange === 'month' && styles.quickRangeTextActive]}>本月</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.quickRange, selectedQuickRange === 'year' && styles.quickRangeActive]}
+                  onPress={() => applyQuickRange('year')}
+                >
+                  <Text style={[styles.quickRangeText, selectedQuickRange === 'year' && styles.quickRangeTextActive]}>本年</Text>
                 </Pressable>
               </View>
             </GlassSurface>

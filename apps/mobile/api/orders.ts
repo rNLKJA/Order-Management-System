@@ -141,4 +141,7 @@ export const ordersApi = {
 
   cancel: (id: number, reason?: string) =>
     api.patch<{ order: DailyOrder; card?: Card }>(`/api/orders/${id}/cancel`, { reason }),
+
+  markDeliveryFailed: (id: number, reason: string) =>
+    api.patch<{ order: DailyOrder; card?: Card }>(`/api/orders/${id}/delivery-failed`, { reason }),
 };

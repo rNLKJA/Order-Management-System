@@ -94,6 +94,15 @@ export default function MembersScreen() {
             <View style={styles.block}>
               <SectionLabel>筛选</SectionLabel>
               <GlassSurface padding={SPACING.md} style={styles.filterCard}>
+                <View style={styles.filterRow}>
+                  {(['all', 'hospital', 'regular', 'expired'] as const).map((f) => (
+                    <Pressable key={f} style={[styles.filterChip, filter === f && styles.filterChipActive]} onPress={() => setFilter(f)}>
+                      <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
+                        {f === 'all' ? '全部' : f === 'hospital' ? '院内' : f === 'regular' ? '院外' : '需续卡'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
                 <View style={styles.searchBox}>
                   <Ionicons name="search-outline" size={16} color={COLORS.text.tertiary} />
                   <TextInput
@@ -109,15 +118,6 @@ export default function MembersScreen() {
                       <Ionicons name="close-circle" size={18} color={COLORS.text.quaternary} />
                     </Pressable>
                   ) : null}
-                </View>
-                <View style={styles.filterRow}>
-                  {(['all', 'hospital', 'regular', 'expired'] as const).map((f) => (
-                    <Pressable key={f} style={[styles.filterChip, filter === f && styles.filterChipActive]} onPress={() => setFilter(f)}>
-                      <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
-                        {f === 'all' ? '全部' : f === 'hospital' ? '院内' : f === 'regular' ? '院外' : '需续卡'}
-                      </Text>
-                    </Pressable>
-                  ))}
                 </View>
                 <View style={styles.limitRow}>
                   <Text style={styles.limitLabel}>每次加载</Text>

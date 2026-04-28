@@ -9,7 +9,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../../api/client';
 import { ordersApi } from '../../../api/orders';
 import {
@@ -134,7 +134,7 @@ export default function QuickOrderScreen() {
   return (
     <View style={{ flex: 1 }}>
       <MeshBackground />
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader title="快速录入" subtitle={`用餐日期：${orderDate}（今天）`} onBack={() => router.back()} />
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           {error ? (

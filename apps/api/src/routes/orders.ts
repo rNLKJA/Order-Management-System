@@ -7,6 +7,7 @@
  * - POST   /api/orders                 拆 1~2 条 DailyOrder，原子扣卡或写散餐 FinanceEntry
  * - PATCH  /api/orders/:id             仅修改 notes + created_by_user_id
  * - PATCH  /api/orders/:id/status      pending/fulfilled/delivered 流转
+ * - PATCH  /api/orders/:id/delivery-failed  已出餐但送餐失败（记录原因 + 原子退餐）
  * - PATCH  /api/orders/:id/cancel      原子冲销
  *
  * 所有接口需要登录。
@@ -640,6 +641,66 @@ ordersRouter.patch(
       .limit(1);
 
     return c.json({ order: updated[0] });
+  },
+);
+
+// ==================== PATCH /api/orders/:id/delivery-failed ====================
+
+const deliveryFailedBodySchema = z.object({
+  reason: z.string().trim().min(1, '请填写送餐失败原因'),
+});
+
+ordersRouter.patch(
+  '/:id/delivery-failed',
+  zValidator('param', idParamSchema),
+  zValidator('json', deliveryFailedBodySchema),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const { reason } = c.req.valid('json');
+    const authUser = c.get('authUser');
+    const db = requestDb(c);
+
+    const rows = await db
+      .select()
+      .from(schema.daily_orders)
+      .where(eq(schema.daily_orders.id, id))
+      .limit(1);
+    const order = rows[0];
+    if (!order) {
+      throw new HTTPException(404, { message: '订单不存在' });
+    }
+    if (order.status !== 'fulfilled') {
+      return c.json(
+        {
+          code: 'DELIVERY_FAILED_INVALID_STATUS',
+          message: '仅「已出餐」订单可标记送餐失败',
+        },
+        422,
+      );
+    }
+
+    try {
+      const result = await db.transaction(async (tx) => {
+        return cancelOrder(tx, {
+          orderId: id,
+          cancelledByUserId: authUser.id,
+          reason: `配送失败：${reason}`,
+        });
+      });
+
+      return c.json({
+        order: result.order,
+        ...(result.card ? { card: result.card } : {}),
+      });
+    } catch (err) {
+      if (err instanceof OrderLockedDeliveredError) {
+        return c.json({ code: err.code, message: err.message }, 422);
+      }
+      if (err instanceof OrderNotFoundError) {
+        throw new HTTPException(404, { message: err.message });
+      }
+      throw err;
+    }
   },
 );
 

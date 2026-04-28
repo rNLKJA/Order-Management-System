@@ -35,13 +35,18 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { IOS_COLORS } from '../../../theme/paperTheme';
 import { type MockMember, type MockOrder } from '../../../constants/mockData';
 import { ordersApi } from '../../../api/orders';
-import { useOrdersToday, useInvalidateOrders } from '../../../hooks/useOrdersToday';
+import {
+  useOrdersByDate,
+  useOrdersToday,
+  useInvalidateOrders,
+} from '../../../hooks/useOrdersToday';
 import {
   useMembersView,
   useInvalidateMembersView,
 } from '../../../hooks/useMembersView';
 import { dailyOrderToMockOrder, membersByIdFrom } from '../../../lib/order-view';
 import { AppHeader, MeshBackground } from '../../../components/ui';
+import { DatePicker } from '../../../components/ui/DatePicker';
 import { MemberQuickInfoModal } from '../../../components/MemberQuickInfoModal';
 import { confirmAction, confirmDestructive } from '../../../lib/confirm';
 
@@ -53,13 +58,30 @@ const STATUS_MAP = {
 } as const;
 
 const ADHOC_DEFAULT_PRICE = 35;
+const DELIVERY_FAIL_REASON_OPTIONS = [
+  '地址信息有误',
+  '客户临时取消收餐',
+  '联系不上客户',
+  '配送超时，餐品不宜送达',
+  '配送资源不足',
+  '其他',
+] as const;
 
-function todayStr(): string {
+function dateStrWithOffset(offsetDays: number): string {
   const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  now.setUTCDate(now.getUTCDate() + offsetDays);
   const y = now.getUTCFullYear();
   const m = String(now.getUTCMonth() + 1).padStart(2, '0');
   const d = String(now.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+function todayStr(): string {
+  return dateStrWithOffset(0);
+}
+
+function tomorrowStr(): string {
+  return dateStrWithOffset(1);
 }
 
 // ============================================================
@@ -90,11 +112,17 @@ export default function OrdersScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [activePrimary, setActivePrimary] = useState<PrimaryTab>('manage');
   const [displayLimit, setDisplayLimit] = useState<LimitOption>(50);
+  const [overviewDate, setOverviewDate] = useState<string>(() => todayStr());
   const [activeOrder, setActiveOrder] = useState<MockOrder | null>(null);
+  const [deliveryFailOrder, setDeliveryFailOrder] = useState<MockOrder | null>(null);
+  const [deliveryFailReason, setDeliveryFailReason] = useState<string>(DELIVERY_FAIL_REASON_OPTIONS[0]);
+  const [deliveryFailExtra, setDeliveryFailExtra] = useState('');
+  const [deliveryFailSubmitting, setDeliveryFailSubmitting] = useState(false);
   const [quickInfoMember, setQuickInfoMember] = useState<MockMember | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const ordersQuery = useOrdersToday();
+  const todayOrdersQuery = useOrdersToday();
+  const overviewOrdersQuery = useOrdersByDate(overviewDate);
   const membersView = useMembersView();
   const invalidateOrders = useInvalidateOrders();
   const invalidateMembers = useInvalidateMembersView();
@@ -104,13 +132,17 @@ export default function OrdersScreen() {
     [membersView.data],
   );
 
-  const orders: MockOrder[] = useMemo(() => {
-    const raw = ordersQuery.data ?? [];
+  const ordersToday: MockOrder[] = useMemo(() => {
+    const raw = todayOrdersQuery.data ?? [];
     return raw.map((o) => dailyOrderToMockOrder(o, membersById));
-  }, [ordersQuery.data, membersById]);
+  }, [todayOrdersQuery.data, membersById]);
+  const overviewOrders: MockOrder[] = useMemo(() => {
+    const raw = overviewOrdersQuery.data ?? [];
+    return raw.map((o) => dailyOrderToMockOrder(o, membersById));
+  }, [overviewOrdersQuery.data, membersById]);
 
-  const lunch  = orders.filter((o) => o.meal_type === 'lunch');
-  const dinner = orders.filter((o) => o.meal_type === 'dinner');
+  const lunch = overviewOrders.filter((o) => o.meal_type === 'lunch');
+  const dinner = overviewOrders.filter((o) => o.meal_type === 'dinner');
   const lunchVisible = lunch.slice(0, displayLimit);
   const dinnerVisible = dinner.slice(0, displayLimit);
   const allSections = [
@@ -118,10 +150,18 @@ export default function OrdersScreen() {
     ...(dinnerVisible.length > 0 ? [{ title: '晚餐', data: dinnerVisible }] : []),
   ];
 
-  const totalLunch  = lunch.reduce((s, o) => s + o.quantity, 0);
-  const totalDinner = dinner.reduce((s, o) => s + o.quantity, 0);
-  const pending     = orders.filter((o) => o.status === 'pending').length;
-  const adhocCount  = orders.filter((o) => o.card_type === null).length;
+  // 统计统一按“待出餐份数”口径，避免与出餐页口径不一致导致漏餐。
+  const pendingOrders = overviewOrders.filter((o) => o.status === 'pending');
+  const totalLunch = pendingOrders
+    .filter((o) => o.meal_type === 'lunch')
+    .reduce((s, o) => s + o.quantity, 0);
+  const totalDinner = pendingOrders
+    .filter((o) => o.meal_type === 'dinner')
+    .reduce((s, o) => s + o.quantity, 0);
+  const pending = pendingOrders.reduce((s, o) => s + o.quantity, 0);
+  const adhocCount = pendingOrders
+    .filter((o) => o.card_type === null)
+    .reduce((s, o) => s + o.quantity, 0);
 
   const flashToast = useCallback((msg: string) => {
     setToast(msg);
@@ -280,6 +320,38 @@ export default function OrdersScreen() {
     [handleUpdateStatus],
   );
 
+  const handleOpenDeliveryFailed = useCallback((order: MockOrder) => {
+    setActiveOrder(null);
+    setDeliveryFailOrder(order);
+    setDeliveryFailReason(DELIVERY_FAIL_REASON_OPTIONS[0]);
+    setDeliveryFailExtra('');
+  }, []);
+
+  const handleSubmitDeliveryFailed = useCallback(async () => {
+    if (!deliveryFailOrder || !deliveryFailReason.trim()) return;
+    const extra = deliveryFailExtra.trim();
+    const reason = extra ? `${deliveryFailReason}；补充：${extra}` : deliveryFailReason;
+    setDeliveryFailSubmitting(true);
+    try {
+      await ordersApi.markDeliveryFailed(deliveryFailOrder.id, reason);
+      setDeliveryFailOrder(null);
+      setDeliveryFailExtra('');
+      await Promise.all([invalidateOrders(), invalidateMembers()]);
+      flashToast('已标记送餐失败，餐数已退回');
+    } catch (e) {
+      flashToast(e instanceof Error ? e.message : '标记送餐失败失败');
+    } finally {
+      setDeliveryFailSubmitting(false);
+    }
+  }, [
+    deliveryFailOrder,
+    deliveryFailReason,
+    deliveryFailExtra,
+    invalidateOrders,
+    invalidateMembers,
+    flashToast,
+  ]);
+
   const now = new Date();
 
   useEffect(() => {
@@ -292,13 +364,16 @@ export default function OrdersScreen() {
     setActiveTab('overview');
   }, [group]);
 
+  const currentOrdersQuery = activeTab === 'overview' ? overviewOrdersQuery : todayOrdersQuery;
+  const currentLoadError = currentOrdersQuery.error;
+  const currentLoading = currentOrdersQuery.isLoading && !currentOrdersQuery.data;
+
   return (
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <AppHeader
         title={activePrimary === 'manage' ? '录入 / 总览' : '出餐 / 配送'}
-        subtitle={`今日 ${now.getMonth() + 1}月${now.getDate()}日`}
       />
 
       {/* 当前分组内的功能筛选 */}
@@ -307,26 +382,72 @@ export default function OrdersScreen() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
-      {activeTab !== 'entry' ? (
-        <View style={styles.limitRow}>
-          <Text style={styles.limitLabel}>每次加载</Text>
-          {LIMIT_OPTIONS.map((n) => (
-            <Pressable
-              key={n}
-              style={[styles.limitChip, displayLimit === n && styles.limitChipActive]}
-              onPress={() => setDisplayLimit(n)}
-            >
-              <Text style={[styles.limitChipText, displayLimit === n && styles.limitChipTextActive]}>
-                {n}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
+      <View style={styles.pageMetaRow}>
+        <Text style={styles.pageMetaText}>{`今日 ${now.getMonth() + 1}月${now.getDate()}日`}</Text>
+        {activeTab !== 'entry' ? (
+          <View style={styles.limitRowInline}>
+            <Text style={styles.limitLabel}>每次加载</Text>
+            {LIMIT_OPTIONS.map((n) => (
+              <Pressable
+                key={n}
+                style={[styles.limitChip, displayLimit === n && styles.limitChipActive]}
+                onPress={() => setDisplayLimit(n)}
+              >
+                <Text style={[styles.limitChipText, displayLimit === n && styles.limitChipTextActive]}>
+                  {n}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+      </View>
 
       {/* —— 总览 —— */}
       {activeTab === 'overview' && (
         <>
+          <View style={styles.overviewDateCard}>
+            <View style={styles.overviewDateQuickRow}>
+              <Pressable
+                style={[
+                  styles.overviewDateQuick,
+                  overviewDate === todayStr() && styles.overviewDateQuickActive,
+                ]}
+                onPress={() => setOverviewDate(todayStr())}
+              >
+                <Text
+                  style={[
+                    styles.overviewDateQuickText,
+                    overviewDate === todayStr() && styles.overviewDateQuickTextActive,
+                  ]}
+                >
+                  今天
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.overviewDateQuick,
+                  overviewDate === tomorrowStr() && styles.overviewDateQuickActive,
+                ]}
+                onPress={() => setOverviewDate(tomorrowStr())}
+              >
+                <Text
+                  style={[
+                    styles.overviewDateQuickText,
+                    overviewDate === tomorrowStr() && styles.overviewDateQuickTextActive,
+                  ]}
+                >
+                  明天
+                </Text>
+              </Pressable>
+            </View>
+            <DatePicker
+              value={overviewDate}
+              onChange={setOverviewDate}
+              label="总览日期"
+              labelMinWidth={60}
+            />
+          </View>
+
           {/* 今日汇总条 */}
           <View style={styles.summaryBar}>
             <SummaryItem label="午餐"  value={`${totalLunch}份`}  color={IOS_COLORS.blue} />
@@ -337,6 +458,7 @@ export default function OrdersScreen() {
             <View style={styles.summaryDivider} />
             <SummaryItem label="散餐"  value={`${adhocCount}份`}  color="#FF9500" />
           </View>
+          <Text style={styles.summaryHint}>口径说明：以上均按待出餐份数统计</Text>
 
           {/* 订单列表 — 展示当日全部订单，午晚分组 */}
           <SectionList
@@ -361,7 +483,7 @@ export default function OrdersScreen() {
             )}
             ListEmptyComponent={
               <View style={styles.empty}>
-                <Text style={styles.emptyText}>暂无订餐记录</Text>
+                <Text style={styles.emptyText}>{`${overviewDate} 暂无订餐记录`}</Text>
                 <Pressable onPress={() => setActiveTab('entry')}>
                   <Text style={styles.emptyLink}>+ 点此录入</Text>
                 </Pressable>
@@ -385,7 +507,7 @@ export default function OrdersScreen() {
       {/* —— 出餐 —— */}
       {activeTab === 'prep' && (
         <PrepView
-          orders={orders}
+          orders={ordersToday}
           displayLimit={displayLimit}
           onMarkFulfilled={handleMarkFulfilled}
           onOpenDetail={setActiveOrder}
@@ -396,10 +518,11 @@ export default function OrdersScreen() {
       {/* —— 送餐（员工自送）—— */}
       {activeTab === 'delivery' && (
         <DeliveryView
-          orders={orders}
+          orders={ordersToday}
           displayLimit={displayLimit}
           membersById={membersById}
           onMarkDelivered={handleMarkDelivered}
+          onMarkDeliveryFailed={handleOpenDeliveryFailed}
           onOpenDetail={setActiveOrder}
           onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
           channel="self"
@@ -409,10 +532,11 @@ export default function OrdersScreen() {
       {/* —— 快递（外包配送）—— */}
       {activeTab === 'courier' && (
         <DeliveryView
-          orders={orders}
+          orders={ordersToday}
           displayLimit={displayLimit}
           membersById={membersById}
           onMarkDelivered={handleMarkDelivered}
+          onMarkDeliveryFailed={handleOpenDeliveryFailed}
           onOpenDetail={setActiveOrder}
           onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
           channel="courier"
@@ -434,22 +558,41 @@ export default function OrdersScreen() {
           onUpdate={handleUpdateStatus}
           onMarkFulfilled={handleMarkFulfilled}
           onMarkDelivered={handleMarkDelivered}
+          onMarkDeliveryFailed={handleOpenDeliveryFailed}
           onOpenProfile={jumpToOrderProfile}
         />
       )}
 
+      <DeliveryFailSheet
+        order={deliveryFailOrder}
+        reason={deliveryFailReason}
+        reasonOptions={DELIVERY_FAIL_REASON_OPTIONS}
+        extra={deliveryFailExtra}
+        submitting={deliveryFailSubmitting}
+        onSelectReason={setDeliveryFailReason}
+        onChangeExtra={setDeliveryFailExtra}
+        onClose={() => {
+          if (deliveryFailSubmitting) return;
+          setDeliveryFailOrder(null);
+        }}
+        onSubmit={() => void handleSubmitDeliveryFailed()}
+      />
+
       {/* 顶部错误 / 加载指示（订单加载失败时挂在 tab bar 下） */}
-      {ordersQuery.error ? (
+      {currentLoadError ? (
         <View style={styles.errorToast}>
           <Ionicons name="alert-circle-outline" size={14} color="#fff" />
           <Text style={styles.errorToastText} numberOfLines={1}>
-            订单加载失败：{ordersQuery.error.message}
+            订单加载失败：{currentLoadError.message}
           </Text>
-          <Pressable onPress={() => void ordersQuery.refetch()} hitSlop={8}>
+          <Pressable
+            onPress={() => void currentOrdersQuery.refetch()}
+            hitSlop={8}
+          >
             <Text style={styles.errorToastLink}>重试</Text>
           </Pressable>
         </View>
-      ) : ordersQuery.isLoading && !ordersQuery.data ? (
+      ) : currentLoading ? (
         <View style={styles.loadingToast}>
           <ActivityIndicator color={IOS_COLORS.blue} size="small" />
           <Text style={styles.loadingToastText}>加载订单...</Text>
@@ -613,6 +756,7 @@ function PrepCard({
   onShowMember: (memberId: number) => void;
 }) {
   const isAdhoc = order.card_type === null;
+  const isLunch = order.meal_type === 'lunch';
   const hasNotes = !!order.dietary_notes || !!order.notes;
   return (
     <View style={prepStyles.card}>
@@ -651,12 +795,25 @@ function PrepCard({
             ) : null}
           </View>
           <View style={prepStyles.metaRow}>
-            <Text style={prepStyles.qtyBig}>{order.quantity}</Text>
-            <Text style={prepStyles.qtyUnit}>份</Text>
-            <Text style={prepStyles.cardMetaSep}>·</Text>
-            <Text style={prepStyles.cardMeta}>
-              {isAdhoc ? `¥${order.amount}` : order.card_type}
-            </Text>
+            <View
+              style={[
+                prepStyles.mealTypePill,
+                isLunch ? prepStyles.mealTypePillLunch : prepStyles.mealTypePillDinner,
+              ]}
+            >
+              <Text
+                style={[
+                  prepStyles.mealTypePillText,
+                  isLunch ? prepStyles.mealTypePillTextLunch : prepStyles.mealTypePillTextDinner,
+                ]}
+              >
+                {isLunch ? '午餐' : '晚餐'}
+              </Text>
+            </View>
+            <View style={prepStyles.qtyPill}>
+              <Text style={prepStyles.qtyPillText}>{order.quantity} 份</Text>
+            </View>
+            <Text style={prepStyles.cardMeta}>{isAdhoc ? `散餐 ¥${order.amount}` : order.card_type}</Text>
           </View>
           {hasNotes ? (
             <View style={prepStyles.noteBox}>
@@ -695,6 +852,7 @@ function DeliveryView({
   displayLimit,
   membersById,
   onMarkDelivered,
+  onMarkDeliveryFailed,
   onOpenDetail,
   onShowMember,
   channel = 'self',
@@ -703,6 +861,7 @@ function DeliveryView({
   displayLimit: 10 | 50 | 100 | 200;
   membersById: Record<number, MockMember>;
   onMarkDelivered: (order: MockOrder) => void;
+  onMarkDeliveryFailed: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
   onShowMember: (memberId: number) => void;
   /** 'self' → 员工自送；'courier' → 外包快递 */
@@ -749,6 +908,7 @@ function DeliveryView({
               order={o}
               member={membersById[o.member_id]}
               onConfirm={() => onMarkDelivered(o)}
+              onMarkDeliveryFailed={() => onMarkDeliveryFailed(o)}
               onOpen={() => onOpenDetail(o)}
               onShowMember={onShowMember}
             />
@@ -768,6 +928,7 @@ function DeliveryView({
               order={o}
               member={membersById[o.member_id]}
               onConfirm={() => onMarkDelivered(o)}
+              onMarkDeliveryFailed={() => onMarkDeliveryFailed(o)}
               onOpen={() => onOpenDetail(o)}
               onShowMember={onShowMember}
             />
@@ -802,12 +963,14 @@ function DeliveryCard({
   order,
   member,
   onConfirm,
+  onMarkDeliveryFailed,
   onOpen,
   onShowMember,
 }: {
   order: MockOrder;
   member?: MockMember;
   onConfirm: () => void;
+  onMarkDeliveryFailed: () => void;
   onOpen: () => void;
   onShowMember: (memberId: number) => void;
 }) {
@@ -910,6 +1073,17 @@ function DeliveryCard({
               ) : null}
             </View>
           ) : null}
+
+          <Pressable
+            style={({ pressed }) => [
+              prepStyles.deliveryFailedBtn,
+              pressed && { opacity: 0.8 },
+            ]}
+            onPress={onMarkDeliveryFailed}
+          >
+            <Ionicons name="alert-circle-outline" size={14} color={IOS_COLORS.red} />
+            <Text style={prepStyles.deliveryFailedBtnText}>送餐失败并退餐</Text>
+          </Pressable>
         </View>
       </Pressable>
       <Pressable
@@ -952,6 +1126,7 @@ function OrderRow({
 }) {
   const s = STATUS_MAP[order.status];
   const isAdhoc = order.card_type === null;
+  const deliveryFailed = order.status === 'cancelled' && (order.cancel_reason ?? '').startsWith('配送失败');
   const remainingMeals = member?.active_card?.remaining_meals;
 
   return (
@@ -978,6 +1153,11 @@ function OrderRow({
           <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
             <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
           </View>
+          {deliveryFailed ? (
+            <View style={styles.deliveryFailedBadge}>
+              <Text style={styles.deliveryFailedText}>送餐失败</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.orderMeta}>
@@ -1055,6 +1235,7 @@ function EntryPanel({
   const [toast, setToast] = useState<string | null>(null);
   const [mode, setMode] = useState<EntryMode>('member');
   const [submitting, setSubmitting] = useState(false);
+  const [entryDate, setEntryDate] = useState<string>(() => tomorrowStr());
   // 共用的配送渠道选择（会员餐和散餐共用一套状态，切 mode 不 reset 更顺手）
   const [deliveryChannel, setDeliveryChannel] = useState<'self' | 'courier'>('self');
   const [courierRef, setCourierRef] = useState('');
@@ -1093,6 +1274,7 @@ function EntryPanel({
 
   const reset = () => {
     setMode('member');
+    setEntryDate(tomorrowStr());
     setMemberQuery(''); setSelectedMember(null);
     setLunchQty(0); setDinnerQty(0); setMemberNotes('');
     setAdhocName(''); setAdhocPhone(''); setAdhocAddress('');
@@ -1113,7 +1295,7 @@ function EntryPanel({
     try {
       await onAddMemberOrder({
         memberId: selectedMember.id,
-        orderDate: todayStr(),
+        orderDate: entryDate,
         lunchQty,
         dinnerQty,
         notes: memberNotes.trim() || undefined,
@@ -1164,7 +1346,7 @@ function EntryPanel({
         customerWechat: adhocWechat.trim(),
         customerAddress: adhocAddress.trim(),
         customerIsHospital: adhocHospital,
-        orderDate: todayStr(),
+        orderDate: entryDate,
         lunchQty: adhocLunchQty,
         dinnerQty: adhocDinnerQty,
         unitPrice: price,
@@ -1224,6 +1406,18 @@ function EntryPanel({
           contentContainerStyle={eStyles.scroll}
           keyboardShouldPersistTaps="handled"
         >
+            <Text style={eStyles.sectionLabel}>录入日期</Text>
+            <View style={eStyles.dateCard}>
+              <DatePicker
+                value={entryDate}
+                onChange={setEntryDate}
+                label="日期"
+              />
+            </View>
+            <Text style={eStyles.dateHint}>
+              默认是次日，可按需要改成今天或任意日期。
+            </Text>
+
             {mode === 'member' ? (
               /* ===== 会员餐 ===== */
               <>
@@ -1662,7 +1856,7 @@ const STATUS_FLOW = [
 ];
 
 function StatusSheet({
-  order, onClose, onUpdate, onMarkFulfilled, onMarkDelivered, onOpenProfile,
+  order, onClose, onUpdate, onMarkFulfilled, onMarkDelivered, onMarkDeliveryFailed, onOpenProfile,
 }: {
   order: MockOrder;
   onClose: () => void;
@@ -1670,6 +1864,7 @@ function StatusSheet({
   /** 点"已出餐"/"已送达"时走二次确认；状态网格里这两个 chip 都会先弹 Modal。 */
   onMarkFulfilled: (o: MockOrder) => void;
   onMarkDelivered: (o: MockOrder) => void;
+  onMarkDeliveryFailed: (o: MockOrder) => void;
   onOpenProfile: (o: MockOrder) => void;
 }) {
   const isAdhoc = order.card_type === null;
@@ -1684,6 +1879,18 @@ function StatusSheet({
     cancelled: [],
   };
   const allowedNext = new Set(ALLOWED[order.status]);
+  const statusFlow = STATUS_FLOW.map((s) => {
+    if (order.status === 'fulfilled' && s.key === 'cancelled') {
+      return {
+        ...s,
+        label: '送餐失败并退餐',
+        color: IOS_COLORS.red,
+        bg: '#FDECEC',
+        icon: 'alert-circle-outline' as const,
+      };
+    }
+    return s;
+  });
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -1733,7 +1940,7 @@ function StatusSheet({
             </View>
           </View>
 
-          {order.dietary_notes || order.notes ? (
+          {order.dietary_notes || order.notes || order.cancel_reason ? (
             <View style={sStyles.notesRow}>
               {order.dietary_notes ? (
                 <Text style={sStyles.notesText}>
@@ -1745,6 +1952,12 @@ function StatusSheet({
                 <Text style={sStyles.notesText}>
                   <Text style={sStyles.notesLabel}>订单备注：</Text>
                   {order.notes}
+                </Text>
+              ) : null}
+              {order.cancel_reason ? (
+                <Text style={sStyles.notesText}>
+                  <Text style={sStyles.notesLabel}>取消原因：</Text>
+                  {order.cancel_reason}
                 </Text>
               ) : null}
             </View>
@@ -1759,9 +1972,11 @@ function StatusSheet({
           </Text>
 
           <View style={sStyles.statusGrid}>
-            {STATUS_FLOW.map((s) => {
+            {statusFlow.map((s) => {
               const isCurrent = order.status === s.key;
-              const isAllowed = allowedNext.has(s.key);
+              const isDeliveryFailedAction =
+                order.status === 'fulfilled' && s.key === 'cancelled';
+              const isAllowed = isDeliveryFailedAction || allowedNext.has(s.key);
               const disabled = isCurrent || !isAllowed;
               return (
                 <Pressable
@@ -1776,7 +1991,10 @@ function StatusSheet({
                   ]}
                   onPress={() => {
                     // 先关弹层再弹确认，避免两个 Modal 叠在一起遮挡
-                    if (s.key === 'delivered') {
+                    if (order.status === 'fulfilled' && s.key === 'cancelled') {
+                      onClose();
+                      onMarkDeliveryFailed(order);
+                    } else if (s.key === 'delivered') {
                       onClose();
                       onMarkDelivered(order);
                     } else if (s.key === 'fulfilled' && order.status === 'pending') {
@@ -1791,17 +2009,106 @@ function StatusSheet({
                 >
                   <Ionicons name={s.icon} size={20} color={s.color} style={sStyles.statusBtnIcon} />
                   <Text style={[sStyles.statusBtnLabel, { color: s.color }]}>{s.label}</Text>
-                  {isCurrent && <Text style={[sStyles.statusBtnCurDot, { color: s.color }]}>当前</Text>}
                 </Pressable>
               );
             })}
           </View>
 
           <Pressable style={sStyles.closeBtn} onPress={onClose}>
-            <Text style={sStyles.closeBtnText}>取消</Text>
+            <Text style={sStyles.closeBtnText}>关闭</Text>
           </Pressable>
         </View>
       </View>
+    </Modal>
+  );
+}
+
+function DeliveryFailSheet({
+  order,
+  reason,
+  reasonOptions,
+  extra,
+  submitting,
+  onSelectReason,
+  onChangeExtra,
+  onClose,
+  onSubmit,
+}: {
+  order: MockOrder | null;
+  reason: string;
+  reasonOptions: readonly string[];
+  extra: string;
+  submitting: boolean;
+  onSelectReason: (v: string) => void;
+  onChangeExtra: (v: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  if (!order) return null;
+  const memberName = order.member_nickname || order.member_name;
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={fStyles.overlay} onPress={onClose} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={fStyles.sheet}
+      >
+        <View style={fStyles.card}>
+          <View style={fStyles.handle} />
+          <Text style={fStyles.title}>送餐失败</Text>
+          <Text style={fStyles.sub}>
+            {memberName} · {order.meal_type === 'lunch' ? '午餐' : '晚餐'} {order.quantity} 份
+          </Text>
+          <Text style={fStyles.hint}>选择失败原因（会自动退回餐数）</Text>
+
+          <View style={fStyles.reasonWrap}>
+            {reasonOptions.map((item) => {
+              const active = reason === item;
+              return (
+                <Pressable
+                  key={item}
+                  style={[
+                    fStyles.reasonChip,
+                    active && fStyles.reasonChipActive,
+                  ]}
+                  onPress={() => onSelectReason(item)}
+                >
+                  <Text style={[fStyles.reasonChipText, active && fStyles.reasonChipTextActive]}>
+                    {item}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={fStyles.inputBox}>
+            <TextInput
+              value={extra}
+              onChangeText={onChangeExtra}
+              placeholder="补充说明（可选）"
+              placeholderTextColor={IOS_COLORS.labelTertiary}
+              style={fStyles.input}
+              multiline
+              maxLength={120}
+            />
+          </View>
+
+          <View style={fStyles.actions}>
+            <Pressable style={fStyles.cancelBtn} onPress={onClose} disabled={submitting}>
+              <Text style={fStyles.cancelBtnText}>暂不处理</Text>
+            </Pressable>
+            <Pressable
+              style={[fStyles.confirmBtn, submitting && { opacity: 0.7 }]}
+              onPress={onSubmit}
+              disabled={submitting}
+            >
+              <Text style={fStyles.confirmBtnText}>
+                {submitting ? '提交中...' : '确认送餐失败'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1837,13 +2144,53 @@ const styles = StyleSheet.create({
   },
   tabLabel: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
   tabLabelActive: { color: IOS_COLORS.blue, fontWeight: '700' },
-  limitRow: {
+  pageMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginTop: -2,
     marginBottom: 8,
-    paddingHorizontal: 4,
+    gap: 10,
+  },
+  pageMetaText: {
+    fontSize: 13,
+    color: IOS_COLORS.labelSecondary,
+    fontWeight: '500',
+  },
+  overviewDateCard: {
+    marginHorizontal: 12,
+    marginBottom: 10,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(17,17,17,0.08)',
+    padding: 10,
+    gap: 8,
+  },
+  overviewDateQuickRow: { flexDirection: 'row', gap: 8 },
+  overviewDateQuick: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  overviewDateQuickActive: {
+    backgroundColor: IOS_COLORS.blueLight,
+  },
+  overviewDateQuickText: {
+    fontSize: 12,
+    color: IOS_COLORS.labelSecondary,
+    fontWeight: '600',
+  },
+  overviewDateQuickTextActive: {
+    color: IOS_COLORS.blue,
+  },
+  limitRowInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
   },
   limitLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
   limitChip: {
@@ -1869,6 +2216,13 @@ const styles = StyleSheet.create({
   summaryValue:   { fontSize: 18, fontWeight: '700' },
   summaryLabel:   { fontSize: 12, color: IOS_COLORS.labelSecondary },
   summaryDivider: { width: StyleSheet.hairlineWidth, backgroundColor: 'rgba(0,0,0,0.08)', marginVertical: 4 },
+  summaryHint: {
+    marginTop: -4,
+    marginBottom: 8,
+    marginHorizontal: 16,
+    fontSize: 12,
+    color: IOS_COLORS.labelSecondary,
+  },
 
   filterSection: {
     paddingHorizontal: 12, paddingVertical: 8, gap: 8,
@@ -1939,6 +2293,13 @@ const styles = StyleSheet.create({
   hospitalText:    { fontSize: 11, color: IOS_COLORS.blue, fontWeight: '600' },
   statusBadge:     { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   statusText:      { fontSize: 11, fontWeight: '600' },
+  deliveryFailedBadge: {
+    backgroundColor: '#FDECEC',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  deliveryFailedText: { fontSize: 11, color: '#D97A00', fontWeight: '700' },
   orderMeta:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardTag:  { fontSize: 12, color: IOS_COLORS.labelSecondary, backgroundColor: IOS_COLORS.fillLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   remainingTag: {
@@ -2108,6 +2469,19 @@ const eStyles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 4, marginTop: 12,
   },
   notesInput: { fontSize: 15, color: IOS_COLORS.label, paddingVertical: 10, minHeight: 60 },
+  dateCard: {
+    backgroundColor: IOS_COLORS.card,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  dateHint: {
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
+    marginBottom: 16,
+    paddingLeft: 4,
+  },
 
   // 散餐专用
   inlineCard: { backgroundColor: IOS_COLORS.card, borderRadius: 14, overflow: 'hidden' },
@@ -2218,6 +2592,8 @@ const prepStyles = StyleSheet.create({
     marginBottom: 12,
     overflow: 'hidden',
     minHeight: 110,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(17,17,17,0.08)',
   },
   cardBody: {
     flex: 1,
@@ -2263,11 +2639,30 @@ const prepStyles = StyleSheet.create({
     marginTop: 4,
   },
 
-  metaRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  qtyBig: { fontSize: 24, fontWeight: '700', color: IOS_COLORS.label, letterSpacing: -0.5, lineHeight: 28 },
-  qtyUnit: { fontSize: 14, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
-  cardMetaSep: { fontSize: 14, color: IOS_COLORS.labelTertiary, marginHorizontal: 4 },
-  cardMeta: { fontSize: 14, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  mealTypePill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  mealTypePillLunch: { backgroundColor: '#FFF4E5' },
+  mealTypePillDinner: { backgroundColor: '#F5E9FC' },
+  mealTypePillText: { fontSize: 12, fontWeight: '700' },
+  mealTypePillTextLunch: { color: '#FF9500' },
+  mealTypePillTextDinner: { color: '#AF52DE' },
+  qtyPill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  qtyPillText: {
+    fontSize: 12,
+    color: IOS_COLORS.label,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  cardMeta: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
 
   tag: {
     backgroundColor: IOS_COLORS.blueLight,
@@ -2294,12 +2689,14 @@ const prepStyles = StyleSheet.create({
 
   // 右侧确认按钮：纵向贯穿整张卡片高度
   sideConfirm: {
-    width: 88,
+    width: 82,
     backgroundColor: IOS_COLORS.blue,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingHorizontal: 6,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: 'rgba(255,255,255,0.35)',
   },
   sideConfirmText: {
     color: '#fff',
@@ -2308,6 +2705,22 @@ const prepStyles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     letterSpacing: 0.3,
+  },
+  deliveryFailedBtn: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF4E5',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  deliveryFailedBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: IOS_COLORS.red,
   },
 
   empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
@@ -2395,18 +2808,107 @@ const sStyles = StyleSheet.create({
   statusBtn: {
     flex: 1, minWidth: 130,
     paddingVertical: 14, paddingHorizontal: 12,
-    borderRadius: 14, alignItems: 'center', gap: 4,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     borderWidth: 1.5,
   },
   statusBtnCurrent: { borderWidth: 2 },
-  statusBtnIcon:    { marginBottom: 2 },
+  statusBtnIcon:    {},
   statusBtnLabel:   { fontSize: 14, fontWeight: '600' },
-  statusBtnCurDot:  { fontSize: 11, fontWeight: '500', opacity: 0.8 },
-
   closeBtn: {
     marginHorizontal: 16, marginTop: 8,
     backgroundColor: 'rgba(118,118,128,0.12)', borderRadius: 14,
     paddingVertical: 16, alignItems: 'center',
   },
   closeBtnText: { fontSize: 17, color: IOS_COLORS.label, fontWeight: '600' },
+});
+
+const fStyles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: IOS_COLORS.fillMedium,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  title: { fontSize: 18, fontWeight: '700', color: IOS_COLORS.label },
+  sub: { marginTop: 3, fontSize: 13, color: IOS_COLORS.labelSecondary },
+  hint: {
+    marginTop: 10,
+    fontSize: 12,
+    color: IOS_COLORS.labelSecondary,
+    fontWeight: '600',
+  },
+  reasonWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  reasonChip: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  reasonChipActive: { backgroundColor: '#FDECEC' },
+  reasonChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
+  reasonChipTextActive: { color: IOS_COLORS.red },
+  inputBox: {
+    marginTop: 10,
+    borderRadius: 12,
+    backgroundColor: IOS_COLORS.fillLight,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  input: {
+    minHeight: 44,
+    color: IOS_COLORS.label,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlignVertical: 'top',
+  },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  cancelBtn: {
+    flex: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(118,118,128,0.12)',
+    paddingVertical: 12,
+  },
+  cancelBtnText: { fontSize: 14, fontWeight: '600', color: IOS_COLORS.label },
+  confirmBtn: {
+    flex: 1.4,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: IOS_COLORS.red,
+    paddingVertical: 12,
+  },
+  confirmBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });

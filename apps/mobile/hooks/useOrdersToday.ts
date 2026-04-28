@@ -12,7 +12,9 @@ import { useFocusEffect } from 'expo-router';
 import { ordersApi, type DailyOrder } from '../api/orders';
 
 const KEYS = {
+  root: ['orders'] as const,
   today: ['orders', 'today'] as const,
+  byDate: (date: string) => ['orders', 'date', date] as const,
 };
 
 export interface UseOrdersTodayResult {
@@ -36,7 +38,40 @@ export function useOrdersToday(): UseOrdersTodayResult {
 
   useFocusEffect(
     useCallback(() => {
-      void queryClient.invalidateQueries({ queryKey: KEYS.today });
+      void queryClient.invalidateQueries({ queryKey: KEYS.root });
+    }, [queryClient]),
+  );
+
+  return {
+    data: query.data,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    error: (query.error as Error | null) ?? null,
+    refetch: async () => {
+      await query.refetch();
+    },
+  };
+}
+
+export function useOrdersByDate(date: string): UseOrdersTodayResult {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: KEYS.byDate(date),
+    queryFn: async () => {
+      const { orders } = await ordersApi.list({
+        date,
+        status: 'all',
+        limit: 500,
+      });
+      return orders;
+    },
+    enabled: !!date,
+    refetchOnWindowFocus: true,
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      void queryClient.invalidateQueries({ queryKey: KEYS.root });
     }, [queryClient]),
   );
 
@@ -55,6 +90,6 @@ export function useOrdersToday(): UseOrdersTodayResult {
 export function useInvalidateOrders(): () => Promise<void> {
   const queryClient = useQueryClient();
   return useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: KEYS.today });
+    await queryClient.invalidateQueries({ queryKey: KEYS.root });
   }, [queryClient]);
 }

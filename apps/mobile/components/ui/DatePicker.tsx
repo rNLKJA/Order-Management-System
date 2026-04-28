@@ -14,6 +14,7 @@ export interface DatePickerProps {
   value: string;
   onChange: (next: string) => void;
   label?: string;
+  labelMinWidth?: number;
   placeholder?: string;
   disabled?: boolean;
   /** YYYY-MM-DD, HTML5 min */
@@ -31,19 +32,25 @@ export function DatePicker({
   value,
   onChange,
   label,
+  labelMinWidth,
   placeholder = 'YYYY-MM-DD',
   disabled,
   min,
   max,
   style,
 }: DatePickerProps) {
+  const labelStyle = [styles.labelInline, labelMinWidth ? { minWidth: labelMinWidth } : null];
   if (Platform.OS === 'web') {
     // 在 Web 上 React 要求 createElement('input')；在 Native 的 TS 里 JSX.IntrinsicElements
     // 不认识 'input'，所以用 React.createElement 绕开类型系统的 JSX 限制。
     const InputEl = require('react').createElement;
     return (
       <View style={[styles.wrap, style]}>
-        {label ? <Text style={styles.labelInline}>{label}</Text> : null}
+        {label ? (
+          <Text numberOfLines={1} ellipsizeMode="tail" style={labelStyle}>
+            {label}
+          </Text>
+        ) : null}
         {InputEl('input', {
           type: 'date',
           value,
@@ -63,7 +70,11 @@ export function DatePicker({
   // Native：先留着 TextInput，等接原生 picker 再换
   return (
     <View style={[styles.wrap, style]}>
-      {label ? <Text style={styles.labelInline}>{label}</Text> : null}
+      {label ? (
+        <Text numberOfLines={1} ellipsizeMode="tail" style={labelStyle}>
+          {label}
+        </Text>
+      ) : null}
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -113,6 +124,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginRight: 8,
     minWidth: 14,
+    flexShrink: 0,
   },
   nativeInput: {
     flex: 1,

@@ -69,6 +69,8 @@ export interface MockOrder {
   is_hospital: boolean;
   dietary_notes: string;
   notes: string;
+  /** 取消原因（含「配送失败：xxx」） */
+  cancel_reason?: string;
   card_type: string | null;
   /** 送餐渠道：self=员工自送（默认）；courier=外包快递 */
   delivery_channel: 'self' | 'courier';

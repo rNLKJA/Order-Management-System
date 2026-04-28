@@ -10,7 +10,7 @@
 | 3 | 会员 CRUD + 搜索 + 归档 | 已上线 |
 | 4 | 购卡 / 升级 / 换卡（院内外价目） | 已上线 |
 | 5 | 每日订餐录入（午 + 晚拆条 + 扣卡 + 散餐 + Idempotency） | 已上线 |
-| 6 | 出餐 / 送餐（pending → fulfilled → delivered，含 cancel 冲销） | 已上线（并入订餐页 Tab，无独立 packing 路由） |
+| 6 | 出餐 / 送餐（pending → fulfilled → delivered，含 cancel 冲销 + delivery-failed） | 已上线（并入订餐页 Tab，无独立 packing 路由） |
 | 7 | 取消订单原子冲销 + 终态锁定 | 已上线 |
 | 8 | 财务（自动入账 + 手动支出 + 筛选 + 汇总） | 已上线 |
 | 0.6 | 次日接龙汇总（D−1 22:05 Cron + 长图/PDF） | 未上线（MEA-18） |
@@ -271,7 +271,7 @@ flowchart LR
     choose -- 客户取消 --> can1[cancelled 原子冲销]
     ful --> next{下一步}
     next -- 送达客户手上 --> deliv[delivered 已送达 终态 锁定]
-    next -- 客户反悔 送前取消 --> can2[cancelled 原子冲销]
+    next -- 配送失败或客户反悔 送前取消 --> can2[cancelled 原子冲销]
     deliv --> end0[永久终态 不可更改 不可删除 不可取消]
     can1 --> end2[永久终态 保留记录]
     can2 --> end2
@@ -569,6 +569,8 @@ flowchart LR
 > **订单有 4 个业务状态 + 2 个终态**：`pending`（等待出餐）→ `fulfilled`（已出餐，等送达）→ `delivered`（**已送达，永久锁定**）；任一中间状态可以 → `cancelled`（已取消）；`delivered` 与 `cancelled` 都是**不可更改、不可删除**的终态。
 >
 > **每条订单必须标注 `meal_type`：`lunch`（午餐） 或 `dinner`（晚餐）**。同一会员一天要"中餐 1 份 + 晚餐 1 份"会**拆成 2 条订单**，各自独立走状态机，独立扣餐（订阅卡扣 2 餐，散餐记 2×35）。
+>
+> 对 `fulfilled` 订单，新增“送餐失败”业务动作：前端要求选择失败原因，后端按取消冲销处理，并把 `cancel_reason` 写成 `配送失败：...`，以便后续客服解释与数据复盘。
 
 ```mermaid
 stateDiagram-v2
@@ -599,7 +601,8 @@ flowchart TD
     a1 -- 完成出餐 --> fulfill[PATCH /api/orders/id/fulfill\nstatus=fulfilled\nfulfilled_at=now\nfulfilled_by=当前登录]
     a1 -- 取消 --> cancelFlow[跳到 7 取消流程]
     action -- fulfilled --> a2{选择}
-    a2 -- 确认送达 --> deliver[PATCH /api/orders/id/deliver\nstatus=delivered\ndelivered_at=now\ndelivered_by=当前登录\n订单从此锁定]
+    a2 -- 确认送达 --> deliver[PATCH /api/orders/id/status\nstatus=delivered\ndelivered_at=now\ndelivered_by=当前登录\n订单从此锁定]
+    a2 -- 送餐失败 --> failFlow[PATCH /api/orders/id/delivery-failed\nreason=快速原因或补充文本\n自动退餐并写失败原因]
     a2 -- 取消 --> cancelFlow
     action -- delivered --> readonly[只读展示 不可操作]
     action -- cancelled --> readonly
@@ -607,6 +610,7 @@ flowchart TD
     deliver --> feedback2[Haptic 振动 + 该条从 待送达 移到 已送达 并上锁标记]
     feedback --> list
     feedback2 --> list
+    failFlow --> list
 ```
 
 ### 6.2 4 个 Tab 的语义
@@ -614,9 +618,15 @@ flowchart TD
 | Tab | 含状态 | 可做动作 |
 | --- | --- | --- |
 | 待出餐 | `pending` | 完成出餐 / 取消 |
-| 待送达 | `fulfilled` | 确认送达 / 取消 |
+| 待送达 | `fulfilled` | 确认送达 / 送餐失败退餐 / 取消 |
 | 已送达 | `delivered` | 只读（带锁图标，提示"已送达 锁定"） |
 | 已取消 | `cancelled` | 只读（灰色 + 原因） |
+
+交互约束补充（2026-04-28）：
+
+- 在订单状态面板中，当订单为 `fulfilled` 时，“取消”入口直接替换为“送餐失败并退餐”。
+- 失败动作必须先选原因再提交，提交后统一走 `delivery-failed` 路由并触发退餐冲销。
+- 送餐失败相关入口统一危险色（红）显示，避免一线操作员误触。
 
 ### 6.3 午餐 / 晚餐分批
 
@@ -829,6 +839,8 @@ flowchart LR
 | `fulfilled` | 已出餐（等送达） | 是 | 是 | 备注 / 录入者（改份数 / 日期 / 餐别要二次确认） | 是（冲销） | 仅 admin |
 | `delivered` | 已送达 | 是 | 是 | **不可编辑（终态锁定）** | **否** | **否（任何角色）** |
 | `cancelled` | 已取消 | 否（已冲销） | 否（voided） | 不可编辑 | 已是终态 | 仅 admin（审计目的一般不删） |
+
+补充：当取消来自配送失败时，`cancel_reason` 统一带前缀 `配送失败：`（后接快速原因/补充说明）。
 
 ### 订单餐别
 

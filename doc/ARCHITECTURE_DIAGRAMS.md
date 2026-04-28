@@ -46,6 +46,8 @@ flowchart LR
   Linear --> GH
 ```
 
+
+
 ---
 
 ## 2) Database Design
@@ -146,6 +148,8 @@ erDiagram
   }
 ```
 
+
+
 ---
 
 ## 3) API Design
@@ -187,8 +191,8 @@ flowchart TB
     Orders --> OrderToday["GET /today"]
     Orders --> OrderCreate["POST /"]
     Orders --> OrderPatch["PATCH /:id"]
-    Orders --> OrderFulfill["PATCH /:id/fulfill"]
-    Orders --> OrderDeliver["PATCH /:id/deliver"]
+    Orders --> OrderStatus["PATCH /:id/status"]
+    Orders --> OrderDeliveryFailed["PATCH /:id/delivery-failed"]
     Orders --> OrderCancel["PATCH /:id/cancel"]
   end
 
@@ -207,4 +211,10 @@ flowchart TB
     Audit --> AuditList["GET /api/audit-logs"]
   end
 ```
+
+Notes:
+
+- `PATCH /api/orders/:id/delivery-failed` is a business alias of cancellation for `fulfilled` orders, with mandatory reason and meal rollback side effects.
+
+
 

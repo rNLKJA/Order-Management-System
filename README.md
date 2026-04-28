@@ -70,6 +70,15 @@ pnpm format           # Prettier 格式化
 - Mobile Web（Vercel）：[https://meal-mobile.vercel.app](https://meal-mobile.vercel.app)
 - API（Vercel）：[https://meal-api-nu.vercel.app](https://meal-api-nu.vercel.app)
 
+## 近期更新（2026-04-28）
+
+- 每日订餐新增「送餐失败并退餐」流程：仅对 `已出餐` 订单可用，支持快速失败原因并自动退回餐数。
+- 送餐失败入口统一危险红色样式，减少误触风险。
+- 订单状态卡按钮改为图标与文字同一行，提升可读性。
+- 出餐卡片信息层级优化：餐别、份数、卡种分层显示，右侧操作区比例更紧凑。
+- 每日订餐页「每次加载」与日期合并为同一行，界面更紧凑。
+- 会员档案页筛选顺序调整为「筛选 Tab 在上，搜索框在下」。
+
 ## App 打包（EAS）说明
 
 当前仓库已完成 EAS 配置（`apps/mobile/eas.json`），并补充了 iOS 出口合规字段：
