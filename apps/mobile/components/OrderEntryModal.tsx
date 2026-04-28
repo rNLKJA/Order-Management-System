@@ -26,6 +26,7 @@ import {
 } from 'react-native-paper';
 import { api } from '../api/client';
 import { ordersApi, type CreateOrderResponse } from '../api/orders';
+import { createIdempotencyKey } from '../lib/idempotencyKey';
 
 interface Member {
   id: number;
@@ -101,13 +102,16 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
     setError(null);
     setSubmitting(true);
     try {
-      const result = await ordersApi.create({
-        member_id: selectedMember.id,
-        order_date: orderDate,
-        lunch_qty: lunchQty > 0 ? lunchQty : undefined,
-        dinner_qty: dinnerQty > 0 ? dinnerQty : undefined,
-        notes: notes.trim() || undefined,
-      });
+      const result = await ordersApi.create(
+        {
+          member_id: selectedMember.id,
+          order_date: orderDate,
+          lunch_qty: lunchQty > 0 ? lunchQty : undefined,
+          dinner_qty: dinnerQty > 0 ? dinnerQty : undefined,
+          notes: notes.trim() || undefined,
+        },
+        createIdempotencyKey(),
+      );
 
       const msg = result.card_exhausted
         ? `录入成功！餐卡已耗尽，请及时续卡。`

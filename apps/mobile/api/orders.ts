@@ -119,18 +119,12 @@ export const ordersApi = {
 
   get: (id: number) => api.get<{ order: DailyOrder }>(`/api/orders/${id}`),
 
-  create: (input: CreateOrderInput, idempotencyKey?: string) => {
-    const init: RequestInit = {
-      method: 'POST',
-      body: JSON.stringify(input),
-    };
-    if (idempotencyKey) {
-      (init as { headers?: Record<string, string> }).headers = {
-        'Idempotency-Key': idempotencyKey,
-      };
-    }
-    return api.post<CreateOrderResponse>('/api/orders', input);
-  },
+  create: (input: CreateOrderInput, idempotencyKey?: string) =>
+    api.post<CreateOrderResponse>(
+      '/api/orders',
+      input,
+      idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined,
+    ),
 
   updateNotes: (id: number, notes: string) =>
     api.patch<{ order: DailyOrder }>(`/api/orders/${id}`, { notes }),

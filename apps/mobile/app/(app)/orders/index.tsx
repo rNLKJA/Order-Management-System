@@ -34,6 +34,7 @@ import { EntryPanel } from '../../../components/orders/EntryPanel';
 import { PrepView, DeliveryView } from '../../../components/orders/PrepDeliveryViews';
 import { StatusSheet } from '../../../components/orders/StatusSheet';
 import { DeliveryFailSheet } from '../../../components/orders/DeliveryFailSheet';
+import { createIdempotencyKey } from '../../../lib/idempotencyKey';
 
 export default function OrdersScreen() {
   const { group } = useLocalSearchParams<{ group?: string }>();
@@ -122,15 +123,18 @@ export default function OrdersScreen() {
       courierRef?: string;
     }) => {
       try {
-        await ordersApi.create({
-          member_id: payload.memberId,
-          order_date: payload.orderDate,
-          lunch_qty: payload.lunchQty,
-          dinner_qty: payload.dinnerQty,
-          notes: payload.notes ?? '',
-          delivery_channel: payload.deliveryChannel,
-          courier_ref: payload.courierRef,
-        });
+        await ordersApi.create(
+          {
+            member_id: payload.memberId,
+            order_date: payload.orderDate,
+            lunch_qty: payload.lunchQty,
+            dinner_qty: payload.dinnerQty,
+            notes: payload.notes ?? '',
+            delivery_channel: payload.deliveryChannel,
+            courier_ref: payload.courierRef,
+          },
+          createIdempotencyKey(),
+        );
         // 会员卡可能被扣减，会员列表也要失效
         await Promise.all([invalidateOrders(), invalidateMembers(payload.memberId)]);
       } catch (e) {
@@ -157,20 +161,23 @@ export default function OrdersScreen() {
       courierRef?: string;
     }) => {
       try {
-        await ordersApi.create({
-          order_date: payload.orderDate,
-          lunch_qty: payload.lunchQty,
-          dinner_qty: payload.dinnerQty,
-          notes: payload.notes ?? '',
-          customer_name: payload.customerName,
-          customer_phone: payload.customerPhone,
-          customer_wechat: payload.customerWechat,
-          customer_address: payload.customerAddress,
-          customer_is_hospital: payload.customerIsHospital,
-          adhoc_unit_price: payload.unitPrice,
-          delivery_channel: payload.deliveryChannel,
-          courier_ref: payload.courierRef,
-        });
+        await ordersApi.create(
+          {
+            order_date: payload.orderDate,
+            lunch_qty: payload.lunchQty,
+            dinner_qty: payload.dinnerQty,
+            notes: payload.notes ?? '',
+            customer_name: payload.customerName,
+            customer_phone: payload.customerPhone,
+            customer_wechat: payload.customerWechat,
+            customer_address: payload.customerAddress,
+            customer_is_hospital: payload.customerIsHospital,
+            adhoc_unit_price: payload.unitPrice,
+            delivery_channel: payload.deliveryChannel,
+            courier_ref: payload.courierRef,
+          },
+          createIdempotencyKey(),
+        );
         // 散客本人的 phone/address 写回了 member 表，会员列表要刷一下
         await Promise.all([invalidateOrders(), invalidateMembers()]);
       } catch (e) {

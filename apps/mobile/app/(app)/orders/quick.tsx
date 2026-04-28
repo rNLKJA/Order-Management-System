@@ -31,6 +31,7 @@ import {
   StatusChip,
 } from '../../../components/ui';
 import { COLORS, GLASS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
+import { createIdempotencyKey } from '../../../lib/idempotencyKey';
 
 interface Member {
   id: number;
@@ -99,13 +100,16 @@ export default function QuickOrderScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      const result = await ordersApi.create({
-        member_id: selectedMember.id,
-        order_date: orderDate,
-        lunch_qty: lunchQty > 0 ? lunchQty : undefined,
-        dinner_qty: dinnerQty > 0 ? dinnerQty : undefined,
-        notes: notes.trim() || undefined,
-      });
+      const result = await ordersApi.create(
+        {
+          member_id: selectedMember.id,
+          order_date: orderDate,
+          lunch_qty: lunchQty > 0 ? lunchQty : undefined,
+          dinner_qty: dinnerQty > 0 ? dinnerQty : undefined,
+          notes: notes.trim() || undefined,
+        },
+        createIdempotencyKey(),
+      );
 
       const msg = result.card_exhausted
         ? `录入成功！餐卡已耗尽，请及时续卡。`
@@ -135,8 +139,9 @@ export default function QuickOrderScreen() {
     <View style={{ flex: 1 }}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <AppHeader title="快速录入" subtitle={`用餐日期：${orderDate}（今天）`} onBack={() => router.back()} />
+        <AppHeader title="快速录入" onBack={() => router.back()} />
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <Text style={styles.dateContext}>用餐日期：{orderDate}（今天）</Text>
           {error ? (
             <GlassSurface tint="danger" padding={SPACING.base} style={styles.errorCard}>
               <Ionicons name="alert-circle-outline" size={16} color={COLORS.danger} />
@@ -280,6 +285,11 @@ function QtyRow({
 }
 
 const styles = StyleSheet.create({
+  dateContext: {
+    ...TYPE.footnote,
+    color: COLORS.text.tertiary,
+    paddingHorizontal: 2,
+  },
   container: {
     paddingHorizontal: SPACING.page,
     paddingTop: SPACING.sm,

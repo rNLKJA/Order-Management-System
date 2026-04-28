@@ -91,10 +91,19 @@ function safeJson(text: string): unknown {
   }
 }
 
+export interface PostOptions {
+  /** 与后端 CORS / POST /api/orders 幂等键一致 */
+  headers?: Record<string, string>;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
-  post: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: 'POST', body: body != null ? JSON.stringify(body) : undefined }),
+  post: <T>(path: string, body?: unknown, options?: PostOptions) =>
+    request<T>(path, {
+      method: 'POST',
+      body: body != null ? JSON.stringify(body) : undefined,
+      headers: options?.headers,
+    }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body != null ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
