@@ -9,6 +9,13 @@
 
 export type UserRole = 'admin' | 'staff';
 
+/** 界面展示：超级管理员（@rNLKJA）/ 管理员 / 员工 */
+export function displayUserRole(u: { role: UserRole; is_superadmin?: boolean | null }): string {
+  if (u.is_superadmin) return '超级管理员';
+  if (u.role === 'admin') return '管理员';
+  return '员工';
+}
+
 // =========== 订单状态机 ===========
 
 export type OrderStatus = 'pending' | 'fulfilled' | 'delivered' | 'cancelled';
@@ -71,6 +78,25 @@ export type AuditEntity =
   | 'daily_order'
   | 'finance_entry'
   | 'user';
+
+/** 审计记录：实体类型中文说明（界面用） */
+export const AUDIT_ENTITY_LABEL: Record<AuditEntity, string> = {
+  member: '会员',
+  card: '会员卡',
+  daily_order: '订餐订单',
+  finance_entry: '财务流水',
+  user: '账号与权限',
+};
+
+/** 审计记录：操作类型中文说明（界面用） */
+export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
+  create: '新建',
+  update: '更新',
+  delete: '删除',
+  fulfill: '出餐',
+  deliver: '送达',
+  cancel: '取消',
+};
 
 // =========== Settings key 枚举 ===========
 

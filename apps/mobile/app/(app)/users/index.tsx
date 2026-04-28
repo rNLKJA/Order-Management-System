@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
+import { displayUserRole } from '@meal/shared';
 import { usersApi, type ApiUser } from '../../../api/users';
 import {
   AppHeader,
@@ -108,8 +109,8 @@ export default function UsersScreen() {
 
 function UserRow({ user, disabled }: { user: ApiUser; disabled?: boolean }) {
   const initial = (user.full_name || user.username)[0] ?? '?';
-  const roleLabel = user.role === 'admin' ? '管理员' : '员工';
-  const roleVariant = user.role === 'admin' ? 'warning' : 'fulfilled';
+  const roleLabel = displayUserRole(user);
+  const roleVariant = user.role === 'admin' || user.is_superadmin ? 'warning' : 'fulfilled';
 
   return (
     <PressableCard

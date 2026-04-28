@@ -14,6 +14,7 @@ export interface ApiUser {
   is_active: boolean;
   avatar_url?: string | null;
   can_data_write?: boolean;
+  is_superadmin?: boolean;
 }
 
 export interface ApiUserOrder {
@@ -50,6 +51,8 @@ export interface CreateStaffInput {
   password: string;
   is_active?: boolean;
   can_data_write?: boolean;
+  /** 仅超级管理员可设为 `admin` */
+  role?: 'admin' | 'staff';
 }
 
 export const usersApi = {
@@ -77,6 +80,8 @@ export const usersApi = {
 
   createStaff: (input: CreateStaffInput) =>
     api.post<{ user: ApiUser }>('/api/users/staff', input),
+
+  deleteUser: (id: number) => api.delete<{ ok: true }>(`/api/users/${id}`),
 
   /** 某员工录入的订单流水（按日期 + 创建时间倒序） */
   orders: (id: number, opts?: { from?: string; to?: string; status?: string; limit?: number; offset?: number }) => {

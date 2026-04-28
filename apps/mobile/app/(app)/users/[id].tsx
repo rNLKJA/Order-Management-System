@@ -1,5 +1,5 @@
 /**
- * 员工详情页 —— 某员工录入的订单流水 + 聚合统计。
+ * 员工详情页 —— 某员工录入的订单流水 + 业务统计。
  *
  * 数据：
  *  - `/api/users/:id`                  基本信息
@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { displayUserRole } from '@meal/shared';
 import { usersApi, type ApiUserOrder } from '../../../api/users';
 import { COLORS, GLASS, SPACING, TYPE } from '../../../theme/paperTheme';
 import {
@@ -130,7 +131,6 @@ export default function UserDetailScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader
           title={user.full_name || user.username}
-          subtitle={`@${user.username} · ${user.role === 'admin' ? '管理员' : '员工'}`}
           onBack={() => router.back()}
         />
 
@@ -138,17 +138,27 @@ export default function UserDetailScreen() {
           <GlassSurface padding={SPACING.base} style={styles.heroCard}>
             <View style={styles.heroRow}>
               <IconAvatar
-                icon={user.role === 'admin' ? 'shield-checkmark-outline' : 'person-outline'}
+                icon={
+                  user.role === 'admin' || user.is_superadmin
+                    ? 'shield-checkmark-outline'
+                    : 'person-outline'
+                }
                 size={48}
-                color={user.role === 'admin' ? COLORS.brand : COLORS.text.secondary}
-                  bg={user.role === 'admin' ? COLORS.brandSoft : GLASS.surface3}
+                color={
+                  user.role === 'admin' || user.is_superadmin ? COLORS.brand : COLORS.text.secondary
+                }
+                bg={
+                  user.role === 'admin' || user.is_superadmin ? COLORS.brandSoft : GLASS.surface3
+                }
               />
               <View style={{ flex: 1 }}>
                 <View style={styles.heroTitleRow}>
                   <Text style={styles.heroTitle}>{user.full_name || user.username}</Text>
                   <StatusChip
-                    label={user.role === 'admin' ? '管理员' : '员工'}
-                    variant={user.role === 'admin' ? 'hospital' : 'neutral'}
+                    label={displayUserRole(user)}
+                    variant={
+                      user.role === 'admin' || user.is_superadmin ? 'hospital' : 'neutral'
+                    }
                   />
                 </View>
                 <Text style={styles.heroSub}>@{user.username}</Text>
@@ -159,15 +169,7 @@ export default function UserDetailScreen() {
           <View style={styles.overviewSection}>
             <SectionLabel>账户概览</SectionLabel>
             <BentoGrid>
-              <Bento span={4} mobileSpan={6}>
-                <StatTile
-                  label="累计录单"
-                  value={String(stats?.total_orders ?? '—')}
-                  icon="receipt-outline"
-                  color={COLORS.brand}
-                />
-              </Bento>
-              <Bento span={4} mobileSpan={6}>
+              <Bento span={6} mobileSpan={6}>
                 <StatTile
                   label="餐数"
                   value={String(stats?.total_meals ?? '—')}
@@ -175,7 +177,7 @@ export default function UserDetailScreen() {
                   color={COLORS.warning}
                 />
               </Bento>
-              <Bento span={4} mobileSpan={12}>
+              <Bento span={6} mobileSpan={6}>
                 <StatTile
                   label="累计金额"
                   value={stats ? `¥${Number(stats.total_amount ?? 0).toFixed(0)}` : '—'}
@@ -185,15 +187,6 @@ export default function UserDetailScreen() {
               </Bento>
             </BentoGrid>
           </View>
-
-          {stats ? (
-            <GlassSurface padding={SPACING.sm} style={styles.breakdownRow}>
-              <StatusChip label={`待出餐 ${stats.pending_count}`} variant="warning" dot />
-              <StatusChip label={`已出餐 ${stats.fulfilled_count}`} variant="fulfilled" dot />
-              <StatusChip label={`已送达 ${stats.delivered_count}`} variant="delivered" dot />
-              <StatusChip label={`已取消 ${stats.cancelled_count}`} variant="neutral" dot />
-            </GlassSurface>
-          ) : null}
 
           <View style={styles.ordersSection}>
             <SectionLabel>订单流水</SectionLabel>
@@ -261,10 +254,7 @@ export default function UserDetailScreen() {
           ) : (
             byDate.map(([date, list], dayIdx) => (
               <View key={date} style={[styles.dayBlock, dayIdx === 0 && styles.dayBlockFirst]}>
-                <Text style={styles.dayHeader}>
-                  {date}
-                  <Text style={styles.dayCount}> · {list.length} 单</Text>
-                </Text>
+                <Text style={styles.dayHeader}>{date}</Text>
                 {list.map((item) => (
                   <OrderRow key={item.order.id} item={item} />
                 ))}
@@ -343,14 +333,6 @@ const styles = StyleSheet.create({
   heroTitle: { ...TYPE.title3, color: COLORS.text.primary },
   heroSub: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 2 },
   overviewSection: { marginHorizontal: SPACING.page },
-  breakdownRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginHorizontal: SPACING.page,
-    marginTop: SPACING.base,
-    marginBottom: SPACING.base,
-    flexWrap: 'wrap',
-  },
   ordersSection: {
     marginHorizontal: SPACING.page,
     marginTop: SPACING.sm,
@@ -376,7 +358,6 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
     paddingVertical: SPACING.xs,
   },
-  dayCount: { fontWeight: '400', color: COLORS.text.secondary },
 
   orderRow: {
     flexDirection: 'row',

@@ -105,6 +105,25 @@ eas build --platform ios --profile production --no-wait
 - 若 Apple Developer Membership 过期，iOS 凭证注册会失败（403），但 **Web 端可继续正常发布和使用**。
 - Android 生产包在无 keystore 的情况下，必须先完成上述 `credentials` 初始化。
 
+## 权限、角色与数据写操作管控
+
+### 账号分级（系统内）
+
+- **超级管理员**（登录名 `rnlkja`，不区分大小写）：分配/撤销一般管理员、管理全员账号；查看操作审计。**业务写接口层面始终放行**（不受数据录入白名单限制），避免把自己锁死。
+- **一般管理员**：管理员工与权限、操作审计；**是否允许改会员/卡/订单/财务** 由下文「写操作管控」决定——**可以只读**，减少日常核对时误改。
+- **员工**：同受「写操作管控」约束。
+
+### 写操作管控（`DATA_OPERATOR_ENFORCEMENT`）
+
+| 环境变量 | 含义 |
+| --- | --- |
+| `DATA_OPERATOR_ENFORCEMENT` | `0`（默认）：不拦截业务写接口，便于测试。`1`：仅 **超级管理员** 与 **数据录入白名单** 内的账号可执行会员/卡/订餐/财务等写操作。 |
+| `DATA_OPERATOR_USERNAMES` | 可选；逗号分隔用户名字段，作白名单**初始种子**。持久名单存 `settings.data_operator_usernames`，与 App「权限管理」里「允许写操作」同步。 |
+
+启用管控后，**管理员若不加入白名单即为只读**；需要录入时由超级管理员在「权限管理」中为其勾选「允许写操作」。
+
+**上线注意**：若生产环境从「管理员一律可写」的旧行为切换为 `DATA_OPERATOR_ENFORCEMENT=1`，请在切换后为实际需要录入的同事（含管理员）逐一打开「允许写操作」，或临时用 `DATA_OPERATOR_USERNAMES` 填入用户名。
+
 ## 贡献流程
 
 所有开发任务通过 [Linear](./doc/LINEAR.md) 管理，每个 issue 对应一条 Git 分支和一个 GitHub PR，合并前需 1 个 approve。详见 [doc/LINEAR.md](./doc/LINEAR.md)。

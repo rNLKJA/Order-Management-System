@@ -118,14 +118,14 @@ export function requireRole(
 }
 
 /**
- * 数据写操作守卫（新增 / 删除 / 改状态 等）。
+ * 数据写操作守卫（会员 / 卡 / 订单 / 财务等 POST/PATCH/DELETE）。
  *
- * 真实业务线上只有 `高平 (gaoping)` 能做数据录入和删除；其他人只读。
- * 目前还在测试阶段，默认 `DATA_OPERATOR_ENFORCEMENT=0`，所有 admin/staff 都能写；
- * 等切正式生产时把 Vercel 上那条环境变量改成 `1` 就生效。
+ * - `DATA_OPERATOR_ENFORCEMENT=0`（默认）：不拦写操作，便于测试与磨合流程。
+ * - `DATA_OPERATOR_ENFORCEMENT=1`：仅 **超级管理员** 与 **`data_operator_usernames` 白名单**
+ *   （及环境变量 `DATA_OPERATOR_USERNAMES` 种子）内的账号可写。**一般管理员也可以只读**，
+ *   避免日常查看时误触改单；需要录入时由超管把该账号勾成「允许写操作」。
  *
- * 白名单可以通过 `DATA_OPERATOR_USERNAMES` 覆盖（逗号分隔），便于加备份录入员。
- * admin 始终放行，避免运维自己把自己锁出来。
+ * 白名单持久在 `settings.data_operator_usernames`，与手机端「权限管理」同步。
  */
 export function DEFAULT_DATA_OPERATORS(): string[] {
   const raw = (globalThis.process?.env?.DATA_OPERATOR_USERNAMES ?? '').trim();
@@ -135,6 +135,21 @@ export function DEFAULT_DATA_OPERATORS(): string[] {
 
 export function isDataOperatorEnforced(): boolean {
   return (globalThis.process?.env?.DATA_OPERATOR_ENFORCEMENT ?? '0') === '1';
+}
+
+/**
+ * 在开启写操作管控时，是否允许对业务数据做写入类请求。
+ * 未开启管控时一律 true；超级管理员始终 true（应急不受白名单限制）。
+ */
+export function userHasEffectiveDataWrite(opts: {
+  username: string;
+  isSuperadmin: boolean;
+  operatorsLower: string[];
+  enforcement: boolean;
+}): boolean {
+  if (!opts.enforcement) return true;
+  if (opts.isSuperadmin) return true;
+  return opts.operatorsLower.includes(opts.username.trim().toLowerCase());
 }
 
 export function requireDataOperator(): MiddlewareHandler<{ Variables: AuthVariables }> {
@@ -151,7 +166,7 @@ export function requireDataOperator(): MiddlewareHandler<{ Variables: AuthVariab
     if (!user) {
       throw new HTTPException(401, { message: '未登录' });
     }
-    if (user.role === 'admin') {
+    if (user.is_superadmin) {
       return next();
     }
     const db = requestDb(c);

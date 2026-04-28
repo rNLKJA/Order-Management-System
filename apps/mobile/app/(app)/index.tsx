@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { CARD_RENEWAL_THRESHOLD_MEALS } from '@meal/shared';
+import { CARD_RENEWAL_THRESHOLD_MEALS, displayUserRole } from '@meal/shared';
 import { useAuth } from '../../hooks/useAuth';
 import { useFinanceToday, useMembersView } from '../../hooks/useMembersView';
 import { useOrdersToday } from '../../hooks/useOrdersToday';
@@ -168,23 +168,34 @@ export default function HomeScreen() {
       route: '/(app)/users',
     },
     ...(user?.role === 'admin'
-      ? [
+      ? ([
           {
             key: 'admin',
             title: '权限管理',
-            subtitle: '管理员可在手机端分配角色与写权限',
+            subtitle: user?.is_superadmin
+              ? '超级管理员：分配管理员、管理全员账号'
+              : '管理员：管理员工写权限与账号',
             icon: 'shield-checkmark-outline' as const,
             color: COLORS.info,
             bg: COLORS.infoSoft,
             route: '/(app)/admin',
           },
-        ]
+          {
+            key: 'audit-logs',
+            title: '操作记录',
+            subtitle: '审计日志：权限、会员、订单、财务等',
+            icon: 'clipboard-outline' as const,
+            color: COLORS.text.secondary,
+            bg: 'rgba(118,118,128,0.12)',
+            route: '/(app)/audit-logs',
+          },
+        ] as EntryDef[])
       : []),
     {
       key: 'profile',
       title: '当前用户',
       subtitle: user?.full_name
-        ? `${user.full_name} · ${user.role === 'admin' ? '管理员' : '员工'}`
+        ? `${user.full_name} · ${displayUserRole(user)}`
         : '未登录',
       icon: 'person-circle-outline',
       color: COLORS.info,
@@ -317,7 +328,7 @@ export default function HomeScreen() {
                   </View>
                 </Bento>
 
-                {['finance', 'orders-stats', 'users', 'admin']
+                {['finance', 'orders-stats', 'users', 'admin', 'audit-logs']
                   .filter((key) => Boolean(entriesByKey[key]))
                   .map((key) => (
                     <Bento key={key} span={6} mobileSpan={12}>

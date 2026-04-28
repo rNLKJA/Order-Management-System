@@ -5,12 +5,16 @@
  * - GET    /api/users/:id                单个用户信息（不含密码）
  * - GET    /api/users/:id/orders         该用户录入的订单列表（按 created_at 倒序）
  * - GET    /api/users/:id/order-summary  该用户录入的订单聚合统计
- * - PATCH  /api/users/:id/password       管理员重置指定用户密码
+ * - POST   /api/users/staff               新建账号（一般管理员仅员工；超管可 role=admin）
+ * - PATCH  /api/users/:id/access         角色 / 在职 / 数据写权限（角色仅超管可改）
+ * - PATCH  /api/users/:id/password       管理员重置指定用户密码（一般管理员仅限员工；本人 / 超管除外）
+ * - DELETE /api/users/:id               停用账号（超级管理员任意；一般管理员仅限员工）
  * - PATCH  /api/users/me/avatar          当前登录用户头像上传（data URL）
- * - DELETE /api/users/me/avatar          清空当前用户头像
+ * - DELETE /api/users/me/avatar           清空当前用户头像
  *
  * 读接口任何登录用户都能用（卡/订单要把 *_user_id 映射成姓名 + 头像）。
- * 写接口只写"自己"，禁止改别人。admin 管理其他用户 Phase 4 再来。
+ * 权限：超级管理员 user @rNLKJA（不区分大小写）；可分配管理员、管理全员。一般管理员仅能管理员工账号与写权限。
+ * 写账号/权限/头像/密码等操作会写入 audit_logs（entity=user）。
  */
 
 import { Hono, type Context } from 'hono';
@@ -19,7 +23,7 @@ import { and, desc, eq, gte, lte, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { userAvatarUpdateSchema } from '@meal/shared';
-import { schema } from '../db/client.js';
+import { schema, type Db } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import { hashPassword } from '../services/password.js';
 import {
@@ -29,6 +33,7 @@ import {
   requireAuth,
   requireRole,
   resolveEffectiveRole,
+  userHasEffectiveDataWrite,
   type AuthVariables,
 } from '../middleware/jwt.js';
 
@@ -72,6 +77,24 @@ async function writeDataOperatorUsernames(c: Context<{ Variables: AuthVariables 
         updated_at: new Date(),
       },
     });
+}
+
+async function insertUserAudit(
+  db: Db,
+  opts: {
+    actorUserId: number;
+    action: 'create' | 'update' | 'delete';
+    targetUserId: number;
+    diff: Record<string, unknown>;
+  },
+): Promise<void> {
+  await db.insert(schema.audit_logs).values({
+    user_id: opts.actorUserId,
+    action: opts.action,
+    entity: 'user',
+    entity_id: opts.targetUserId,
+    diff_json: JSON.stringify(opts.diff),
+  });
 }
 
 usersRouter.get('/', async (c) => {
@@ -123,6 +146,7 @@ const createStaffSchema = z.object({
   password: z.string().min(8, '密码至少 8 位').max(64, '密码不能超过 64 位'),
   is_active: z.boolean().optional().default(true),
   can_data_write: z.boolean().optional().default(false),
+  role: z.enum(['admin', 'staff']).optional(),
 });
 
 usersRouter.get('/permissions/data-operators', requireRole('admin'), async (c) => {
@@ -138,15 +162,20 @@ usersRouter.get('/permissions/data-operators', requireRole('admin'), async (c) =
     .from(schema.users)
     .orderBy(schema.users.id);
   const operators = await readDataOperatorUsernames(c);
+  const enforced = isDataOperatorEnforced();
   return c.json({
-    enforcement: isDataOperatorEnforced(),
+    enforcement: enforced,
     operators,
     users: users.map((u) => ({
       ...u,
       role: resolveEffectiveRole(u.username, u.role),
       is_superadmin: isSuperAdminUsername(u.username),
-      can_data_write:
-        resolveEffectiveRole(u.username, u.role) === 'admin' || operators.includes(u.username.toLowerCase()),
+      can_data_write: userHasEffectiveDataWrite({
+        username: u.username,
+        isSuperadmin: isSuperAdminUsername(u.username),
+        operatorsLower: operators,
+        enforcement: enforced,
+      }),
     })),
   });
 });
@@ -156,11 +185,22 @@ usersRouter.post(
   requireRole('admin'),
   zValidator('json', createStaffSchema),
   async (c) => {
+    const actor = c.get('authUser');
     const db = requestDb(c);
     const input = c.req.valid('json');
     const passwordHash = await hashPassword(input.password);
     const username = input.username.trim();
     const fullName = input.full_name.trim();
+
+    let newRole: 'admin' | 'staff' = 'staff';
+    if (input.role === 'admin') {
+      if (!actor.is_superadmin) {
+        throw new HTTPException(403, { message: '仅超级管理员可创建管理员账号' });
+      }
+      newRole = 'admin';
+    } else if (input.role === 'staff') {
+      newRole = 'staff';
+    }
 
     let createdId: number;
     try {
@@ -170,7 +210,7 @@ usersRouter.post(
           username,
           full_name: fullName,
           password_hash: passwordHash,
-          role: 'staff',
+          role: newRole,
           is_active: input.is_active,
         })
         .returning({
@@ -185,7 +225,8 @@ usersRouter.post(
       throw err;
     }
 
-    if (input.can_data_write) {
+    const effectiveWrite = !!input.can_data_write;
+    if (effectiveWrite) {
       const operators = new Set(await readDataOperatorUsernames(c));
       operators.add(username.toLowerCase());
       await writeDataOperatorUsernames(c, Array.from(operators));
@@ -204,12 +245,35 @@ usersRouter.post(
       .limit(1);
     const row = rows[0];
     if (!row) throw new HTTPException(500, { message: '创建员工后读取失败' });
+
+    const ops = await readDataOperatorUsernames(c);
+    const enforced = isDataOperatorEnforced();
+    const canWrite = userHasEffectiveDataWrite({
+      username: row.username,
+      isSuperadmin: isSuperAdminUsername(row.username),
+      operatorsLower: ops,
+      enforcement: enforced,
+    });
+
+    await insertUserAudit(db, {
+      actorUserId: actor.id,
+      action: 'create',
+      targetUserId: createdId,
+      diff: {
+        username,
+        full_name: fullName,
+        role: newRole,
+        is_active: input.is_active,
+        can_data_write: canWrite,
+      },
+    });
+
     return c.json({
       user: {
         ...row,
         role: resolveEffectiveRole(row.username, row.role),
         is_superadmin: isSuperAdminUsername(row.username),
-        can_data_write: !!input.can_data_write,
+        can_data_write: canWrite,
       },
     });
   },
@@ -237,20 +301,61 @@ usersRouter.patch(
       .limit(1);
     const target = targetRows[0];
     if (!target) throw new HTTPException(404, { message: '用户不存在' });
+    const actor = c.get('authUser');
+
+    const beforeOperators = await readDataOperatorUsernames(c);
+    const enforced = isDataOperatorEnforced();
+    const beforeCanWrite = userHasEffectiveDataWrite({
+      username: target.username,
+      isSuperadmin: isSuperAdminUsername(target.username),
+      operatorsLower: beforeOperators,
+      enforcement: enforced,
+    });
 
     const patch: { role?: 'admin' | 'staff'; is_active?: boolean } = {};
     if (input.role !== undefined) {
+      if (!actor.is_superadmin) {
+        throw new HTTPException(403, { message: '仅超级管理员可分配或撤销管理员角色' });
+      }
       if (input.role === 'staff' && isSuperAdminUsername(target.username)) {
         throw new HTTPException(422, { message: 'rNLKJA 不能降级为员工' });
       }
       patch.role = input.role;
     }
-    if (input.is_active !== undefined) patch.is_active = input.is_active;
+    if (input.is_active !== undefined) {
+      if (input.is_active === false) {
+        if (actor.id === id) {
+          throw new HTTPException(422, { message: '不能停用自己的账号' });
+        }
+        if (isSuperAdminUsername(target.username) && !actor.is_superadmin) {
+          throw new HTTPException(403, { message: '仅超级管理员可停用该账号' });
+        }
+        if (!actor.is_superadmin && target.role === 'admin') {
+          throw new HTTPException(403, { message: '仅超级管理员可停用管理员账号' });
+        }
+      } else {
+        if (isSuperAdminUsername(target.username) && !actor.is_superadmin) {
+          throw new HTTPException(403, { message: '仅超级管理员可启用该账号' });
+        }
+        if (!actor.is_superadmin && target.role === 'admin') {
+          throw new HTTPException(403, { message: '仅超级管理员可启用管理员账号' });
+        }
+      }
+      patch.is_active = input.is_active;
+    }
     if (Object.keys(patch).length > 0) {
       await db.update(schema.users).set(patch).where(eq(schema.users.id, id));
     }
 
     if (input.can_data_write !== undefined) {
+      if (!actor.is_superadmin && target.role !== 'staff') {
+        throw new HTTPException(403, {
+          message: '仅超级管理员可调整其他管理员的写权限；你可修改员工的读写（写操作）权限',
+        });
+      }
+      if (!actor.is_superadmin && isSuperAdminUsername(target.username)) {
+        throw new HTTPException(403, { message: '无权限修改该账号写权限' });
+      }
       const operators = new Set(await readDataOperatorUsernames(c));
       const uname = target.username.toLowerCase();
       if (input.can_data_write) operators.add(uname);
@@ -272,12 +377,33 @@ usersRouter.patch(
     const user = users[0]!;
     const operators = await readDataOperatorUsernames(c);
     const effectiveRole = resolveEffectiveRole(user.username, user.role);
+    const afterCanWrite = userHasEffectiveDataWrite({
+      username: user.username,
+      isSuperadmin: isSuperAdminUsername(user.username),
+      operatorsLower: operators,
+      enforcement: enforced,
+    });
+
+    const diff: Record<string, unknown> = {};
+    if (user.role !== target.role) diff.role = [target.role, user.role];
+    if (user.is_active !== target.is_active) diff.is_active = [target.is_active, user.is_active];
+    if (beforeCanWrite !== afterCanWrite) diff.can_data_write = [beforeCanWrite, afterCanWrite];
+
+    if (Object.keys(diff).length > 0) {
+      await insertUserAudit(db, {
+        actorUserId: actor.id,
+        action: 'update',
+        targetUserId: id,
+        diff,
+      });
+    }
+
     return c.json({
       user: {
         ...user,
         role: effectiveRole,
         is_superadmin: isSuperAdminUsername(user.username),
-        can_data_write: effectiveRole === 'admin' ? true : operators.includes(user.username.toLowerCase()),
+        can_data_write: afterCanWrite,
       },
       operators,
     });
@@ -299,6 +425,7 @@ usersRouter.patch(
         id: schema.users.id,
         username: schema.users.username,
         full_name: schema.users.full_name,
+        role: schema.users.role,
         token_version: schema.users.token_version,
       })
       .from(schema.users)
@@ -306,6 +433,12 @@ usersRouter.patch(
       .limit(1);
     const target = targetRows[0];
     if (!target) throw new HTTPException(404, { message: '用户不存在' });
+    const actor = c.get('authUser');
+    if (actor.id !== target.id) {
+      if (!actor.is_superadmin && (target.role === 'admin' || isSuperAdminUsername(target.username))) {
+        throw new HTTPException(403, { message: '仅超级管理员可重置该账号密码' });
+      }
+    }
 
     const passwordHash = await hashPassword(password);
     await db
@@ -316,6 +449,17 @@ usersRouter.patch(
       })
       .where(eq(schema.users.id, id));
 
+    await insertUserAudit(db, {
+      actorUserId: actor.id,
+      action: 'update',
+      targetUserId: id,
+      diff: {
+        password_reset: true,
+        target_username: target.username,
+        self_service: actor.id === target.id,
+      },
+    });
+
     return c.json({
       ok: true,
       user: {
@@ -324,6 +468,64 @@ usersRouter.patch(
         full_name: target.full_name,
       },
     });
+  },
+);
+
+usersRouter.delete(
+  '/:id',
+  requireRole('admin'),
+  zValidator('param', accessIdSchema),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const actor = c.get('authUser');
+    const db = requestDb(c);
+
+    if (actor.id === id) {
+      throw new HTTPException(422, { message: '不能删除自己的账号' });
+    }
+
+    const targetRows = await db
+      .select({
+        id: schema.users.id,
+        username: schema.users.username,
+        role: schema.users.role,
+        token_version: schema.users.token_version,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, id))
+      .limit(1);
+    const target = targetRows[0];
+    if (!target) throw new HTTPException(404, { message: '用户不存在' });
+
+    if (!actor.is_superadmin) {
+      if (isSuperAdminUsername(target.username)) {
+        throw new HTTPException(403, { message: '无权限删除该账号' });
+      }
+      if (target.role === 'admin') {
+        throw new HTTPException(403, { message: '仅超级管理员可删除（停用）管理员账号' });
+      }
+    }
+
+    await db
+      .update(schema.users)
+      .set({
+        is_active: false,
+        token_version: target.token_version + 1,
+      })
+      .where(eq(schema.users.id, id));
+
+    await insertUserAudit(db, {
+      actorUserId: actor.id,
+      action: 'update',
+      targetUserId: id,
+      diff: {
+        is_active: [true, false],
+        account_deactivated: true,
+        target_username: target.username,
+      },
+    });
+
+    return c.json({ ok: true as const });
   },
 );
 
@@ -346,6 +548,15 @@ usersRouter.patch(
         role: schema.users.role,
         avatar_url: schema.users.avatar_url,
       });
+
+    if (updated[0]) {
+      await insertUserAudit(db, {
+        actorUserId: authUser.id,
+        action: 'update',
+        targetUserId: authUser.id,
+        diff: { avatar: 'uploaded', data_url_length: avatar.length },
+      });
+    }
 
     return c.json({
       user: updated[0]
@@ -374,6 +585,15 @@ usersRouter.delete('/me/avatar', async (c) => {
       role: schema.users.role,
       avatar_url: schema.users.avatar_url,
     });
+
+  if (updated[0]) {
+    await insertUserAudit(db, {
+      actorUserId: authUser.id,
+      action: 'update',
+      targetUserId: authUser.id,
+      diff: { avatar: 'cleared' },
+    });
+  }
 
   return c.json({
     user: updated[0]

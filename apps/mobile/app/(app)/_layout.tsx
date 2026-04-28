@@ -30,6 +30,7 @@ export default function AppLayout() {
       <Stack.Screen name="users/index" />
       <Stack.Screen name="users/[id]" />
       <Stack.Screen name="admin/index" />
+      <Stack.Screen name="audit-logs/index" />
       <Stack.Screen name="finance/index" />
       <Stack.Screen name="reminders/index" />
       <Stack.Screen name="profile/index" />

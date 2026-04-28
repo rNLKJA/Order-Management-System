@@ -2,7 +2,7 @@
  * Linear 同步数据：按 plan §25 的实施顺序预定义所有 issue。
  *
  * 字段说明：
- * - title    -> issue 标题（Linear 按序自动分配 MEA-1, MEA-2, ...）
+ * - title    -> issue 标题（Linear 按创建顺序分配 identifier；sync 按标题幂等 upsert）
  * - state    -> 初始状态 Backlog/Todo/InProgress/InReview/Done/Canceled
  * - priority -> 0=No priority 1=Urgent 2=High 3=Medium 4=Low
  * - labels   -> 标签数组（脚本会自动创建缺失的 label）
@@ -421,7 +421,7 @@ scripts/import-excel.ts 读 doc/xxx.xlsm 的 5 张表，调 API 批量入库；m
   },
   {
     title: 'chore: 自有域名 + Cloudflare + EAS Build (iOS + Android)',
-    state: 'Backlog',
+    state: 'InProgress',
     priority: 3,
     labels: [PHASES.p4, 'deploy'],
     body: `## 目标
@@ -430,7 +430,7 @@ scripts/import-excel.ts 读 doc/xxx.xlsm 的 5 张表，调 API 批量入库；m
 ## 当前状态
 - [x] EAS project 7a9ccfc7 已接入（commit bebf318，apps/mobile/eas.json 三环境配置齐）
 - [x] production API baseUrl 指向 https://api.anshun-healthy-food.com（绕开国内对 *.vercel.app 的 DNS 污染）
-- [x] 自有 .com 域名 anshun-healthy-food.com 已上线；api 子域名 CNAME 到 Vercel
+- [x] 自有 .com 域名 anshun-healthy-food.com 已上线；api / app 子域名 CNAME 到 Vercel（CORS 含 app.anshun-healthy-food.com，commit ef3420e）
 - [ ] iOS TestFlight 发布
 - [ ] Android .apk 分发
 
@@ -440,11 +440,21 @@ scripts/import-excel.ts 读 doc/xxx.xlsm 的 5 张表，调 API 批量入库；m
   },
   {
     title: 'chore: 漏洞补全（时区/重复手机/限流/幂等/观测/health）',
-    state: 'Backlog',
+    state: 'InProgress',
     priority: 3,
     labels: [PHASES.p4, 'hardening'],
     body: `## 目标
-时区统一 UTC 存/Asia/Shanghai 展示/04:00 业务日；重复手机提示；admin 忘密 CLI 脚本（已有占位）；登录限流完善；Idempotency-Key 表；pushplus/bark 告警；/api/health + UptimeRobot。
+时区统一 UTC 存/Asia/Shanghai 展示/04:00 业务日；重复手机提示；admin 忘密；登录限流完善；Idempotency-Key 表；pushplus/bark 告警；/api/health + UptimeRobot。
+
+## 当前状态
+- [x] 时区：财务/展示走 Asia/Shanghai（finance 服务与 shared format）
+- [x] 重复手机号：创建会员时提示（不硬阻）
+- [x] 登录限流（auth 路由）
+- [x] Idempotency-Key 表 + 订餐 POST 防重
+- [x] GET /api/health（apps/api/src/routes/health.ts）
+- [x] CORS 白名单收紧 + CORS_ALLOWED_ORIGINS（commit 80359ab）
+- [ ] pushplus / bark 类告警推送
+- [ ] UptimeRobot 或等价对外探测配置（文档化）
 
 ## 关联
 - plan §23、§25 step 19
@@ -452,14 +462,171 @@ scripts/import-excel.ts 读 doc/xxx.xlsm 的 5 张表，调 API 批量入库；m
   },
   {
     title: 'chore: README 最终版 + PROCESS/DESIGN/LINEAR 同步 + GitHub polish',
-    state: 'Backlog',
+    state: 'Done',
     priority: 4,
     labels: [PHASES.p4, 'docs'],
     body: `## 目标
 README 中文完整版（架构图 + 快速开始 + Turso/Vercel/EAS 部署 + 备份 + FAQ）；PROCESS/DESIGN 与最终代码对齐；GitHub repo description + topics + about section。
 
+## 验收标准
+- [x] README：阶段表、文档索引、与当前上线范围一致（近期 commits 3f6993d 等）
+- [x] doc/PROCESS.md：实现状态一览 + 流程图标注
+- [x] doc/LINEAR.md：本地规格与 sync-linear 对齐说明（§11）
+- [ ] GitHub repo About：description + topics（需手动画一下）
+
 ## 关联
 - plan §24、§25 step 20
+`,
+  },
+
+  // ==================== 追补：已落地但未挂在原 23 条上的工作 ====================
+  {
+    title: 'feat(walkin): 散客录单 + 散客目录 + 晋升为正式会员',
+    state: 'Done',
+    priority: 2,
+    labels: [PHASES.p4, 'orders', 'members'],
+    body: `## 目标
+散客可走订餐 API（customer_name / walk-in 哨兵会员）；散客资料（手机+地址）写回档案；散客列表与「晋升为正式会员」闭环。
+
+## 验收标准
+- [x] POST /api/orders 散客路径 + 前端双 stepper 午/晚（commits 5daa224、1c73b79、8ae7b6a、bda2faa 等）
+- [x] 送餐卡片展示散客手机+地址；useMembersView 拉 type=all（25f1726、a00258d）
+- [x] 散客目录 + 开卡晋升（5daa224）
+
+## 关联
+- apps/api/src/routes/orders.ts
+- apps/mobile/app/(app)/orders/index.tsx
+`,
+  },
+  {
+    title: 'feat(orders): 退卡 + DatePicker + 统一订单备注',
+    state: 'Done',
+    priority: 2,
+    labels: [PHASES.p4, 'orders', 'cards', 'finance'],
+    body: `## 目标
+会员退卡产生财务冲销/退款流水；跨端 DatePicker（Web input type=date）；订单备注交互统一。
+
+## 验收标准
+- [x] 退卡 API + 前端（commit 43f404e）
+- [x] DatePicker 组件（finance / 统计等复用）
+- [x] 订单备注 UX 调整（如 1d348e8）
+
+## 关联
+- packages/shared、apps/mobile/components/ui/DatePicker.tsx
+`,
+  },
+  {
+    title: 'feat(admin): 员工管理 + 角色守卫 + 管理员重置密码',
+    state: 'Done',
+    priority: 2,
+    labels: [PHASES.p4, 'auth', 'members'],
+    body: `## 目标
+管理员维护员工账号、角色；接口与页面按角色守卫；管理员可重置员工密码。
+
+## 验收标准
+- [x] 员工名单、每人订餐流水、角色守卫（aa2dff9、fb3264c）
+- [x] 管理员唯一 + 创建员工（59c2b04）
+- [x] 管理员重置密码 + 权限页简化（812aad8、b27be87 superadmin 等）
+
+## 关联
+- apps/api/src/routes/auth.ts、apps/mobile 权限相关屏
+`,
+  },
+  {
+    title: 'feat(profile): 用户头像上传（相册/拍照）',
+    state: 'Done',
+    priority: 3,
+    labels: [PHASES.p4, 'members'],
+    body: `## 目标
+登录用户可在个人资料更换头像，支持相册与拍照。
+
+## 验收标准
+- [x] commit 962f3e7
+
+## 关联
+- apps/mobile/app/(app)/profile/**
+`,
+  },
+  {
+    title: 'feat(orders): 订单统计页 + GET /api/orders 日期范围',
+    state: 'Done',
+    priority: 3,
+    labels: [PHASES.p4, 'orders', 'analytics'],
+    body: `## 目标
+按日期范围汇总订单：份数、状态分布、会员/散客、按日明细、Top 会员；后端列表 API 支持 from/to。
+
+## 验收标准
+- [x] GET /api/orders?from=&to=（含单测）
+- [x] 移动端 orders/stats + 主导航/订餐页入口（commit 5940a10）
+
+## 关联
+- apps/api/src/routes/orders.ts
+- apps/mobile/app/(app)/orders/stats.tsx
+`,
+  },
+  {
+    title: 'chore(mobile): API baseUrl 文档（getBaseUrl 与 .env.example）',
+    state: 'Done',
+    priority: 4,
+    labels: [PHASES.p4, 'docs', 'deploy'],
+    body: `## 目标
+厘清 EXPO_PUBLIC_API_BASE_URL 与 app.json extra.apiBaseUrl 的优先级，避免开发/生产混用。
+
+## 验收标准
+- [x] apps/mobile/api/client.ts 顶部注释
+- [x] 根目录 .env.example 分段说明（commit 5940a10）
+
+## 关联
+- apps/mobile/app.json expo.extra.apiBaseUrl
+`,
+  },
+  {
+    title: 'feat(orders): 出餐/送达二次确认 + 无卡会员禁止下单',
+    state: 'Done',
+    priority: 2,
+    labels: [PHASES.p4, 'orders', 'packing'],
+    body: `## 目标
+降低误触；无 active 卡的会员不能录单（前后端一致）。
+
+## 验收标准
+- [x] 出餐完成前二次确认（380e598）
+- [x] 送达前二次确认（2448fe9）
+- [x] 无卡禁止下单（4d27db1）
+
+## 关联
+- apps/mobile/app/(app)/orders/index.tsx
+- apps/api/src/routes/orders.ts
+`,
+  },
+  {
+    title: 'chore(infra): Dockerfile + Zeabur 香港迁移准备',
+    state: 'InProgress',
+    priority: 3,
+    labels: [PHASES.p4, 'infra', 'deploy'],
+    body: `## 目标
+容器化 API 便于从 Vercel 平滑迁到 Zeabur（香港）等 Node 托管。
+
+## 当前状态
+- [x] apps/api Dockerfile（commit 895375e）
+- [ ] Zeabur 生产联调与域名切换 Runbook
+
+## 关联
+- apps/api/Dockerfile
+`,
+  },
+  {
+    title: 'feat(api,docs): superadmin 与英文架构图',
+    state: 'Done',
+    priority: 3,
+    labels: [PHASES.p4, 'auth', 'docs'],
+    body: `## 目标
+支持 superadmin 能力扩展；文档与架构说明覆盖英文读者。
+
+## 验收标准
+- [x] commit b27be87
+
+## 关联
+- apps/api、doc/**
 `,
   },
 ];

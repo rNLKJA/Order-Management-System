@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -13,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { displayUserRole } from '@meal/shared';
 import { usersApi, type ApiUser } from '../../../api/users';
 import { useAuth } from '../../../hooks/useAuth';
 import {
@@ -54,6 +56,7 @@ export default function AdminPermissionsScreen() {
   const [staffPassword, setStaffPassword] = useState('');
   const [staffPassword2, setStaffPassword2] = useState('');
   const [staffCanWrite, setStaffCanWrite] = useState(false);
+  const [newUserRole, setNewUserRole] = useState<'staff' | 'admin'>('staff');
   const [staffHint, setStaffHint] = useState<string | null>(null);
 
   const q = useQuery({
@@ -100,39 +103,93 @@ export default function AdminPermissionsScreen() {
       setStaffPassword('');
       setStaffPassword2('');
       setStaffCanWrite(false);
+      setNewUserRole('staff');
       setStaffHint(null);
     },
     onError: (e) => {
-      setStaffHint(e instanceof Error ? e.message : '新增员工失败，请稍后重试');
+      setStaffHint(e instanceof Error ? e.message : '创建账号失败，请稍后重试');
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: usersApi.deleteUser,
+    onSuccess: async () => {
+      setEditingUser(null);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['admin', 'permissions'] }),
+        qc.invalidateQueries({ queryKey: ['users', 'list-full'] }),
+        qc.invalidateQueries({ queryKey: ['users'] }),
+      ]);
     },
   });
 
   const users = useMemo(() => q.data?.users ?? [], [q.data?.users]);
   const activeUsers = users.filter((u) => u.is_active);
 
+  const isSuper = !!user?.is_superadmin;
+
+  const openRow = (target: ApiUser) => {
+    if (!isSuper && target.role === 'admin') return;
+    openEditor(target);
+  };
+
   const openEditor = (target: ApiUser) => {
     setEditingUser(target);
     setDraftRole(target.role);
     setDraftActive(target.is_active);
-    setDraftCanWrite(target.role === 'admin' ? true : !!target.can_data_write);
+    setDraftCanWrite(!!target.can_data_write);
     setNewPassword('');
     setConfirmPassword('');
     setShowPassword(false);
     setPasswordHint(null);
   };
-  const isPrimaryAdmin = (name?: string) => (name ?? '').trim().toLowerCase() === 'rnlkja';
 
   const saveEditor = async () => {
     if (!editingUser) return;
+    const input: Parameters<typeof usersApi.updateAccess>[1] = {};
+    if (isSuper) {
+      input.role = draftRole;
+      input.is_active = draftActive;
+      input.can_data_write = draftCanWrite;
+    } else if (editingUser.role === 'staff') {
+      input.is_active = draftActive;
+      input.can_data_write = draftCanWrite;
+    }
     await updateMut.mutateAsync({
       id: editingUser.id,
-      input: {
-        role: draftRole,
-        is_active: draftActive,
-        can_data_write: draftCanWrite,
-      },
+      input,
     });
     setEditingUser(null);
+  };
+
+  const canDeleteEditing =
+    !!editingUser &&
+    !!user &&
+    editingUser.id !== user.id &&
+    (isSuper || (editingUser.role === 'staff' && !editingUser.is_superadmin));
+
+  const confirmDeleteUser = () => {
+    if (!editingUser || !canDeleteEditing) return;
+    Alert.alert(
+      '确认删除账号',
+      `将停用「${editingUser.full_name || editingUser.username}」(@${editingUser.username})，对方将立即下线。是否继续？`,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '停用账号',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await deleteMut.mutateAsync(editingUser.id);
+              } catch (e) {
+                Alert.alert('操作失败', e instanceof Error ? e.message : '请稍后重试');
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const changePassword = async () => {
@@ -150,7 +207,7 @@ export default function AdminPermissionsScreen() {
   };
   const createStaff = async () => {
     if (!staffUsername.trim()) return setStaffHint('请输入用户名。');
-    if (!staffFullName.trim()) return setStaffHint('请输入员工姓名。');
+    if (!staffFullName.trim()) return setStaffHint('请输入姓名。');
     if (staffPassword.length < 8) return setStaffHint('初始密码至少 8 位。');
     if (staffPassword !== staffPassword2) return setStaffHint('两次输入的密码不一致。');
     setStaffHint(null);
@@ -160,8 +217,15 @@ export default function AdminPermissionsScreen() {
       password: staffPassword,
       can_data_write: staffCanWrite,
       is_active: true,
+      ...(isSuper && newUserRole === 'admin' ? { role: 'admin' as const } : {}),
     });
   };
+
+  const canResetPassword = (target: ApiUser) =>
+    !!user &&
+    (user.id === target.id ||
+      isSuper ||
+      (target.role === 'staff' && !target.is_superadmin));
 
   if (user?.role !== 'admin') return null;
 
@@ -202,10 +266,11 @@ export default function AdminPermissionsScreen() {
                   <View style={styles.tipHeadRow}>
                     <Text style={styles.tipTitle}>点击“编辑权限”即可修改</Text>
                     <Button
-                      label="新增员工"
+                      label="新增人员"
                       style={styles.tipActionButton}
                       onPress={() => {
                         setStaffHint(null);
+                        setNewUserRole('staff');
                         setShowCreateModal(true);
                       }}
                     />
@@ -214,51 +279,69 @@ export default function AdminPermissionsScreen() {
                     当前写操作开关：
                     {q.data?.enforcement ? '已开启' : '测试模式（未开启）'}。即使未开启，也可以先分配写权限。
                   </Text>
-                  <Text style={styles.tipText}>管理员固定为 rNLKJA，其余账号均为员工权限。</Text>
+                  <Text style={styles.tipText}>
+                    {isSuper
+                      ? '超级管理员可分配管理员；开启写操作管控后，「允许写操作」须单独授予（管理员也可只读防误触）。'
+                      : '你为一般管理员：可编辑员工的读/写（数据录入）权限、账号状态，并可新增或停用在册员工。'}
+                  </Text>
                 </View>
               </View>
             </GlassSurface>
 
-            {users.map((u) => (
-              <Pressable key={u.id} onPress={() => openEditor(u)} style={{ borderRadius: RADIUS.md }}>
-                {({ pressed }) => (
-                  <GlassSurface
-                    padding={SPACING.base}
-                    style={[styles.row, !u.is_active && styles.rowMuted, pressed && styles.rowPressed]}
-                  >
-                    <View style={styles.rowTop}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.name}>{u.full_name || u.username}</Text>
-                        <Text style={styles.sub}>@{u.username}</Text>
+            {users.map((u) => {
+              const rowLocked = !isSuper && u.role === 'admin';
+              return (
+                <Pressable
+                  key={u.id}
+                  onPress={() => openRow(u)}
+                  disabled={rowLocked}
+                  style={{ borderRadius: RADIUS.md }}
+                >
+                  {({ pressed }) => (
+                    <GlassSurface
+                      padding={SPACING.base}
+                      style={[
+                        styles.row,
+                        !u.is_active && styles.rowMuted,
+                        rowLocked && styles.rowLocked,
+                        pressed && !rowLocked && styles.rowPressed,
+                      ]}
+                    >
+                      <View style={styles.rowTop}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.name}>{u.full_name || u.username}</Text>
+                          <Text style={styles.sub}>@{u.username}</Text>
+                        </View>
+                        <Pressable
+                          onPress={() => openRow(u)}
+                          disabled={rowLocked}
+                          hitSlop={8}
+                          style={({ pressed: p }) => [styles.editIconBtn, p && { opacity: 0.75 }]}
+                        >
+                          <Ionicons name="create-outline" size={16} color={COLORS.brand} />
+                        </Pressable>
                       </View>
-                      <Pressable
-                        onPress={() => openEditor(u)}
-                        hitSlop={8}
-                        style={({ pressed: p }) => [styles.editIconBtn, p && { opacity: 0.75 }]}
-                      >
-                        <Ionicons name="create-outline" size={16} color={COLORS.brand} />
-                      </Pressable>
-                    </View>
-                    <Text style={styles.summaryLine}>
-                      {u.role === 'admin' ? '管理员' : '员工'} ·{' '}
-                      {u.role === 'admin' || u.can_data_write ? '允许写操作' : '只读'} ·{' '}
-                      {u.is_active ? '在职' : '停用'}
-                    </Text>
-                    <View style={styles.summaryRow}>
-                      <Tag
-                        label={u.role === 'admin' ? '管理员' : '员工'}
-                        active={u.role === 'admin'}
-                      />
-                      <Tag
-                        label={u.role === 'admin' || u.can_data_write ? '可写' : '只读'}
-                        active={u.role === 'admin' || !!u.can_data_write}
-                      />
-                      <Tag label={u.is_active ? '在职' : '停用'} active={u.is_active} />
-                    </View>
-                  </GlassSurface>
-                )}
-              </Pressable>
-            ))}
+                      <Text style={styles.summaryLine}>
+                        {displayUserRole(u)} ·{' '}
+                        {u.can_data_write ? '允许写操作' : '只读'} ·{' '}
+                        {u.is_active ? '在职' : '停用'}
+                      </Text>
+                      <View style={styles.summaryRow}>
+                        <Tag
+                          label={displayUserRole(u)}
+                          active={u.role === 'admin' || !!u.is_superadmin}
+                        />
+                        <Tag
+                          label={u.can_data_write ? '可写' : '只读'}
+                          active={!!u.can_data_write}
+                        />
+                        <Tag label={u.is_active ? '在职' : '停用'} active={u.is_active} />
+                      </View>
+                    </GlassSurface>
+                  )}
+                </Pressable>
+              );
+            })}
           </ScrollView>
         )}
       </SafeAreaView>
@@ -279,52 +362,57 @@ export default function AdminPermissionsScreen() {
                 : ''}
             </Text>
 
-            <View style={styles.editorBlock}>
-              <Text style={styles.blockLabel}>角色</Text>
-              <View style={styles.segmented}>
-                {(['staff', 'admin'] as const).map((role) => (
-                  <Pressable
-                    key={role}
-                    disabled={
-                      !editingUser ||
-                      (role === 'admin' && !isPrimaryAdmin(editingUser.username)) ||
-                      (role === 'staff' && isPrimaryAdmin(editingUser.username))
-                    }
-                    style={[
-                      styles.segmentBtn,
-                      draftRole === role && styles.segmentBtnActive,
-                      (!editingUser ||
-                        (role === 'admin' && !isPrimaryAdmin(editingUser.username)) ||
-                        (role === 'staff' && isPrimaryAdmin(editingUser.username))) &&
-                        styles.segmentBtnDisabled,
-                    ]}
-                    onPress={() => {
-                      setDraftRole(role);
-                      if (role === 'admin') setDraftCanWrite(true);
-                    }}
-                  >
-                    <Text style={[styles.segmentText, draftRole === role && styles.segmentTextActive]}>
-                      {role === 'admin' ? '管理员' : '员工'}
-                    </Text>
-                  </Pressable>
-                ))}
+            {isSuper ? (
+              <View style={styles.editorBlock}>
+                <Text style={styles.blockLabel}>角色</Text>
+                <View style={styles.segmented}>
+                  {(['staff', 'admin'] as const).map((role) => (
+                    <Pressable
+                      key={role}
+                      disabled={!editingUser || (role === 'staff' && !!editingUser.is_superadmin)}
+                      style={[
+                        styles.segmentBtn,
+                        draftRole === role && styles.segmentBtnActive,
+                        (!editingUser || (role === 'staff' && !!editingUser.is_superadmin)) &&
+                          styles.segmentBtnDisabled,
+                      ]}
+                      onPress={() => {
+                        setDraftRole(role);
+                      }}
+                    >
+                      <Text style={[styles.segmentText, draftRole === role && styles.segmentTextActive]}>
+                        {role === 'admin' ? '管理员' : '员工'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.lockHint}>
+                  超级管理员（@rNLKJA）不可降级为员工；其余账号可在管理员与员工之间调整。
+                </Text>
               </View>
-              <Text style={styles.lockHint}>系统限制：仅 rNLKJA 保持管理员。</Text>
-            </View>
+            ) : (
+              <View style={styles.editorBlock}>
+                <Text style={styles.blockLabel}>角色</Text>
+                <Text style={styles.lockHint}>
+                  仅超级管理员可分配「管理员」角色。你可修改下方写权限与在职状态。
+                </Text>
+              </View>
+            )}
 
             <View style={styles.editorBlock}>
               <Text style={styles.blockLabel}>写权限</Text>
               <View style={styles.segmented}>
                 {(['readonly', 'write'] as const).map((mode) => {
                   const active = mode === 'write' ? draftCanWrite : !draftCanWrite;
+                  const readOnlyStaff = !isSuper && editingUser && editingUser.role !== 'staff';
                   return (
                     <Pressable
                       key={mode}
-                      disabled={draftRole === 'admin'}
+                      disabled={!!readOnlyStaff}
                       style={[
                         styles.segmentBtn,
                         active && styles.segmentBtnActive,
-                        draftRole === 'admin' && styles.segmentBtnDisabled,
+                        readOnlyStaff && styles.segmentBtnDisabled,
                       ]}
                       onPress={() => setDraftCanWrite(mode === 'write')}
                     >
@@ -354,56 +442,69 @@ export default function AdminPermissionsScreen() {
               </View>
             </View>
 
-            <View style={styles.editorBlock}>
-              <Text style={styles.blockLabel}>修改账户密码（仅管理员）</Text>
-              <View style={styles.passwordCard}>
-                <View style={styles.inputRow}>
-                  <Ionicons name="lock-closed-outline" size={16} color={COLORS.text.tertiary} />
-                  <TextInput
-                    style={styles.input}
-                    value={newPassword}
-                    onChangeText={setNewPassword}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    placeholder="输入新密码（至少 8 位）"
-                    placeholderTextColor={COLORS.text.quaternary}
-                  />
-                </View>
-                <View style={styles.inputDivider} />
-                <View style={styles.inputRow}>
-                  <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text.tertiary} />
-                  <TextInput
-                    style={styles.input}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    placeholder="再次输入新密码"
-                    placeholderTextColor={COLORS.text.quaternary}
-                  />
-                  <Pressable
-                    hitSlop={8}
-                    onPress={() => setShowPassword((v) => !v)}
-                    style={({ pressed }) => [styles.eyeBtn, pressed && { opacity: 0.6 }]}
-                  >
-                    <Ionicons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={16}
-                      color={COLORS.text.tertiary}
+            {editingUser && canResetPassword(editingUser) ? (
+              <View style={styles.editorBlock}>
+                <Text style={styles.blockLabel}>重置密码</Text>
+                <View style={styles.passwordCard}>
+                  <View style={styles.inputRow}>
+                    <Ionicons name="lock-closed-outline" size={16} color={COLORS.text.tertiary} />
+                    <TextInput
+                      style={styles.input}
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      placeholder="输入新密码（至少 8 位）"
+                      placeholderTextColor={COLORS.text.quaternary}
                     />
-                  </Pressable>
+                  </View>
+                  <View style={styles.inputDivider} />
+                  <View style={styles.inputRow}>
+                    <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.text.tertiary} />
+                    <TextInput
+                      style={styles.input}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      placeholder="再次输入新密码"
+                      placeholderTextColor={COLORS.text.quaternary}
+                    />
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => setShowPassword((v) => !v)}
+                      style={({ pressed }) => [styles.eyeBtn, pressed && { opacity: 0.6 }]}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={16}
+                        color={COLORS.text.tertiary}
+                      />
+                    </Pressable>
+                  </View>
+                </View>
+                {passwordHint ? <Text style={styles.passwordHint}>{passwordHint}</Text> : null}
+                <View style={styles.passwordActionRow}>
+                  <Button
+                    label="更新密码"
+                    variant="secondary"
+                    loading={passwordMut.isPending}
+                    onPress={() => void changePassword()}
+                  />
                 </View>
               </View>
-              {passwordHint ? <Text style={styles.passwordHint}>{passwordHint}</Text> : null}
-              <View style={styles.passwordActionRow}>
+            ) : null}
+
+            {canDeleteEditing ? (
+              <View style={{ marginBottom: SPACING.md }}>
                 <Button
-                  label="更新密码"
-                  variant="secondary"
-                  loading={passwordMut.isPending}
-                  onPress={() => void changePassword()}
+                  label="停用此账号"
+                  variant="danger"
+                  loading={deleteMut.isPending}
+                  onPress={() => confirmDeleteUser()}
                 />
               </View>
-            </View>
+            ) : null}
 
             <View style={styles.modalActions}>
               <Button
@@ -430,8 +531,12 @@ export default function AdminPermissionsScreen() {
         <Pressable style={styles.modalOverlay} onPress={() => setShowCreateModal(false)} />
         <View style={styles.modalWrap}>
           <GlassSurface padding={SPACING.lg} style={styles.modalCard}>
-            <Text style={styles.modalTitle}>新增员工</Text>
-            <Text style={styles.modalSub}>创建员工账号（管理员固定为 rNLKJA）</Text>
+            <Text style={styles.modalTitle}>新增账号</Text>
+            <Text style={styles.modalSub}>
+              {isSuper
+                ? '超级管理员可创建「管理员」或「员工」；一般管理员仅可创建员工。'
+                : '创建在职员工账号并设置初始密码。'}
+            </Text>
 
             <View style={styles.editorBlock}>
               <Text style={styles.blockLabel}>用户名</Text>
@@ -450,10 +555,31 @@ export default function AdminPermissionsScreen() {
                 style={styles.simpleInput}
                 value={staffFullName}
                 onChangeText={setStaffFullName}
-                placeholder="输入员工姓名"
+                placeholder="输入显示名称"
                 placeholderTextColor={COLORS.text.quaternary}
               />
             </View>
+            {isSuper ? (
+              <View style={styles.editorBlock}>
+                <Text style={styles.blockLabel}>账号类型</Text>
+                <View style={styles.segmented}>
+                  {(['staff', 'admin'] as const).map((r) => (
+                    <Pressable
+                      key={r}
+                      style={[styles.segmentBtn, newUserRole === r && styles.segmentBtnActive]}
+                      onPress={() => {
+                        setNewUserRole(r);
+                        if (r === 'admin') setStaffCanWrite(false);
+                      }}
+                    >
+                      <Text style={[styles.segmentText, newUserRole === r && styles.segmentTextActive]}>
+                        {r === 'admin' ? '管理员' : '员工'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            ) : null}
             <View style={styles.editorBlock}>
               <Text style={styles.blockLabel}>初始密码</Text>
               <TextInput
@@ -477,7 +603,7 @@ export default function AdminPermissionsScreen() {
               />
             </View>
             <View style={styles.editorBlock}>
-              <Text style={styles.blockLabel}>写权限</Text>
+              <Text style={styles.blockLabel}>数据写权限</Text>
               <View style={styles.segmented}>
                 {(['readonly', 'write'] as const).map((mode) => {
                   const active = mode === 'write' ? staffCanWrite : !staffCanWrite;
@@ -494,13 +620,17 @@ export default function AdminPermissionsScreen() {
                   );
                 })}
               </View>
+              <Text style={styles.lockHint}>
+                测试阶段默认不拦写接口；生产设 DATA_OPERATOR_ENFORCEMENT=1
+                后，仅此处勾选「允许写操作」的账号（含管理员）可改会员/订单/财务，超级管理员不受限。
+              </Text>
             </View>
             {staffHint ? <Text style={styles.passwordHint}>{staffHint}</Text> : null}
 
             <View style={styles.modalActions}>
               <Button label="取消" variant="ghost" onPress={() => setShowCreateModal(false)} />
               <Button
-                label="创建员工"
+                label="创建账号"
                 loading={createMut.isPending}
                 onPress={() => void createStaff()}
               />
@@ -546,6 +676,7 @@ const styles = StyleSheet.create({
   tipText: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 2, lineHeight: 18 },
   row: { borderWidth: 1, borderColor: GLASS.border, gap: 10 },
   rowMuted: { opacity: 0.6 },
+  rowLocked: { opacity: 0.55 },
   rowPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
   rowTop: {
     flexDirection: 'row',

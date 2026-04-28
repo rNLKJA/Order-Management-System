@@ -1,0 +1,185 @@
+import { StyleSheet } from 'react-native';
+import { IOS_COLORS } from '../../theme/paperTheme';
+
+export const prepDeliveryStyles = StyleSheet.create({
+  scroll: { paddingHorizontal: 12, paddingBottom: 32 },
+
+  summary: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  summaryTile: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 14,
+    gap: 2,
+  },
+  summaryLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+  summaryValue: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5, lineHeight: 32 },
+  summaryUnit: { fontSize: 14, fontWeight: '500' },
+  summarySub: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
+
+  mealBlock: { marginBottom: 18 },
+  mealHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+  },
+  mealTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: IOS_COLORS.labelSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  mealCount: { fontSize: 13, color: IOS_COLORS.labelSecondary },
+
+  card: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+    minHeight: 110,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(17,17,17,0.08)',
+  },
+  cardBody: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 14,
+    alignItems: 'flex-start',
+  },
+  cardContent: { flex: 1, gap: 6 },
+  cardAvatarLg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardAvatarTextLg: { fontSize: 24, fontWeight: '700', color: IOS_COLORS.blue },
+
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  cardName: { fontSize: 18, fontWeight: '700', color: IOS_COLORS.label },
+  cardNameLink: { color: IOS_COLORS.blue },
+  nameLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginRight: 2,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: IOS_COLORS.label,
+    fontWeight: '500',
+  },
+  infoTextMuted: {
+    color: IOS_COLORS.labelTertiary,
+    fontWeight: '400',
+  },
+  cardMetaDim: {
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
+    marginTop: 4,
+  },
+
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  mealTypePill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  mealTypePillLunch: { backgroundColor: '#FFF4E5' },
+  mealTypePillDinner: { backgroundColor: '#F5E9FC' },
+  mealTypePillText: { fontSize: 12, fontWeight: '700' },
+  mealTypePillTextLunch: { color: '#FF9500' },
+  mealTypePillTextDinner: { color: '#AF52DE' },
+  qtyPill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  qtyPillText: {
+    fontSize: 12,
+    color: IOS_COLORS.label,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  cardMeta: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
+
+  tag: {
+    backgroundColor: IOS_COLORS.blueLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  tagText: { fontSize: 12, fontWeight: '700', color: IOS_COLORS.blue },
+
+  noteBox: {
+    marginTop: 4,
+    backgroundColor: '#FFF8E6',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 2,
+  },
+  noteText: { fontSize: 13, color: '#8A5A00', lineHeight: 18 },
+  noteLabel: { fontWeight: '700' },
+
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addressText: { flex: 1, fontSize: 15, color: IOS_COLORS.label, fontWeight: '600', lineHeight: 20 },
+
+  sideConfirm: {
+    width: 82,
+    backgroundColor: IOS_COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 6,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: 'rgba(255,255,255,0.35)',
+  },
+  sideConfirmText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 18,
+    letterSpacing: 0.3,
+  },
+  deliveryFailedBtn: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF4E5',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  deliveryFailedBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: IOS_COLORS.red,
+  },
+
+  empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: IOS_COLORS.label },
+  emptySub: { fontSize: 13, color: IOS_COLORS.labelSecondary },
+});

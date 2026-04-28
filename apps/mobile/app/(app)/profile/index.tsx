@@ -11,6 +11,7 @@ import { ActivityIndicator, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { displayUserRole } from '@meal/shared';
 import { useAuth } from '../../../hooks/useAuth';
 import { COLORS, GLASS, SPACING, TYPE } from '../../../theme/paperTheme';
 import { confirmDestructive, notify } from '../../../lib/confirm';
@@ -155,8 +156,8 @@ export default function ProfileScreen() {
                   <Text style={styles.fullName}>{user?.full_name ?? '未登录'}</Text>
                   <Text style={styles.username}>@{user?.username ?? '—'}</Text>
                   <StatusChip
-                    label={user?.role === 'admin' ? '管理员' : '员工'}
-                    variant={user?.role === 'admin' ? 'warning' : 'fulfilled'}
+                    label={user ? displayUserRole(user) : '—'}
+                    variant={user?.role === 'admin' || user?.is_superadmin ? 'warning' : 'fulfilled'}
                     dot
                     style={styles.roleChip}
                   />
@@ -168,7 +169,7 @@ export default function ProfileScreen() {
               <SectionLabel>账户概览</SectionLabel>
               <BentoGrid gap={SPACING.md}>
                 <Bento span={4} mobileSpan={6}>
-                  <StatTile label="角色" value={user?.role === 'admin' ? '管理员' : '员工'} icon="shield-checkmark-outline" color={COLORS.info} tint="info" />
+                  <StatTile label="角色" value={user ? displayUserRole(user) : '—'} icon="shield-checkmark-outline" color={COLORS.info} tint="info" />
                 </Bento>
                 <Bento span={4} mobileSpan={6}>
                   <StatTile label="状态" value="已登录" icon="checkmark-circle-outline" color={COLORS.success} tint="ok" />
@@ -186,7 +187,13 @@ export default function ProfileScreen() {
                 <InfoRow label="显示名称" value={user?.full_name ?? '—'} />
                 <InfoRow
                   label="权限角色"
-                  value={user?.role === 'admin' ? '管理员（全部权限）' : '员工（日常操作）'}
+                  value={
+                    user?.is_superadmin
+                      ? '超级管理员（用户与角色）'
+                      : user?.role === 'admin'
+                        ? '管理员（员工与写权限）'
+                        : '员工（日常操作）'
+                  }
                   isLast
                 />
               </GlassSurface>

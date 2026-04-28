@@ -176,7 +176,55 @@ describe('GET /api/audit-logs', () => {
     expect(body.logs).toHaveLength(3);
   });
 
-  it('结果按 created_at 倒序排列', async () => {
+  it('按 actor_id 过滤', async () => {
+    await seedAuditLog(ctx.db, {
+      user_id: ctx.staffId,
+      action: 'create',
+      entity: 'member',
+      entity_id: 99,
+    });
+    await seedAuditLog(ctx.db, {
+      user_id: ctx.adminId,
+      action: 'update',
+      entity: 'member',
+      entity_id: 100,
+    });
+
+    const res = await ctx.app.fetch(
+      new Request(`http://test.local/api/audit-logs?actor_id=${ctx.staffId}`, {
+        headers: { Authorization: `Bearer ${ctx.adminToken}` },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { logs: { user_id: number }[] };
+    expect(body.logs.length).toBeGreaterThanOrEqual(1);
+    expect(body.logs.every((l) => l.user_id === ctx.staffId)).toBe(true);
+  });
+
+  it('返回 actor_username / actor_full_name', async () => {
+    await seedAuditLog(ctx.db, {
+      user_id: ctx.adminId,
+      action: 'create',
+      entity: 'card',
+      entity_id: 7,
+    });
+
+    const res = await ctx.app.fetch(
+      new Request('http://test.local/api/audit-logs?limit=5', {
+        headers: { Authorization: `Bearer ${ctx.adminToken}` },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      logs: { actor_username?: string | null; actor_full_name?: string | null }[];
+    };
+    expect(body.logs.length).toBeGreaterThanOrEqual(1);
+    const hit = body.logs.find((l) => l.actor_username === 'audit_admin');
+    expect(hit).toBeDefined();
+    expect(hit?.actor_full_name).toBe('审计管理员');
+  });
+
+  it('结果按 id 倒序排列（新记录在前）', async () => {
     await seedAuditLog(ctx.db, {
       user_id: ctx.adminId,
       action: 'create',
@@ -197,7 +245,6 @@ describe('GET /api/audit-logs', () => {
     );
     const body = (await res.json()) as { logs: schema.AuditLog[] };
     expect(body.logs.length).toBeGreaterThanOrEqual(2);
-    // 最新插入的（entity_id=2）应该在前
     const ids = body.logs.map((l) => l.id);
     expect(ids[0]).toBeGreaterThan(ids[1]!);
   });
