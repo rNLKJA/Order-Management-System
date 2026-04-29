@@ -76,7 +76,7 @@ const listQuerySchema = z.object({
     .regex(/^\d+$/)
     .optional()
     .default('50')
-    .transform((v) => Math.min(200, Math.max(1, Number(v)))),
+    .transform((v) => Math.min(500, Math.max(1, Number(v)))),
   offset: z
     .string()
     .regex(/^\d+$/)

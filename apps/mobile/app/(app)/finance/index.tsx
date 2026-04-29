@@ -3,12 +3,8 @@
  *
  * - 顶部：AppHeader 带「新增支出」按钮（替代右下 FAB）
  * - 筛选：日期区间 + 类型 Segmented（全部 / 收入 / 支出）+ 分类下拉 + 冲销开关
- * - 汇总：BentoGrid 3 格 — 总收入 / 总支出 / 净额（与主界面速览同风格）
- * - 明细：按日期倒序卡片列表；每条包含日期、类型/分类 Pill、金额、描述
- *
- * 数据策略（demo 阶段）：
- *   API 与 Mock 的 income 记录都会合并显示，避免后端还没有接入开卡/升级事件时看不到收入流水；
- *   API 与 Mock 的 expense 同样合并去重。等真实数据稳定后可切换为只用 API。
+ * - 汇总与「履约/预收」Bento：直接来自接口 summary（全量聚合）
+ * - 结构分布：同样基于 summary.byCategory（全量），不再仅用当前页 limited items 抽样
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -54,6 +50,11 @@ import { ExpenseModal } from '../../../components/ExpenseModal';
 import { COLORS, SPACING, RADIUS, TYPE } from '../../../theme/paperTheme';
 
 type TypeFilter = 'all' | 'income' | 'expense';
+
+/** 与 @meal/shared FinanceCategory 中支出类一致，用于从 byCategory 拆出支出结构 */
+function isExpenseCategory(cat: string): boolean {
+  return cat === 'manual_expense' || cat === 'legacy_expense';
+}
 
 const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
   'all',
@@ -186,12 +187,12 @@ export default function FinanceScreen() {
       setFetchError(null);
       try {
         const [res, detailRes] = await Promise.all([
-          listFinance(params),
+          listFinance({ ...params, limit: 1 }),
           listFinance({
             ...params,
             from: detailWindowFrom,
             to: detailWindowTo,
-            limit: 200,
+            limit: 500,
           }),
         ]);
         setData(res);
@@ -251,27 +252,29 @@ export default function FinanceScreen() {
 
   const summary = data?.summary;
   const structureGroups = useMemo(() => {
+    const byCat = summary?.byCategory ?? {};
     const incomeMap = new Map<string, number>();
     const expenseMap = new Map<string, number>();
-    for (const item of data?.items ?? []) {
-      if (item.voided) continue;
-      const target = item.type === 'income' ? incomeMap : expenseMap;
-      target.set(item.category, (target.get(item.category) ?? 0) + item.amount);
+    for (const [cat, rawAmt] of Object.entries(byCat)) {
+      const amt = Number(rawAmt);
+      if (!Number.isFinite(amt) || amt === 0) continue;
+      const target = isExpenseCategory(cat) ? expenseMap : incomeMap;
+      target.set(cat, (target.get(cat) ?? 0) + amt);
     }
     const toSortedList = (source: Map<string, number>) =>
       Array.from(source.entries())
-        .map(([cat, amt]) => ({
-          key: cat,
-          label: FINANCE_CATEGORY_LABEL[cat as FinanceCategory] ?? cat,
+        .map(([ckey, amt]) => ({
+          key: ckey,
+          label: FINANCE_CATEGORY_LABEL[ckey as FinanceCategory] ?? ckey,
           amount: amt,
         }))
         .sort((a, b) => b.amount - a.amount)
-        .slice(0, 5);
+        .slice(0, 8);
     return {
       income: toSortedList(incomeMap),
       expense: toSortedList(expenseMap),
     };
-  }, [data?.items]);
+  }, [summary?.byCategory]);
 
   return (
     <View style={styles.root}>
