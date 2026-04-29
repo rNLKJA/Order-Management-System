@@ -18,6 +18,7 @@
  *   - CANCEL 卡订单 → 卡 remaining 恢复
  *   - CANCEL 散餐订单 → FinanceEntry.voided=true
  *   - CANCEL delivered → 422
+ *   - PATCH delivery-failed：已送达 + 员工 → 403；已送达 + 管理员 → 冲销退餐
  *   - CANCEL 已取消 → 幂等 200
  *   - Idempotency-Key 防重复提交
  *   - GET 列表需要登录
@@ -853,6 +854,103 @@ describe('Orders API /api/orders', () => {
     expect(res.status).toBe(422);
     const body = (await res.json()) as { code: string };
     expect(body.code).toBe('ORDER_LOCKED_DELIVERED');
+  });
+
+  it('PATCH delivery-failed：已送达 + 员工 → 403', async () => {
+    const inserted = await db
+      .insert(schema.daily_orders)
+      .values({
+        member_id: memberId,
+        order_date: '2026-04-24',
+        meal_type: 'lunch',
+        quantity: 1,
+        amount: 0,
+        status: 'delivered',
+        created_by_user_id: staffId,
+        delivered_at: new Date(),
+        delivered_by_user_id: staffId,
+      })
+      .returning({ id: schema.daily_orders.id });
+    const orderId = inserted[0]!.id;
+
+    const res = await app.fetch(
+      new Request(`http://test.local/api/orders/${orderId}/delivery-failed`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ reason: '客户取消' }),
+      }),
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { code: string; message: string };
+    expect(body.code).toBe('DELIVERY_FAILED_ADMIN_ONLY');
+    expect(body.message).toBe('只有管理员能修改');
+  });
+
+  it('PATCH delivery-failed：已送达 + 管理员 → 冲销并退卡餐', async () => {
+    await deactivateDefaultCard();
+    const cardRes = await seedCard(db, {
+      member_id: memberId,
+      created_by_user_id: staffId,
+      collector_user_id: staffId,
+      card_code: 'month',
+      is_hospital: false,
+      total_meals: 40,
+      used_meals: 3,
+      unit_price: 25,
+      paid_amount: 1000,
+      status: 'active',
+    });
+    const cardId = cardRes.id;
+
+    const inserted = await db
+      .insert(schema.daily_orders)
+      .values({
+        member_id: memberId,
+        card_id: cardId,
+        order_date: '2026-04-24',
+        meal_type: 'lunch',
+        quantity: 3,
+        amount: 0,
+        status: 'delivered',
+        created_by_user_id: staffId,
+        delivered_at: new Date(),
+        delivered_by_user_id: staffId,
+      })
+      .returning({ id: schema.daily_orders.id });
+    const orderId = inserted[0]!.id;
+
+    const adminUser = await seedUser(db, {
+      username: 'admin_delivery_undo',
+      full_name: '测试管理员',
+      role: 'admin',
+      password: 'AdminPw123!',
+    });
+    const adminToken = await signToken({
+      user_id: adminUser.id,
+      role: 'admin',
+      token_version: 1,
+    });
+
+    const res = await app.fetch(
+      new Request(`http://test.local/api/orders/${orderId}/delivery-failed`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ reason: '客户取消' }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { order: schema.DailyOrder; card?: schema.Card };
+    expect(body.order.status).toBe('cancelled');
+    expect(body.order.cancel_reason).toContain('误点已送达后纠正');
+    expect(body.card).toBeDefined();
+    expect(body.card!.used_meals).toBe(0);
+    expect(body.card!.remaining_meals).toBe(40);
   });
 
   it('CANCEL 已取消 → 幂等 200', async () => {

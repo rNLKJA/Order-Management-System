@@ -125,6 +125,7 @@ export default function AdminPermissionsScreen() {
 
   const users = useMemo(() => q.data?.users ?? [], [q.data?.users]);
   const activeUsers = users.filter((u) => u.is_active);
+  const inactiveCount = users.length - activeUsers.length;
 
   const isSuper = !!user?.is_superadmin;
 
@@ -233,11 +234,7 @@ export default function AdminPermissionsScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <AppHeader
-          title="权限管理"
-          subtitle={q.data ? `在职 ${activeUsers.length} 人 · 点击编辑权限进行修改` : ''}
-          onBack={() => router.back()}
-        />
+        <AppHeader title="权限管理" onBack={() => router.back()} />
         {q.isLoading ? (
           <View style={styles.center}>
             <ActivityIndicator color={COLORS.brand} />
@@ -255,6 +252,26 @@ export default function AdminPermissionsScreen() {
         ) : (
           <ScrollView contentContainerStyle={styles.listPad}>
             <GlassSurface padding={SPACING.base} style={styles.tip}>
+              <View style={styles.tipStatsRow}>
+                <View style={[styles.statChip, styles.statChipEmphasis]}>
+                  <Text style={styles.statChipValue}>{activeUsers.length}</Text>
+                  <Text style={styles.statChipLabel}>在职</Text>
+                </View>
+                <View style={styles.statChip}>
+                  <Text style={styles.statChipValue}>{users.length}</Text>
+                  <Text style={styles.statChipLabel}>全部账号</Text>
+                </View>
+                {inactiveCount > 0 ? (
+                  <View style={styles.statChip}>
+                    <Text style={[styles.statChipValue, styles.statChipValueMuted]}>{inactiveCount}</Text>
+                    <Text style={styles.statChipLabel}>停用</Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.tipHintRow}>
+                <Ionicons name="hand-left-outline" size={14} color={COLORS.text.quaternary} />
+                <Text style={styles.tipHintText}>点列表行或右侧铅笔编辑该账号</Text>
+              </View>
               <View style={styles.tipRow}>
                 <IconAvatar
                   icon="shield-checkmark-outline"
@@ -264,7 +281,7 @@ export default function AdminPermissionsScreen() {
                 />
                 <View style={styles.tipMain}>
                   <View style={styles.tipHeadRow}>
-                    <Text style={styles.tipTitle}>点击“编辑权限”即可修改</Text>
+                    <Text style={styles.tipTitle}>快捷操作</Text>
                     <Button
                       label="新增人员"
                       style={styles.tipActionButton}
@@ -668,6 +685,51 @@ const styles = StyleSheet.create({
   errTitle: { ...TYPE.body, color: COLORS.danger, fontWeight: '700' },
   err: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 2 },
   tip: { borderWidth: 1, borderColor: GLASS.border },
+  tipStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: SPACING.sm,
+  },
+  statChip: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 56,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(118,118,128,0.1)',
+  },
+  statChipEmphasis: {
+    backgroundColor: 'rgba(0,122,255,0.12)',
+  },
+  statChipValue: {
+    ...TYPE.headline,
+    fontSize: 18,
+    color: COLORS.text.primary,
+    fontVariant: ['tabular-nums'],
+  },
+  statChipValueMuted: {
+    color: COLORS.text.tertiary,
+  },
+  statChipLabel: {
+    ...TYPE.caption,
+    color: COLORS.text.secondary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  tipHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: SPACING.sm,
+  },
+  tipHintText: {
+    ...TYPE.caption,
+    color: COLORS.text.quaternary,
+    flex: 1,
+  },
   tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
   tipMain: { flex: 1, minWidth: 0 },
   tipHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: SPACING.sm },

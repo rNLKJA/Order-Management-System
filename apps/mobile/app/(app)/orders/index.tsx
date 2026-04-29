@@ -35,8 +35,11 @@ import { PrepView, DeliveryView } from '../../../components/orders/PrepDeliveryV
 import { StatusSheet } from '../../../components/orders/StatusSheet';
 import { DeliveryFailSheet } from '../../../components/orders/DeliveryFailSheet';
 import { createIdempotencyKey } from '../../../lib/idempotencyKey';
+import { useAuth } from '../../../hooks/useAuth';
 
 export default function OrdersScreen() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const { group } = useLocalSearchParams<{ group?: string }>();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [activePrimary, setActivePrimary] = useState<PrimaryTab>('manage');
@@ -242,8 +245,8 @@ export default function OrdersScreen() {
       const zone = order.is_hospital ? '院内' : '院外';
       const lines = [
         `${displayName} · ${mealLabel} ${order.quantity} 份 · ${zone}`,
-        '确认送达后订单状态将被锁定，无法再回退或修改。',
-        '如需纠错只能走「取消」走冲销流程后重新建单。',
+        '确认送达后员工端无法再改状态。',
+        '若误点「已送达」而实际需退餐，请通知管理员在订单详情中操作「送餐失败并退餐（纠正误送达）」。',
       ].join('\n');
       confirmDestructive(
         '确认送达？',
@@ -489,6 +492,7 @@ export default function OrdersScreen() {
       {activeOrder && (
         <StatusSheet
           order={activeOrder}
+          isAdmin={isAdmin}
           onClose={() => setActiveOrder(null)}
           onUpdate={handleUpdateStatus}
           onMarkFulfilled={handleMarkFulfilled}

@@ -265,7 +265,6 @@ export default function FinanceScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader
           title="财务记账"
-          subtitle={`${from} ~ ${to}`}
           right={
             <Pressable
               onPress={() => setModalVisible(true)}
@@ -297,6 +296,7 @@ export default function FinanceScreen() {
               />
               <View style={styles.heroMain}>
                 <Text style={styles.heroTitle}>财务总览</Text>
+                <Text style={styles.heroRange}>{`${from} ~ ${to}`}</Text>
                 <Text style={styles.heroSub}>支持按任意时间段筛选与核对</Text>
               </View>
               <StatusChip label={`${data?.total ?? 0} 条`} variant="neutral" />
@@ -320,7 +320,7 @@ export default function FinanceScreen() {
               <Bento span={4} mobileSpan={6}>
                 <StatTile
                   label="总收入"
-                  value={`¥${(summary?.income ?? 0).toLocaleString()}`}
+                  value={formatCNY(summary?.income ?? 0)}
                   icon="arrow-up-circle-outline"
                   color={COLORS.brand}
                   tint="info"
@@ -329,7 +329,7 @@ export default function FinanceScreen() {
               <Bento span={4} mobileSpan={6}>
                 <StatTile
                   label="总支出"
-                  value={`¥${(summary?.expense ?? 0).toLocaleString()}`}
+                  value={formatCNY(summary?.expense ?? 0)}
                   icon="arrow-down-circle-outline"
                   color={COLORS.danger}
                   tint="danger"
@@ -338,7 +338,7 @@ export default function FinanceScreen() {
               <Bento span={4} mobileSpan={12}>
                 <StatTile
                   label="净额"
-                  value={`¥${(summary?.net ?? 0).toLocaleString()}`}
+                  value={formatCNY(summary?.net ?? 0)}
                   icon={
                     (summary?.net ?? 0) >= 0
                       ? 'checkmark-circle-outline'
@@ -689,6 +689,7 @@ const styles = StyleSheet.create({
   heroCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.base },
   heroMain: { flex: 1, minWidth: 0 },
   heroTitle: { ...TYPE.headline, color: COLORS.text.primary },
+  heroRange: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 4, fontVariant: ['tabular-nums'] },
   heroSub: { ...TYPE.footnote, color: COLORS.text.tertiary, marginTop: 2 },
 
   errorBanner: {

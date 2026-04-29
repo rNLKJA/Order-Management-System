@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
-import { formatDate } from '@meal/shared';
+import { formatDate, formatCNY } from '@meal/shared';
 import {
   AppHeader,
   Bento,
@@ -258,7 +258,7 @@ export default function OrdersStatsScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <AppHeader title="订餐数据" subtitle={`${effectiveFrom} ~ ${effectiveTo}`} />
+        <AppHeader title="订餐数据" />
 
         <ScrollView
           contentContainerStyle={styles.container}
@@ -280,7 +280,7 @@ export default function OrdersStatsScreen() {
 
           {/* 时间范围 */}
           <View style={styles.block}>
-            <SectionLabel>时间范围</SectionLabel>
+            <SectionLabel>{`时间范围 · ${effectiveFrom} ~ ${effectiveTo}`}</SectionLabel>
             <GlassSurface padding={SPACING.md}>
               <View style={styles.rangeRow}>
                 <DatePicker
@@ -485,7 +485,7 @@ export default function OrdersStatsScreen() {
                   icon="walk-outline"
                   color={COLORS.warning}
                   tint="warn"
-                  hint={`收入 ¥${totals.walkinRevenue.toLocaleString()}`}
+                  hint={`收入 ${formatCNY(totals.walkinRevenue)}`}
                 />
               </Bento>
             </BentoGrid>

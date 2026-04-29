@@ -26,6 +26,7 @@ const STATUS_FLOW = [
 
 export function StatusSheet({
   order,
+  isAdmin = false,
   onClose,
   onUpdate,
   onMarkFulfilled,
@@ -34,6 +35,8 @@ export function StatusSheet({
   onOpenProfile,
 }: {
   order: MockOrder;
+  /** 已送达订单按送餐失败退餐仅管理员可用（与后端 403 一致） */
+  isAdmin?: boolean;
   onClose: () => void;
   onUpdate: (id: number, status: MockOrder['status']) => void;
   onMarkFulfilled: (o: MockOrder) => void;
@@ -43,7 +46,8 @@ export function StatusSheet({
 }) {
   const isAdhoc = order.card_type === null;
   const cur = STATUS_MAP[order.status];
-  const locked = order.status === 'delivered' || order.status === 'cancelled';
+  const deliveredLockedForStaff = order.status === 'delivered' && !isAdmin;
+  const showDeliveredAdminCorrect = order.status === 'delivered' && isAdmin;
   const ALLOWED: Record<MockOrder['status'], MockOrder['status'][]> = {
     pending: ['fulfilled', 'cancelled'],
     fulfilled: ['pending', 'delivered'],
@@ -137,12 +141,42 @@ export function StatusSheet({
           ) : null}
 
           <Text style={sStyles.sectionLabel}>
-            {locked
-              ? order.status === 'delivered'
-                ? '订单已送达，状态已锁定'
-                : '订单已取消，状态不可变更'
-              : '更新出餐状态'}
+            {order.status === 'cancelled'
+              ? '订单已取消，状态不可变更'
+              : showDeliveredAdminCorrect
+                ? '本单已送达。若实际未送达或误点「已送达」，管理员可按送餐失败退餐并恢复餐数。'
+                : deliveredLockedForStaff
+                  ? '订单已送达，状态已锁定。如需按送餐失败退餐，请联系管理员。'
+                  : '更新出餐状态'}
           </Text>
+
+          {showDeliveredAdminCorrect ? (
+            <Pressable
+              style={({ pressed }) => [
+                sStyles.statusBtn,
+                {
+                  backgroundColor: '#FDECEC',
+                  borderColor: IOS_COLORS.red,
+                  borderWidth: 1,
+                  marginBottom: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                },
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={() => {
+                onClose();
+                onMarkDeliveryFailed(order);
+              }}
+            >
+              <Ionicons name="alert-circle-outline" size={20} color={IOS_COLORS.red} />
+              <Text style={[sStyles.statusBtnLabel, { color: IOS_COLORS.red }]}>
+                送餐失败并退餐（纠正误送达）
+              </Text>
+            </Pressable>
+          ) : null}
 
           <View style={sStyles.statusGrid}>
             {statusFlow.map((s) => {

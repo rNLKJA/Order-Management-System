@@ -92,6 +92,11 @@ export interface CancelOrderInput {
   orderId: number;
   cancelledByUserId: number;
   reason?: string;
+  /**
+   * true 时允许对 `status === 'delivered'` 的订单执行冲销（仅管理员经 delivery-failed 纠错用）。
+   * 默认 false：已送达仍不可在普通「取消」中冲销。
+   */
+  allowFromDelivered?: boolean;
 }
 
 export interface CancelOrderResult {
@@ -101,7 +106,7 @@ export interface CancelOrderResult {
 
 /**
  * 取消订单 + 原子冲销（卡恢复 / 散餐 voided）。
- * delivered → 抛 OrderLockedDeliveredError
+ * delivered → 默认抛 OrderLockedDeliveredError；若 `allowFromDelivered`（仅管理员纠错）则允许冲销。
  * 已 cancelled → 幂等返回当前订单
  * 必须在事务里调用。
  */
@@ -121,7 +126,9 @@ export async function cancelOrder(
   }
 
   if (order.status === 'delivered') {
-    throw new OrderLockedDeliveredError();
+    if (!input.allowFromDelivered) {
+      throw new OrderLockedDeliveredError();
+    }
   }
 
   // 幂等：已取消直接返回
@@ -204,6 +211,7 @@ export async function cancelOrder(
     diff_json: JSON.stringify({
       before: { status: order.status },
       after: { status: 'cancelled', cancel_reason: input.reason ?? '' },
+      ...(input.allowFromDelivered ? { correction_from_delivered: true } : {}),
     }),
   });
 

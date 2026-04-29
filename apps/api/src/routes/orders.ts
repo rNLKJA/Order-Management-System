@@ -7,7 +7,7 @@
  * - POST   /api/orders                 拆 1~2 条 DailyOrder，原子扣卡或写散餐 FinanceEntry
  * - PATCH  /api/orders/:id             仅修改 notes + created_by_user_id
  * - PATCH  /api/orders/:id/status      pending/fulfilled/delivered 流转
- * - PATCH  /api/orders/:id/delivery-failed  已出餐但送餐失败（记录原因 + 原子退餐）
+ * - PATCH  /api/orders/:id/delivery-failed  已出餐送餐失败，或已送达后管理员纠错（退餐理由 + 原子退餐）
  * - PATCH  /api/orders/:id/cancel      原子冲销
  *
  * 所有接口需要登录。
@@ -669,38 +669,70 @@ ordersRouter.patch(
     if (!order) {
       throw new HTTPException(404, { message: '订单不存在' });
     }
-    if (order.status !== 'fulfilled') {
-      return c.json(
-        {
-          code: 'DELIVERY_FAILED_INVALID_STATUS',
-          message: '仅「已出餐」订单可标记送餐失败',
-        },
-        422,
-      );
-    }
-
-    try {
-      const result = await db.transaction(async (tx) => {
-        return cancelOrder(tx, {
-          orderId: id,
-          cancelledByUserId: authUser.id,
-          reason: `配送失败：${reason}`,
+    if (order.status === 'fulfilled') {
+      try {
+        const result = await db.transaction(async (tx) => {
+          return cancelOrder(tx, {
+            orderId: id,
+            cancelledByUserId: authUser.id,
+            reason: `配送失败：${reason}`,
+          });
         });
-      });
 
-      return c.json({
-        order: result.order,
-        ...(result.card ? { card: result.card } : {}),
-      });
-    } catch (err) {
-      if (err instanceof OrderLockedDeliveredError) {
-        return c.json({ code: err.code, message: err.message }, 422);
+        return c.json({
+          order: result.order,
+          ...(result.card ? { card: result.card } : {}),
+        });
+      } catch (err) {
+        if (err instanceof OrderLockedDeliveredError) {
+          return c.json({ code: err.code, message: err.message }, 422);
+        }
+        if (err instanceof OrderNotFoundError) {
+          throw new HTTPException(404, { message: err.message });
+        }
+        throw err;
       }
-      if (err instanceof OrderNotFoundError) {
-        throw new HTTPException(404, { message: err.message });
-      }
-      throw err;
     }
+
+    if (order.status === 'delivered') {
+      if (authUser.role !== 'admin') {
+        return c.json(
+          {
+            code: 'DELIVERY_FAILED_ADMIN_ONLY',
+            message: '只有管理员能修改',
+          },
+          403,
+        );
+      }
+      try {
+        const result = await db.transaction(async (tx) => {
+          return cancelOrder(tx, {
+            orderId: id,
+            cancelledByUserId: authUser.id,
+            reason: `误点已送达后纠正 · 配送失败：${reason}`,
+            allowFromDelivered: true,
+          });
+        });
+
+        return c.json({
+          order: result.order,
+          ...(result.card ? { card: result.card } : {}),
+        });
+      } catch (err) {
+        if (err instanceof OrderNotFoundError) {
+          throw new HTTPException(404, { message: err.message });
+        }
+        throw err;
+      }
+    }
+
+    return c.json(
+      {
+        code: 'DELIVERY_FAILED_INVALID_STATUS',
+        message: '仅「已出餐」或「已送达」（管理员纠错）可标记送餐失败',
+      },
+      422,
+    );
   },
 );
 

@@ -30,6 +30,7 @@ doc/          设计与流程文档
   PROCESS.md  业务流程图
   DESIGN.md   视觉规范
   LINEAR.md   任务管理与 Git 工作流
+infra/        自托管编排（Docker 负载均衡等）
 ```
 
 ## 快速开始（开发）
@@ -54,6 +55,18 @@ pnpm dev
 
 - API：`http://localhost:3000`
 - Expo Dev：`http://localhost:8081`（扫 QR 码或按 `w` 开 Web）
+
+## Docker 自托管与负载均衡（可选）
+
+生产 API 在 **Vercel** 上时已由平台做边缘调度；若在 **VPS / 私有云** 使用本仓库 `Dockerfile` 部署，可用 **nginx + 双实例 Hono** 做反向代理与简单均衡，在一台主机上提高韧性：单进程 OOM 或重启时，另一实例仍可应答；nginx 侧使用 `least_conn`、合理超时与 `proxy_next_upstream`，减轻瞬时故障对客户端的影响。
+
+在仓库根目录准备好 `.env`（与本地开发相同）后：
+
+```bash
+docker compose -f infra/docker/docker-compose.lb.yml --env-file .env up -d --build
+```
+
+对外入口为 `http://localhost:3000`（指向容器内 nginx）；探测地址：`GET /api/health`。两实例共用同一 Turso 与 `JWT_SECRET`，无需会话黏滞。若只需单容器，可继续 `docker run …`（见 `apps/api/Dockerfile`），不必启用该编排。
 
 ## 常用命令
 

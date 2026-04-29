@@ -10,7 +10,9 @@
 # 本地验证：
 #   docker build -t meal-api:local -f apps/api/Dockerfile .
 #   docker run --rm -p 3000:3000 --env-file apps/api/.env.docker meal-api:local
-#   curl http://localhost:3000/health
+#   curl http://localhost:3000/api/health
+#
+# 多实例 + 负载均衡见 infra/docker/docker-compose.lb.yml
 
 # ---------- Stage 1: builder ----------
 FROM node:20-slim AS builder
@@ -54,4 +56,9 @@ COPY --from=builder --chown=node:node /out/package.json ./package.json
 COPY --from=builder --chown=node:node /repo/apps/api/dist ./dist
 
 EXPOSE 3000
+
+# Compose / 编排：配合 nginx upstream 做就绪探测与摘除异常实例
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 CMD ["node", "dist/server.js"]

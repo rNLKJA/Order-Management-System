@@ -48,11 +48,7 @@ export default function UsersScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <AppHeader
-          title="员工名单"
-          subtitle={q.data ? `共 ${q.data.length} 人，${active.length} 位在职` : ''}
-          onBack={() => router.back()}
-        />
+        <AppHeader title="员工名单" onBack={() => router.back()} />
 
         {q.isLoading ? (
           <View style={styles.center}>

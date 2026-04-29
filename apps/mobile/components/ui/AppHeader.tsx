@@ -11,7 +11,6 @@ import { COLORS, SPACING, TYPE } from '../../theme/paperTheme';
 
 export interface AppHeaderProps {
   title: string;
-  subtitle?: string;
   showBack?: boolean;
   onBack?: () => void;
   right?: React.ReactNode;
@@ -20,7 +19,6 @@ export interface AppHeaderProps {
 
 export function AppHeader({
   title,
-  subtitle,
   showBack = true,
   onBack,
   right,
@@ -48,7 +46,6 @@ export function AppHeader({
       </View>
       <View style={styles.titleWrap} pointerEvents="none">
         <Text style={styles.title} numberOfLines={1}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
       </View>
       <View style={[styles.slot, styles.slotRight]}>{right}</View>
     </View>
@@ -71,5 +68,4 @@ const styles = StyleSheet.create({
   backText: { ...TYPE.body, color: COLORS.brand, marginLeft: 2 },
   titleWrap: { flex: 2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   title: { ...TYPE.headline, color: COLORS.text.primary, textAlign: 'center' },
-  subtitle: { ...TYPE.caption, color: COLORS.text.tertiary, textAlign: 'center', marginTop: 1 },
 });

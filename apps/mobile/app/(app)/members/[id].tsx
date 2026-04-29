@@ -28,7 +28,7 @@ import {
   IconAvatar,
   StatusChip,
 } from '../../../components/ui';
-import { CARD_RENEWAL_THRESHOLD_MEALS, type SubscriptionCardCode } from '@meal/shared';
+import { CARD_RENEWAL_THRESHOLD_MEALS, formatCNY, type SubscriptionCardCode } from '@meal/shared';
 import { type MockCard } from '../../../constants/mockData';
 import { cardsApi } from '../../../api/cards';
 import { membersApi } from '../../../api/members';
@@ -406,7 +406,7 @@ export default function MemberDetailScreen() {
               <StatTile label="消费餐数" value={`${member.stats.total_consumed_meals}`} icon="restaurant-outline" color="#34C759" tint="ok" />
             </Bento>
             <Bento span={4} mobileSpan={12}>
-              <StatTile label="累计消费" value={`¥${member.stats.total_paid_amount.toLocaleString()}`} icon="wallet-outline" color="#FF9500" tint="warn" />
+              <StatTile label="累计消费" value={formatCNY(member.stats.total_paid_amount)} icon="wallet-outline" color="#FF9500" tint="warn" />
             </Bento>
           </BentoGrid>
         </View>

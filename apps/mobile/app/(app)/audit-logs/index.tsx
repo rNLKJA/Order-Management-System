@@ -97,11 +97,6 @@ export default function AuditLogsScreen() {
 
   const logs = q.data?.logs ?? [];
 
-  const subtitle = useMemo(() => {
-    if (!q.data) return '';
-    return `最近 ${logs.length} 条（最多拉取 120 条）`;
-  }, [q.data, logs.length]);
-
   const onBack = useCallback(() => router.back(), []);
 
   if (user && user.role !== 'admin') {
@@ -112,11 +107,15 @@ export default function AuditLogsScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <AppHeader
-          title="操作记录"
-          subtitle={subtitle}
-          onBack={onBack}
-        />
+        <AppHeader title="操作记录" onBack={onBack} />
+
+        {q.data && !q.isLoading ? (
+          <View style={styles.listHint}>
+            <Text style={styles.listHintText}>
+              最近 {logs.length} 条（最多拉取 120 条）
+            </Text>
+          </View>
+        ) : null}
 
         <ScrollView
           horizontal
@@ -214,6 +213,14 @@ const styles = StyleSheet.create({
     gap: 8,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  listHint: {
+    paddingHorizontal: SPACING.base,
+    paddingBottom: SPACING.xs,
+  },
+  listHintText: {
+    ...TYPE.caption,
+    color: COLORS.text.tertiary,
   },
   filterChip: {
     paddingHorizontal: 14,

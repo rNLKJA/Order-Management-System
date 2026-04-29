@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { CARD_RENEWAL_THRESHOLD_MEALS, displayUserRole } from '@meal/shared';
+import { CARD_RENEWAL_THRESHOLD_MEALS, displayUserRole, formatCNY } from '@meal/shared';
 import { useAuth } from '../../hooks/useAuth';
 import { useFinanceToday, useMembersView } from '../../hooks/useMembersView';
 import { useOrdersToday } from '../../hooks/useOrdersToday';
@@ -141,7 +141,7 @@ export default function HomeScreen() {
       title: '财务流水',
       subtitle: financeToday.isLoading
         ? '加载中...'
-        : `今日净额 ¥${fin.net.toLocaleString()} · 可新增支出`,
+        : `今日净额 ${formatCNY(fin.net)} · 可新增支出`,
       icon: 'wallet-outline',
       color: COLORS.warning,
       bg: COLORS.warningSoft,
@@ -245,7 +245,7 @@ export default function HomeScreen() {
                 <Bento span={3} mobileSpan={6}>
                   <StatTile
                     label="今日收入"
-                    value={`¥${fin.income.toLocaleString()}`}
+                    value={formatCNY(fin.income)}
                     icon="arrow-up-circle-outline"
                     color={COLORS.brand}
                     tint="info"
@@ -254,7 +254,7 @@ export default function HomeScreen() {
                 <Bento span={3} mobileSpan={6}>
                   <StatTile
                     label="今日支出"
-                    value={`¥${fin.expense.toLocaleString()}`}
+                    value={formatCNY(fin.expense)}
                     icon="arrow-down-circle-outline"
                     color={COLORS.danger}
                     tint="danger"
@@ -263,7 +263,7 @@ export default function HomeScreen() {
                 <Bento span={3} mobileSpan={6}>
                   <StatTile
                     label="今日净额"
-                    value={`¥${fin.net.toLocaleString()}`}
+                    value={formatCNY(fin.net)}
                     icon={fin.net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
                     color={fin.net >= 0 ? COLORS.success : COLORS.danger}
                     tint={fin.net >= 0 ? 'ok' : 'danger'}
