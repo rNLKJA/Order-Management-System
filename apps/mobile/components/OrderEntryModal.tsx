@@ -27,6 +27,7 @@ import {
 import { api } from '../api/client';
 import { ordersApi, type CreateOrderResponse } from '../api/orders';
 import { createIdempotencyKey } from '../lib/idempotencyKey';
+import { formatDate } from '@meal/shared';
 
 interface Member {
   id: number;
@@ -44,11 +45,7 @@ interface OrderEntryModalProps {
 }
 
 function todayDate(): string {
-  const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(now.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return formatDate(new Date());
 }
 
 export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: OrderEntryModalProps) {

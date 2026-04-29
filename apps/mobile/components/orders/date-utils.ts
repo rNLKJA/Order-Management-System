@@ -1,12 +1,10 @@
-/** 与订单屏历史逻辑一致：按 UTC+8 日历日换算 */
+import { addCalendarDaysShanghai, formatDate } from '@meal/shared';
+
+/** 上海日历 YYYY-MM-DD 起算加减自然日（与设备时区无关） */
 
 export function dateStrWithOffset(offsetDays: number): string {
-  const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  now.setUTCDate(now.getUTCDate() + offsetDays);
-  const y = now.getUTCFullYear();
-  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(now.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  const today = formatDate(new Date());
+  return addCalendarDaysShanghai(today, offsetDays);
 }
 
 export function todayStr(): string {

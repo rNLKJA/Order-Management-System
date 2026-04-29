@@ -19,7 +19,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
-import { formatDate, formatCNY } from '@meal/shared';
+import {
+  addCalendarDaysShanghai,
+  addCalendarYearsShanghai,
+  diffCalendarDaysInclusiveShanghai,
+  formatCNY,
+  formatDate,
+} from '@meal/shared';
 import {
   AppHeader,
   Bento,
@@ -36,20 +42,15 @@ import { COLORS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
 type ChartRange = 'today' | 'week' | 'month' | 'year' | 'custom';
 
 function diffDaysInclusive(from: string, to: string): number {
-  const f = new Date(`${from}T00:00:00`);
-  const t = new Date(`${to}T00:00:00`);
-  const ms = t.getTime() - f.getTime();
-  if (!Number.isFinite(ms) || ms < 0) return 1;
-  return Math.floor(ms / 86_400_000) + 1;
+  return diffCalendarDaysInclusiveShanghai(from, to);
 }
 
 function startOfRange(range: ChartRange, endDate: string): string {
-  const d = new Date(`${endDate}T00:00:00`);
   if (range === 'today') return endDate;
-  if (range === 'week') d.setDate(d.getDate() - 6);
-  if (range === 'month') d.setDate(d.getDate() - 29);
-  if (range === 'year') d.setFullYear(d.getFullYear() - 1);
-  return formatDate(d);
+  if (range === 'week') return addCalendarDaysShanghai(endDate, -6);
+  if (range === 'month') return addCalendarDaysShanghai(endDate, -29);
+  if (range === 'year') return addCalendarYearsShanghai(endDate, -1);
+  return endDate;
 }
 
 interface Totals {

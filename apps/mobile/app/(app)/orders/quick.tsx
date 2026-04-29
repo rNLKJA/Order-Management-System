@@ -32,6 +32,7 @@ import {
 } from '../../../components/ui';
 import { COLORS, GLASS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
 import { createIdempotencyKey } from '../../../lib/idempotencyKey';
+import { formatDate } from '@meal/shared';
 
 interface Member {
   id: number;
@@ -42,11 +43,7 @@ interface Member {
 }
 
 function todayDate(): string {
-  const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(now.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return formatDate(new Date());
 }
 
 export default function QuickOrderScreen() {

@@ -6,6 +6,11 @@ import {
   formatMeals,
   buildUid,
   businessDate,
+  addCalendarDaysShanghai,
+  addCalendarYearsShanghai,
+  mondayOfWeekShanghai,
+  diffCalendarDaysInclusiveShanghai,
+  startOfMonthShanghai,
 } from './format';
 
 describe('formatCNY', () => {
@@ -84,5 +89,30 @@ describe('businessDate（04:00 业务日切点）', () => {
 
   it('北京时间中午', () => {
     expect(businessDate('2026-04-21T04:00:00Z')).toBe('2026-04-21');
+  });
+});
+
+describe('上海日历运算（与运行环境本地时区无关）', () => {
+  it('addCalendarDaysShanghai 跨月', () => {
+    expect(addCalendarDaysShanghai('2026-04-28', 5)).toBe('2026-05-03');
+    expect(addCalendarDaysShanghai('2026-04-28', -7)).toBe('2026-04-21');
+  });
+
+  it('addCalendarYearsShanghai', () => {
+    expect(addCalendarYearsShanghai('2026-04-28', -1)).toBe('2025-04-28');
+  });
+
+  it('mondayOfWeekShanghai 周一至周日', () => {
+    expect(mondayOfWeekShanghai('2026-04-27')).toBe('2026-04-27'); // Mon
+    expect(mondayOfWeekShanghai('2026-05-02')).toBe('2026-04-27'); // Sat -> same week Mon
+  });
+
+  it('diffCalendarDaysInclusiveShanghai', () => {
+    expect(diffCalendarDaysInclusiveShanghai('2026-04-21', '2026-04-21')).toBe(1);
+    expect(diffCalendarDaysInclusiveShanghai('2026-04-21', '2026-04-28')).toBe(8);
+  });
+
+  it('startOfMonthShanghai', () => {
+    expect(startOfMonthShanghai('2026-04-28')).toBe('2026-04-01');
   });
 });

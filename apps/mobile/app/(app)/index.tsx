@@ -9,7 +9,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { CARD_RENEWAL_THRESHOLD_MEALS, displayUserRole, formatCNY } from '@meal/shared';
+import {
+  CARD_RENEWAL_THRESHOLD_MEALS,
+  displayUserRole,
+  formatCNY,
+  formatDate,
+  shanghaiCalendarMetaLine,
+} from '@meal/shared';
 import { useAuth } from '../../hooks/useAuth';
 import { useFinanceToday, useMembersView } from '../../hooks/useMembersView';
 import { useOrdersToday } from '../../hooks/useOrdersToday';
@@ -47,14 +53,6 @@ const ICON_OPTICAL_NUDGE: Partial<
   'bar-chart-outline': { x: 0.5, y: -1 },
 };
 
-function todayISO(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, '0');
-  const day = `${d.getDate()}`.padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
 export default function HomeScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -64,7 +62,7 @@ export default function HomeScreen() {
   const timeGreeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
 
   const membersView = useMembersView();
-  const financeToday = useFinanceToday(todayISO());
+  const financeToday = useFinanceToday(formatDate(new Date()));
   const ordersToday = useOrdersToday();
   const walkinsQuery = useQuery({
     queryKey: ['walkins', 'list'],
@@ -238,7 +236,7 @@ export default function HomeScreen() {
                   bg="rgba(0,122,255,0.14)"
                 />
                 <View style={styles.heroTextWrap}>
-                  <Text style={styles.greetingDate}>{formatDate()}</Text>
+                  <Text style={styles.greetingDate}>{shanghaiCalendarMetaLine()}</Text>
                   <View style={styles.greetingRow}>
                     <Text style={styles.greetingHello}>{timeGreeting}，</Text>
                     <Text style={styles.greetingName}>{user?.full_name ?? '朋友'}</Text>
@@ -409,12 +407,6 @@ function QuickEntryCard({
       </View>
     </PressableCard>
   );
-}
-
-function formatDate() {
-  const d = new Date();
-  const days = ['日', '一', '二', '三', '四', '五', '六'];
-  return `${d.getMonth() + 1}月${d.getDate()}日  星期${days[d.getDay()]}`;
 }
 
 const styles = StyleSheet.create({

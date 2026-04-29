@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:backfill:finance": "tsx src/scripts/backfill-finance.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

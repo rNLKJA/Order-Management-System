@@ -89,3 +89,115 @@ export function businessDate(date: Date | string, tz: string = DEFAULT_TZ): stri
   const shifted = new Date(d.getTime() - 4 * 60 * 60 * 1000);
   return formatDate(shifted, tz);
 }
+
+/**
+ * 上海日历日 YYYY-MM-DD 当天正午（上海）对应的 UTC 瞬时。
+ * 用于在同日历上做加减，不依赖设备本地时区。
+ */
+export function shanghaiNoon(isoDate: string): Date {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  if (!y || !m || !d) return new Date(Number.NaN);
+  return new Date(Date.UTC(y, m - 1, d, 4, 0, 0));
+}
+
+/** 以上海日历日为单位加减自然日，返回新的 YYYY-MM-DD */
+export function addCalendarDaysShanghai(isoDate: string, delta: number): string {
+  const base = shanghaiNoon(isoDate);
+  if (!Number.isFinite(base.getTime())) return isoDate;
+  base.setUTCDate(base.getUTCDate() + delta);
+  return formatDate(base.toISOString());
+}
+
+/** 上海日历上增减整年（仅改年份，月日不变） */
+export function addCalendarYearsShanghai(isoDate: string, deltaYears: number): string {
+  const parts = isoDate.split('-');
+  if (parts.length !== 3) return isoDate;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return isoDate;
+  const ny = y + deltaYears;
+  return `${String(ny).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+export function startOfMonthShanghai(isoDate: string): string {
+  const [y, m] = isoDate.split('-').map(Number);
+  if (!y || !m) return isoDate;
+  return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-01`;
+}
+
+export function startOfYearShanghai(isoDate: string): string {
+  const y = Number(isoDate.slice(0, 4));
+  if (!Number.isFinite(y)) return isoDate;
+  return `${String(y).padStart(4, '0')}-01-01`;
+}
+
+function weekdayMondayOffsetShanghai(isoDate: string): number {
+  const d = shanghaiNoon(isoDate);
+  if (!Number.isFinite(d.getTime())) return 0;
+  const w = new Intl.DateTimeFormat('en-US', {
+    timeZone: DEFAULT_TZ,
+    weekday: 'short',
+  }).format(d);
+  const map: Record<string, number> = {
+    Mon: 0,
+    Tue: 1,
+    Wed: 2,
+    Thu: 3,
+    Fri: 4,
+    Sat: 5,
+    Sun: 6,
+  };
+  return map[w] ?? 0;
+}
+
+/** 包含 isoDate 的那一周（周一至周日）的周一，上海日历 */
+export function mondayOfWeekShanghai(isoDate: string): string {
+  return addCalendarDaysShanghai(isoDate, -weekdayMondayOffsetShanghai(isoDate));
+}
+
+/** 上海日历两端日期包含在内的自然日天数 */
+export function diffCalendarDaysInclusiveShanghai(from: string, to: string): number {
+  const a = shanghaiNoon(from).getTime();
+  const b = shanghaiNoon(to).getTime();
+  const ms = b - a;
+  if (!Number.isFinite(ms) || ms < 0) return 1;
+  return Math.floor(ms / 86_400_000) + 1;
+}
+
+/** 首页副标题：「M月D日  星期一」口径（上海日历） */
+export function shanghaiCalendarMetaLine(now: Date = new Date()): string {
+  const iso = formatDate(now);
+  const d = shanghaiNoon(iso);
+  if (!Number.isFinite(d.getTime())) return '';
+  const weekdayFmt = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: DEFAULT_TZ,
+    weekday: 'long',
+  });
+  const mdFmt = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: DEFAULT_TZ,
+    month: 'numeric',
+    day: 'numeric',
+  });
+  const mdParts = mdFmt.formatToParts(d);
+  const month = mdParts.find((p) => p.type === 'month')?.value ?? '';
+  const day = mdParts.find((p) => p.type === 'day')?.value ?? '';
+  const weekday = weekdayFmt.format(d);
+  return `${month}月${day}日  ${weekday}`;
+}
+
+/** 「M月D日」（上海日历），用于页内「今日 …」文案 */
+export function shanghaiMonthDayLine(now: Date = new Date()): string {
+  const iso = formatDate(now);
+  const d = shanghaiNoon(iso);
+  if (!Number.isFinite(d.getTime())) return '';
+  const mdFmt = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: DEFAULT_TZ,
+    month: 'numeric',
+    day: 'numeric',
+  });
+  const mdParts = mdFmt.formatToParts(d);
+  const month = mdParts.find((p) => p.type === 'month')?.value ?? '';
+  const day = mdParts.find((p) => p.type === 'day')?.value ?? '';
+  return `${month}月${day}日`;
+}

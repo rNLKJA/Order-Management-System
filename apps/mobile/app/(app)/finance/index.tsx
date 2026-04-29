@@ -2,9 +2,9 @@
  * 财务记账 — v3 毛玻璃 + Bento
  *
  * - 顶部：AppHeader 带「新增支出」按钮（替代右下 FAB）
- * - 筛选：日期区间 + 类型 Segmented（全部 / 收入 / 支出）+ 分类下拉 + 冲销开关
- * - 汇总与「履约/预收」Bento：直接来自接口 summary（全量聚合）
- * - 结构分布：同样基于 summary.byCategory（全量），不再仅用当前页 limited items 抽样
+ * - 时间范围：仅影响期间总览（履约/预收/汇总/结构/期内条数）与明细的日期窗
+ * - 列表筛选：类型 / 分类 / 是否含冲销 —— **只影响下方明细列表**，不改变期间 KPI
+ * - 明细：完整 from~to（最多 500 条），与顶部筛选区间一致
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -37,6 +37,9 @@ import {
   type FinanceCategory,
   formatCNY,
   formatDate,
+  mondayOfWeekShanghai,
+  startOfMonthShanghai,
+  startOfYearShanghai,
 } from '@meal/shared';
 import { useAuth } from '../../../hooks/useAuth';
 import {
@@ -71,81 +74,57 @@ const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
   'legacy_expense',
 ];
 
-function firstOfMonth(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = `${now.getMonth() + 1}`.padStart(2, '0');
-  return `${y}-${m}-01`;
-}
-
-function firstOfYear(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  return `${y}-01-01`;
-}
-
-function todayISO(): string {
-  return formatDate(new Date());
-}
-
-function mondayOfWeek(): string {
-  const now = new Date();
-  const day = now.getDay();
-  const offset = day === 0 ? -6 : 1 - day;
-  now.setDate(now.getDate() + offset);
-  return formatDate(now);
-}
-
-function daysAgoISO(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return formatDate(d);
-}
-
-function daysAgoFrom(baseISO: string, days: number): string {
-  const d = new Date(`${baseISO}T00:00:00`);
-  if (!Number.isFinite(d.getTime())) return daysAgoISO(days);
-  d.setDate(d.getDate() - days);
-  return formatDate(d);
-}
-
 export default function FinanceScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  const [from, setFrom] = useState(firstOfMonth());
+  const [from, setFrom] = useState(() =>
+    startOfMonthShanghai(formatDate(new Date())),
+  );
   const [to, setTo] = useState(() => formatDate(new Date()));
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [category, setCategory] = useState<FinanceCategory | 'all'>('all');
   const [includeVoided, setIncludeVoided] = useState(false);
   const [categoryMenuVisible, setCategoryMenuVisible] = useState(false);
 
-  const [data, setData] = useState<FinanceListResponse | null>(null);
+  const [periodData, setPeriodData] = useState<FinanceListResponse | null>(null);
+  const [listData, setListData] = useState<FinanceListResponse | null>(null);
   const [detailItems, setDetailItems] = useState<FinanceEntryDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const params = useMemo<ListFinanceParams>(
+  /** 期间总览：只按日期，便于履约/预收与下方列表筛选解耦 */
+  const periodParams = useMemo<ListFinanceParams>(
+    () => ({
+      from: from || undefined,
+      to: to || undefined,
+      type: 'all',
+      limit: 1,
+    }),
+    [from, to],
+  );
+
+  const listParams = useMemo<ListFinanceParams>(
     () => ({
       from: from || undefined,
       to: to || undefined,
       type: typeFilter,
       category: category === 'all' ? undefined : category,
       include_voided: includeVoided,
-      limit: 200,
+      limit: 500,
     }),
     [from, to, typeFilter, category, includeVoided],
   );
 
-  const today = todayISO();
-  const detailWindowTo = to || today;
-  const detailWindowFromRaw = daysAgoFrom(detailWindowTo, 7);
-  const detailWindowFrom = from && from > detailWindowFromRaw ? from : detailWindowFromRaw;
-  const weekStart = mondayOfWeek();
-  const monthStart = firstOfMonth();
-  const yearStart = firstOfYear();
+  const listFilterActive =
+    typeFilter !== 'all' || category !== 'all' || includeVoided;
+
+  const today = formatDate(new Date());
+  const weekStart = mondayOfWeekShanghai(today);
+  const monthStart = startOfMonthShanghai(today);
+  const yearStart = startOfYearShanghai(today);
   const selectedQuickRange =
     from === today && to === today
       ? 'today'
@@ -180,38 +159,37 @@ export default function FinanceScreen() {
     [today, weekStart, monthStart, yearStart],
   );
 
+  const emptySummary: FinanceListResponse['summary'] = {
+    income: 0,
+    expense: 0,
+    net: 0,
+    realized_income: 0,
+    prepaid_income: 0,
+    realized_net: 0,
+    realized_by_channel: { hospital: 0, regular: 0, walkin: 0 },
+    byCategory: {},
+  };
+
   const fetchData = useCallback(
     async (mode: 'load' | 'refresh' = 'load') => {
       if (mode === 'load') setLoading(true);
       else setRefreshing(true);
       setFetchError(null);
       try {
-        const [res, detailRes] = await Promise.all([
-          listFinance({ ...params, limit: 1 }),
-          listFinance({
-            ...params,
-            from: detailWindowFrom,
-            to: detailWindowTo,
-            limit: 500,
-          }),
+        const [periodRes, detailRes] = await Promise.all([
+          listFinance(periodParams),
+          listFinance(listParams),
         ]);
-        setData(res);
+        setPeriodData(periodRes);
+        setListData(detailRes);
         setDetailItems(detailRes.items);
       } catch (e) {
-        setData({
+        setPeriodData({
           items: [],
           total: 0,
-          summary: {
-            income: 0,
-            expense: 0,
-            net: 0,
-            realized_income: 0,
-            prepaid_income: 0,
-            realized_net: 0,
-            realized_by_channel: { hospital: 0, regular: 0, walkin: 0 },
-            byCategory: {},
-          },
+          summary: emptySummary,
         });
+        setListData({ items: [], total: 0, summary: emptySummary });
         setDetailItems([]);
         setFetchError(e instanceof Error ? e.message : '加载失败');
       } finally {
@@ -219,7 +197,7 @@ export default function FinanceScreen() {
         setRefreshing(false);
       }
     },
-    [params, detailWindowFrom, detailWindowTo],
+    [periodParams, listParams],
   );
 
   useEffect(() => {
@@ -250,7 +228,7 @@ export default function FinanceScreen() {
     );
   };
 
-  const summary = data?.summary;
+  const summary = periodData?.summary;
   const structureGroups = useMemo(() => {
     const byCat = summary?.byCategory ?? {};
     const incomeMap = new Map<string, number>();
@@ -314,9 +292,12 @@ export default function FinanceScreen() {
               <View style={styles.heroMain}>
                 <Text style={styles.heroTitle}>财务总览</Text>
                 <Text style={styles.heroRange}>{`${from} ~ ${to}`}</Text>
-                <Text style={styles.heroSub}>支持按任意时间段筛选与核对</Text>
+                <Text style={styles.heroSub}>上方 KPI 随日期变；列表可用下方筛选收窄</Text>
               </View>
-              <StatusChip label={`${data?.total ?? 0} 条`} variant="neutral" />
+              <StatusChip
+                label={`期内 ${periodData?.total ?? 0} 条`}
+                variant="neutral"
+              />
             </GlassSurface>
           </View>
 
@@ -329,6 +310,54 @@ export default function FinanceScreen() {
               </GlassSurface>
             </View>
           ) : null}
+
+          <View style={styles.block}>
+            <SectionLabel>时间范围</SectionLabel>
+            <GlassSurface padding={SPACING.md} style={styles.filterCard}>
+              <View style={styles.dateRow}>
+                <DatePicker
+                  label="起"
+                  value={from}
+                  onChange={setFrom}
+                  max={to || undefined}
+                  style={styles.dateField}
+                />
+                <DatePicker
+                  label="止"
+                  value={to}
+                  onChange={setTo}
+                  min={from || undefined}
+                  style={styles.dateField}
+                />
+              </View>
+              <View style={styles.quickRangeRow}>
+                <Pressable
+                  style={[styles.quickRange, selectedQuickRange === 'today' && styles.quickRangeActive]}
+                  onPress={() => applyQuickRange('today')}
+                >
+                  <Text style={[styles.quickRangeText, selectedQuickRange === 'today' && styles.quickRangeTextActive]}>今天</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.quickRange, selectedQuickRange === 'week' && styles.quickRangeActive]}
+                  onPress={() => applyQuickRange('week')}
+                >
+                  <Text style={[styles.quickRangeText, selectedQuickRange === 'week' && styles.quickRangeTextActive]}>本周</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.quickRange, selectedQuickRange === 'month' && styles.quickRangeActive]}
+                  onPress={() => applyQuickRange('month')}
+                >
+                  <Text style={[styles.quickRangeText, selectedQuickRange === 'month' && styles.quickRangeTextActive]}>本月</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.quickRange, selectedQuickRange === 'year' && styles.quickRangeActive]}
+                  onPress={() => applyQuickRange('year')}
+                >
+                  <Text style={[styles.quickRangeText, selectedQuickRange === 'year' && styles.quickRangeTextActive]}>本年</Text>
+                </Pressable>
+              </View>
+            </GlassSurface>
+          </View>
 
           <View style={styles.block}>
             <SectionLabel>履约收入（已送达餐费 · 院内 / 院外 / 散客）</SectionLabel>
@@ -440,28 +469,13 @@ export default function FinanceScreen() {
             </BentoGrid>
           </View>
 
-          {/* 筛选 */}
+          {/* 明細列表筛选（不影响上方期间 KPI） */}
           <View style={styles.block}>
-            <SectionLabel>筛选</SectionLabel>
+            <SectionLabel>明細筛选</SectionLabel>
             <GlassSurface padding={SPACING.md} style={styles.filterCard}>
-              {/* 日期区间 */}
-              <View style={styles.dateRow}>
-                <DatePicker
-                  label="起"
-                  value={from}
-                  onChange={setFrom}
-                  max={to || undefined}
-                  style={styles.dateField}
-                />
-                <DatePicker
-                  label="止"
-                  value={to}
-                  onChange={setTo}
-                  min={from || undefined}
-                  style={styles.dateField}
-                />
-              </View>
-
+              <Text style={styles.filterHint}>
+                以下选项仅缩小下方列表；履约、预收与汇总始终对应上面的日期区间。
+              </Text>
               {/* 类型 Segmented */}
               <View style={styles.segmentedBar}>
                 {(['all', 'income', 'expense'] as const).map((v) => {
@@ -547,42 +561,19 @@ export default function FinanceScreen() {
                   </Text>
                 </PressableCard>
               </View>
-
-              <View style={styles.quickRangeRow}>
-                <Pressable
-                  style={[styles.quickRange, selectedQuickRange === 'today' && styles.quickRangeActive]}
-                  onPress={() => applyQuickRange('today')}
-                >
-                  <Text style={[styles.quickRangeText, selectedQuickRange === 'today' && styles.quickRangeTextActive]}>今天</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.quickRange, selectedQuickRange === 'week' && styles.quickRangeActive]}
-                  onPress={() => applyQuickRange('week')}
-                >
-                  <Text style={[styles.quickRangeText, selectedQuickRange === 'week' && styles.quickRangeTextActive]}>本周</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.quickRange, selectedQuickRange === 'month' && styles.quickRangeActive]}
-                  onPress={() => applyQuickRange('month')}
-                >
-                  <Text style={[styles.quickRangeText, selectedQuickRange === 'month' && styles.quickRangeTextActive]}>本月</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.quickRange, selectedQuickRange === 'year' && styles.quickRangeActive]}
-                  onPress={() => applyQuickRange('year')}
-                >
-                  <Text style={[styles.quickRangeText, selectedQuickRange === 'year' && styles.quickRangeTextActive]}>本年</Text>
-                </Pressable>
-              </View>
             </GlassSurface>
           </View>
 
           {/* 明细 */}
           <View style={styles.block}>
             <View style={styles.listHeaderRow}>
-              <SectionLabel>{`最近7天明细（${detailWindowFrom} ~ ${detailWindowTo}）`}</SectionLabel>
+              <SectionLabel>
+                {listFilterActive
+                  ? `明細（${from} ~ ${to}）· 列表 ${listData?.total ?? 0} 条`
+                  : `明細（${from} ~ ${to}）· ${listData?.total ?? 0} 条`}
+              </SectionLabel>
             </View>
-            {loading && !data ? (
+            {loading && !periodData ? (
               <View style={{ paddingVertical: 40, alignItems: 'center' }}>
                 <ActivityIndicator />
               </View>
@@ -627,7 +618,7 @@ function CategoryBars({
     <GlassSurface padding={SPACING.md}>
       <Text style={styles.groupTitle}>{title}</Text>
       {items.length === 0 ? (
-        <Text style={styles.emptyText}>当前筛选条件下没有记录</Text>
+        <Text style={styles.emptyText}>所选期间暂无该类数据</Text>
       ) : (
         items.map((item, idx) => (
           <View
@@ -765,6 +756,13 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
   },
   errorBannerText: { ...TYPE.footnote, color: COLORS.danger },
+
+  filterHint: {
+    ...TYPE.caption,
+    color: COLORS.text.tertiary,
+    marginBottom: SPACING.sm,
+    lineHeight: 18,
+  },
 
   // 筛选卡
   filterCard: { gap: SPACING.md },
