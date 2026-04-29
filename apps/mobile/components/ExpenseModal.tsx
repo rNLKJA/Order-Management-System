@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import {
   Button,
   Modal,
@@ -120,7 +120,7 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
           mode="outlined"
           value={amountText}
           onChangeText={(t) => setAmountText(t.replace(/[^0-9.]/g, ''))}
-          keyboardType={Platform.OS === 'ios' ? 'decimal-pad' : 'numeric'}
+          keyboardType="decimal-pad"
           placeholder="例如 45.50"
           style={styles.field}
         />
