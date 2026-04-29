@@ -109,62 +109,70 @@ export default function AuditLogsScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader title="操作记录" onBack={onBack} />
 
-        {q.data && !q.isLoading ? (
-          <View style={styles.listHint}>
-            <Text style={styles.listHintText}>
-              最近 {logs.length} 条（最多拉取 120 条）
-            </Text>
-          </View>
-        ) : null}
+        <View style={styles.body}>
+          {q.data && !q.isLoading ? (
+            <View style={styles.listHint}>
+              <Text style={styles.listHintText}>
+                最近 {logs.length} 条（最多拉取 120 条）
+              </Text>
+            </View>
+          ) : null}
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-        >
-          {ENTITY_FILTERS.map((f) => {
-            const active = filter === f.key;
-            return (
-              <Pressable
-                key={f.key}
-                onPress={() => setFilter(f.key)}
-                style={({ pressed }) => [
-                  styles.filterChip,
-                  active && styles.filterChipActive,
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {f.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        {q.isLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={COLORS.brand} />
-          </View>
-        ) : q.isError ? (
-          <View style={styles.center}>
-            <GlassSurface tint="danger" padding={SPACING.md} style={styles.errCard}>
-              <Ionicons name="alert-circle-outline" size={18} color={COLORS.danger} />
-              <Text style={styles.errText}>{q.error.message}</Text>
-            </GlassSurface>
-          </View>
-        ) : logs.length === 0 ? (
-          <View style={styles.center}>
-            <Text style={styles.empty}>暂无记录</Text>
-            <Text style={styles.emptySub}>业务写入与权限变更会出现在此处</Text>
-          </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.listPad}>
-            {logs.map((row) => (
-              <LogCard key={row.id} row={row} />
-            ))}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterRow}
+            keyboardShouldPersistTaps="handled"
+          >
+            {ENTITY_FILTERS.map((f) => {
+              const active = filter === f.key;
+              return (
+                <Pressable
+                  key={f.key}
+                  onPress={() => setFilter(f.key)}
+                  style={({ pressed }) => [
+                    styles.filterChip,
+                    active && styles.filterChipActive,
+                    pressed && { opacity: 0.85 },
+                  ]}
+                >
+                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                    {f.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </ScrollView>
-        )}
+
+          {q.isLoading ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={COLORS.brand} />
+            </View>
+          ) : q.isError ? (
+            <View style={styles.center}>
+              <GlassSurface tint="danger" padding={SPACING.md} style={styles.errCard}>
+                <Ionicons name="alert-circle-outline" size={18} color={COLORS.danger} />
+                <Text style={styles.errText}>{q.error.message}</Text>
+              </GlassSurface>
+            </View>
+          ) : logs.length === 0 ? (
+            <View style={styles.center}>
+              <Text style={styles.empty}>暂无记录</Text>
+              <Text style={styles.emptySub}>业务写入与权限变更会出现在此处</Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.listScroll}
+              contentContainerStyle={styles.listPad}
+              keyboardShouldPersistTaps="handled"
+            >
+              {logs.map((row) => (
+                <LogCard key={row.id} row={row} />
+              ))}
+            </ScrollView>
+          )}
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -201,20 +209,36 @@ function LogCard({ row }: { row: AuditLogRow }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.systemGrouped },
+  body: {
+    flex: 1,
+    minHeight: 0,
+  },
   center: {
     flex: 1,
+    minHeight: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: SPACING.lg,
   },
+  filterScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    zIndex: 1,
+  },
+  listScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
   filterRow: {
     paddingHorizontal: SPACING.base,
+    paddingTop: SPACING.xs,
     paddingBottom: SPACING.sm,
     gap: 8,
     flexDirection: 'row',
     alignItems: 'center',
   },
   listHint: {
+    flexShrink: 0,
     paddingHorizontal: SPACING.base,
     paddingBottom: SPACING.xs,
   },
@@ -242,6 +266,7 @@ const styles = StyleSheet.create({
   filterChipTextActive: { color: COLORS.brand },
   listPad: {
     paddingHorizontal: SPACING.base,
+    paddingTop: SPACING.sm,
     paddingBottom: 32,
     gap: 10,
   },
