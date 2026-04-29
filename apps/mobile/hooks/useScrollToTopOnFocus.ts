@@ -18,7 +18,7 @@ type ScrollableRef = {
 export function useScrollToTopOnFocus(ref: RefObject<ScrollableRef | null>) {
   useFocusEffect(
     useCallback(() => {
-      const id = setTimeout(() => {
+      const scrollTop = () => {
         const node = ref.current;
         if (!node) return;
         if (typeof node.scrollTo === 'function') {
@@ -32,8 +32,11 @@ export function useScrollToTopOnFocus(ref: RefObject<ScrollableRef | null>) {
         if (typeof node.scrollToLocation === 'function') {
           node.scrollToLocation({ sectionIndex: 0, itemIndex: 0, animated: false, viewOffset: 0 });
         }
-      }, 0);
-      return () => clearTimeout(id);
+      };
+
+      // 某些页面在进入后会异步恢复上次 offset，这里做多次兜底回顶。
+      const ids = [0, 120, 320].map((ms) => setTimeout(scrollTop, ms));
+      return () => ids.forEach((id) => clearTimeout(id));
     }, [ref]),
   );
 }
