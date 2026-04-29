@@ -3,7 +3,7 @@
  *
  * 子组件见 components/orders/。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View, Text, Pressable, SectionList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,8 +37,12 @@ import { StatusSheet } from '../../../components/orders/StatusSheet';
 import { DeliveryFailSheet } from '../../../components/orders/DeliveryFailSheet';
 import { createIdempotencyKey } from '../../../lib/idempotencyKey';
 import { useAuth } from '../../../hooks/useAuth';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 export default function OrdersScreen() {
+  const sectionRef = useRef<SectionList>(null);
+  useScrollToTopOnFocus(sectionRef);
+
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const { group } = useLocalSearchParams<{ group?: string }>();
@@ -401,6 +405,7 @@ export default function OrdersScreen() {
 
           {/* 订单列表 — 展示当日全部订单，午晚分组 */}
           <SectionList
+            ref={sectionRef}
             sections={allSections}
             keyExtractor={(item) => String(item.id)}
             stickySectionHeadersEnabled

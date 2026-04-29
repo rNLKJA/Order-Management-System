@@ -5,7 +5,7 @@
  * 展示 OrderEntryModal 内联版（不弹 Modal，直接渲染表单）。
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -33,6 +33,7 @@ import {
 import { COLORS, GLASS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
 import { createIdempotencyKey } from '../../../lib/idempotencyKey';
 import { formatDate } from '@meal/shared';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 interface Member {
   id: number;
@@ -47,6 +48,9 @@ function todayDate(): string {
 }
 
 export default function QuickOrderScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,7 +141,7 @@ export default function QuickOrderScreen() {
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader title="快速录入" onBack={() => router.back()} />
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <Text style={styles.dateContext}>用餐日期：{orderDate}（今天）</Text>
           {error ? (
             <GlassSurface tint="danger" padding={SPACING.base} style={styles.errorCard}>

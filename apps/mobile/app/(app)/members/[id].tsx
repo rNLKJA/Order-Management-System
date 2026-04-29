@@ -8,7 +8,7 @@
  * 变更后用 useInvalidateMembersView() 失效会员、卡与出餐流水缓存。
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +33,7 @@ import { type MockCard } from '../../../constants/mockData';
 import { cardsApi } from '../../../api/cards';
 import { membersApi } from '../../../api/members';
 import { useAuth } from '../../../hooks/useAuth';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 import {
   useMemberView,
   useMemberOrders,
@@ -61,6 +62,9 @@ const ORDER_STATUS = {
 } as const;
 
 export default function MemberDetailScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const { id } = useLocalSearchParams<{ id: string }>();
   const memberId = Number(id);
   const { data: member, isLoading, notFound, error } = useMemberView(memberId);
@@ -242,7 +246,7 @@ export default function MemberDetailScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
         <AppHeader
           title="会员详情"
           right={

@@ -2,7 +2,7 @@
  * 散客目录 — 与会员档案同构布局（仅业务动作不同）。
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
@@ -23,10 +23,14 @@ import {
   IconAvatar,
 } from '../../../components/ui';
 import { walkinsApi, type WalkinRow } from '../../../api/walkins';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 const WALKINS_KEY = ['walkins', 'list'] as const;
 
 export default function WalkinsScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const [query, setQuery] = useState('');
   const qc = useQueryClient();
 
@@ -70,7 +74,7 @@ export default function WalkinsScreen() {
           }
         />
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
           <View style={styles.container}>
             <View style={styles.block}>
               <SectionLabel>概览</SectionLabel>

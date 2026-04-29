@@ -1,19 +1,24 @@
+import { useRef } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { AppHeader, GlassSurface, MeshBackground, SectionLabel } from '../../../components/ui';
 import { COLORS, SPACING, TYPE } from '../../../theme/paperTheme';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 const LAST_UPDATED = '2026-04-25';
 
 export default function PrivacyPolicyScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   return (
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader title="隐私政策" onBack={() => router.back()} />
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
           <View style={styles.container}>
             <GlassSurface padding={SPACING.base} style={styles.noticeCard}>
               <Text style={styles.noticeTitle}>生效日期：{LAST_UPDATED}</Text>

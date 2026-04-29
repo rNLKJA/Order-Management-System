@@ -9,7 +9,7 @@
  *   本页把这两口径分开显示，避免被误解为总收入。
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -38,6 +38,7 @@ import {
 } from '../../../components/ui';
 import { ordersApi, type DailyOrder } from '../../../api/orders';
 import { COLORS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 type ChartRange = 'today' | 'week' | 'month' | 'year' | 'custom';
 
@@ -93,6 +94,9 @@ function emptyTotals(): Totals {
 }
 
 export default function OrdersStatsScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const [chartRange, setChartRange] = useState<ChartRange>('month');
   const [from, setFrom] = useState(() => startOfRange('month', formatDate(new Date())));
   const [to, setTo] = useState(() => formatDate(new Date()));
@@ -262,6 +266,7 @@ export default function OrdersStatsScreen() {
         <AppHeader title="订餐数据" />
 
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.container}
           refreshControl={
             <RefreshControl

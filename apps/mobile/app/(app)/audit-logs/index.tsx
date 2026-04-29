@@ -2,7 +2,7 @@
  * 操作记录（审计日志）— 仅管理员。聚合业务写入与账号/权限变更。
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -34,6 +34,7 @@ import {
   GlassSurface,
   MeshBackground,
 } from '../../../components/ui';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 type FilterKey = 'all' | AuditEntity;
 
@@ -74,6 +75,9 @@ function shortenDiff(json: string, max = 220): string {
 }
 
 export default function AuditLogsScreen() {
+  const listRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(listRef);
+
   const { user } = useAuth();
   const [filter, setFilter] = useState<FilterKey>('all');
 
@@ -163,6 +167,7 @@ export default function AuditLogsScreen() {
             </View>
           ) : (
             <ScrollView
+              ref={listRef}
               style={styles.listScroll}
               contentContainerStyle={styles.listPad}
               keyboardShouldPersistTaps="handled"

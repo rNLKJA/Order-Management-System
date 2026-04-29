@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -32,8 +32,12 @@ import {
   IconAvatar,
   MeshBackground,
 } from '../../../components/ui';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 export default function AdminPermissionsScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const { user } = useAuth();
   useEffect(() => {
     if (user && user.role !== 'admin') {
@@ -250,7 +254,7 @@ export default function AdminPermissionsScreen() {
             </GlassSurface>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.listPad}>
+          <ScrollView ref={scrollRef} contentContainerStyle={styles.listPad}>
             <GlassSurface padding={SPACING.base} style={styles.tip}>
               <View style={styles.tipStatsRow}>
                 <View style={[styles.statChip, styles.statChipEmphasis]}>

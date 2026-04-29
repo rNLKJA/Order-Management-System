@@ -7,7 +7,7 @@
  * - 明细：完整 from~to（最多 500 条），与顶部筛选区间一致
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -51,6 +51,7 @@ import {
 } from '../../../api/finance';
 import { ExpenseModal } from '../../../components/ExpenseModal';
 import { COLORS, SPACING, RADIUS, TYPE } from '../../../theme/paperTheme';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 type TypeFilter = 'all' | 'income' | 'expense';
 
@@ -80,8 +81,8 @@ function categoryDisplayLabel(category: string): string {
   if (category === 'meal_earned_walkin' || category === 'ad_hoc') return '散客履约收入（已送达确认）';
   if (category === 'card_prepaid_hospital') return '院内预收（办卡/升级）';
   if (category === 'card_prepaid_regular') return '院外预收（办卡/升级）';
-  if (category === 'hospital_sub') return '院内预收（补贴）';
-  if (category === 'regular_sub') return '院外预收（补贴）';
+  if (category === 'hospital_sub') return '院内预收（散客订单）';
+  if (category === 'regular_sub') return '院外预收（散客订单）';
   return FINANCE_CATEGORY_LABEL[category as FinanceCategory] ?? category;
 }
 
@@ -98,6 +99,9 @@ function incomeCategoryColor(category: string): string {
 }
 
 export default function FinanceScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
@@ -295,6 +299,7 @@ export default function FinanceScreen() {
         />
 
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.container}
           refreshControl={
             <RefreshControl
@@ -475,7 +480,10 @@ export default function FinanceScreen() {
           <View style={styles.block}>
             <SectionLabel>结构分布</SectionLabel>
             <Text style={styles.filterHint}>
-              绿色=履约收入（已送达确认） · 黄色=预收（办卡/升级/补贴，尚未履约）
+              绿色=履约收入（已送达确认） · 黄色=预收（办卡/升级/散客订单，尚未履约）
+            </Text>
+            <Text style={styles.filterHint}>
+              办卡/升级=会员付费购卡；散客订单=院内/院外渠道的散客订单预收入账（不对应某张会员卡）。
             </Text>
             <BentoGrid gap={SPACING.md}>
               <Bento span={6} mobileSpan={12}>
@@ -657,7 +665,7 @@ function CategoryBars({
               idx === items.length - 1 && { marginBottom: 0 },
             ]}
           >
-            <Text style={styles.chartLabel} numberOfLines={1}>
+            <Text style={styles.chartLabel} numberOfLines={2}>
               {item.label}
             </Text>
             <View style={styles.chartTrack}>
@@ -867,7 +875,12 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     marginBottom: SPACING.sm,
   },
-  chartLabel: { ...TYPE.footnote, color: COLORS.text.primary, width: 146, lineHeight: 17 },
+  chartLabel: {
+    ...TYPE.footnote,
+    color: COLORS.text.primary,
+    width: 170,
+    lineHeight: 17,
+  },
   chartTrack: {
     flex: 1,
     height: 10,

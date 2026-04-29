@@ -9,7 +9,7 @@
  *          就跳到 /members/:id 查看新会员。
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -39,6 +39,7 @@ import { walkinsApi, type WalkinDetailResp } from '../../../api/walkins';
 import { cardsApi } from '../../../api/cards';
 import { useAuth } from '../../../hooks/useAuth';
 import { useUsersMap } from '../../../hooks/useMembersView';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 import {
   CardFlowModal,
   type CardFlowSubmitPayload,
@@ -59,6 +60,9 @@ const STATUS_MAP = {
 } as const;
 
 export default function WalkinDetailScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const { id } = useLocalSearchParams<{ id: string }>();
   const walkinId = Number(id);
   const qc = useQueryClient();
@@ -222,6 +226,7 @@ export default function WalkinDetailScreen() {
         />
 
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}
         >

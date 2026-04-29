@@ -2,7 +2,7 @@
  * 会员列表（正式会员）— v3 Glass + Bento。
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { View, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -23,12 +23,16 @@ import {
   IconAvatar,
 } from '../../../components/ui';
 import { COLORS, SPACING, TYPE } from '../../../theme/paperTheme';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 type MemberFilter = 'all' | 'hospital' | 'regular' | 'expired';
 const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
 type LimitOption = (typeof LIMIT_OPTIONS)[number];
 
 export default function MembersScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<MemberFilter>('all');
   const [limit, setLimit] = useState<LimitOption>(50);
@@ -68,6 +72,7 @@ export default function MembersScreen() {
         />
 
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
           refreshControl={undefined}

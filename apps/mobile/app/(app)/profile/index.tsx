@@ -5,7 +5,7 @@
  * 让全应用订阅 useAuth 的页面都拿到最新头像 URL。
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Image, Modal, Pressable, StyleSheet, ScrollView, View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,8 +30,12 @@ import {
   StatTile,
   StatusChip,
 } from '../../../components/ui';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 export default function ProfileScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const { user, signOut, refresh } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [avatarMenuVisible, setAvatarMenuVisible] = useState(false);
@@ -105,7 +109,7 @@ export default function ProfileScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
           <View style={styles.container}>
             <AppHeader title="当前用户" />
 

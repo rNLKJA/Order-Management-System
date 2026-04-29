@@ -3,7 +3,7 @@
  * 布局：概览 Bento → 在职列表 → 已停用列表。
  */
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -31,8 +31,12 @@ import {
   GlassSurface,
 } from '../../../components/ui';
 import { COLORS, SPACING, TYPE } from '../../../theme/paperTheme';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 export default function UsersScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const q = useQuery({
     queryKey: ['users', 'list-full'],
     queryFn: async () => (await usersApi.list()).users,
@@ -59,7 +63,7 @@ export default function UsersScreen() {
             <Text style={styles.errorText}>加载失败：{q.error.message}</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             <View style={styles.container}>
               <View style={styles.block}>
                 <SectionLabel>人员概览</SectionLabel>

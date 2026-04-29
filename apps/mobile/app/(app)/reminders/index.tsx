@@ -2,6 +2,7 @@
  * 余餐不足提醒 — v3 玻璃 + Bento。
  */
 
+import { useRef } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { router } from 'expo-router';
@@ -10,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CARD_RENEWAL_THRESHOLD_MEALS } from '@meal/shared';
 import { COLORS, SPACING, TYPE } from '../../../theme/paperTheme';
 import { useMembersView } from '../../../hooks/useMembersView';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 import {
   AppHeader,
   GlassSurface,
@@ -20,6 +22,9 @@ import {
 } from '../../../components/ui';
 
 export default function RemindersScreen() {
+  const listRef = useRef<FlatList>(null);
+  useScrollToTopOnFocus(listRef);
+
   const { data, isLoading, error, refetch } = useMembersView();
   const list = (data ?? []).filter(
     (m) => m.active_card && m.active_card.remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS,
@@ -63,6 +68,7 @@ export default function RemindersScreen() {
           </GlassSurface>
 
           <FlatList
+            ref={listRef}
             data={list}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={styles.listContent}

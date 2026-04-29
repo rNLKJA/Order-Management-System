@@ -9,7 +9,7 @@
  * 暂不支持删除订单（取消走订单详情走 cancel 路由），这里是只读视图。
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -30,6 +30,7 @@ import {
   StatTile,
   StatusChip,
 } from '../../../components/ui';
+import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 const STATUS_LABEL = {
   pending: { label: '待出餐', fg: COLORS.warning, bg: COLORS.warningSoft, chip: 'warning' as const },
@@ -42,6 +43,9 @@ type LimitOption = (typeof LIMIT_OPTIONS)[number];
 type StatusFilter = 'all' | 'pending' | 'fulfilled' | 'delivered' | 'cancelled';
 
 export default function UserDetailScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = Number(id);
   const [limit, setLimit] = useState<LimitOption>(50);
@@ -134,7 +138,7 @@ export default function UserDetailScreen() {
           onBack={() => router.back()}
         />
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 32 }}>
           <GlassSurface padding={SPACING.base} style={styles.heroCard}>
             <View style={styles.heroRow}>
               <IconAvatar

@@ -3,6 +3,7 @@
  * 布局：欢迎卡（左图标右文案）→ 速览 4 连格 → 余餐提醒 → 快捷操作分层。
  */
 
+import { useRef } from 'react';
 import { StyleSheet, ScrollView, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +36,7 @@ import {
   IconAvatar,
   SectionLabel,
 } from '../../components/ui';
+import { useScrollToTopOnFocus } from '../../hooks/useScrollToTopOnFocus';
 
 type EntryDef = {
   key: string;
@@ -54,6 +56,9 @@ const ICON_OPTICAL_NUDGE: Partial<
 };
 
 export default function HomeScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnFocus(scrollRef);
+
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -216,6 +221,7 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scroll,
