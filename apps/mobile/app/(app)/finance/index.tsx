@@ -74,6 +74,29 @@ const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
   'legacy_expense',
 ];
 
+function categoryDisplayLabel(category: string): string {
+  if (category === 'meal_earned_hospital') return '院内履约收入（已送达确认）';
+  if (category === 'meal_earned_regular') return '院外履约收入（已送达确认）';
+  if (category === 'meal_earned_walkin' || category === 'ad_hoc') return '散客履约收入（已送达确认）';
+  if (category === 'card_prepaid_hospital') return '院内预收（办卡/升级）';
+  if (category === 'card_prepaid_regular') return '院外预收（办卡/升级）';
+  if (category === 'hospital_sub') return '院内预收（补贴）';
+  if (category === 'regular_sub') return '院外预收（补贴）';
+  return FINANCE_CATEGORY_LABEL[category as FinanceCategory] ?? category;
+}
+
+function incomeCategoryColor(category: string): string {
+  if (
+    category === 'card_prepaid_hospital' ||
+    category === 'card_prepaid_regular' ||
+    category === 'hospital_sub' ||
+    category === 'regular_sub'
+  ) {
+    return COLORS.warning;
+  }
+  return COLORS.success;
+}
+
 export default function FinanceScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -243,7 +266,7 @@ export default function FinanceScreen() {
       Array.from(source.entries())
         .map(([ckey, amt]) => ({
           key: ckey,
-          label: FINANCE_CATEGORY_LABEL[ckey as FinanceCategory] ?? ckey,
+          label: categoryDisplayLabel(ckey),
           amount: amt,
         }))
         .sort((a, b) => b.amount - a.amount)
@@ -360,7 +383,7 @@ export default function FinanceScreen() {
           </View>
 
           <View style={styles.block}>
-            <SectionLabel>履约收入（已送达餐费 · 院内 / 院外 / 散客）</SectionLabel>
+            <SectionLabel>履约收入（按已送达确认）</SectionLabel>
             <BentoGrid gap={SPACING.md}>
               <Bento span={3} mobileSpan={6}>
                 <StatTile
@@ -373,7 +396,7 @@ export default function FinanceScreen() {
               </Bento>
               <Bento span={3} mobileSpan={6}>
                 <StatTile
-                  label="院内"
+                  label="院内履约"
                   value={formatCNY(summary?.realized_by_channel?.hospital ?? 0)}
                   icon="medkit-outline"
                   color={COLORS.brand}
@@ -382,7 +405,7 @@ export default function FinanceScreen() {
               </Bento>
               <Bento span={3} mobileSpan={6}>
                 <StatTile
-                  label="院外"
+                  label="院外履约"
                   value={formatCNY(summary?.realized_by_channel?.regular ?? 0)}
                   icon="home-outline"
                   color={COLORS.info}
@@ -391,21 +414,21 @@ export default function FinanceScreen() {
               </Bento>
               <Bento span={3} mobileSpan={6}>
                 <StatTile
-                  label="散客"
+                  label="散客履约"
                   value={formatCNY(summary?.realized_by_channel?.walkin ?? 0)}
                   icon="walk-outline"
-                  color={COLORS.warning}
-                  tint="warn"
+                  color={COLORS.info}
+                  tint="info"
                 />
               </Bento>
               <Bento span={6} mobileSpan={12}>
                 <StatTile
-                  label="办卡预收（同期）"
+                  label="办卡预收（未履约）"
                   value={formatCNY(summary?.prepaid_income ?? 0)}
-                  icon="card-outline"
-                  color={COLORS.text.secondary}
-                  tint="info"
-                  hint="购卡/升级当天现金预收"
+                  icon="time-outline"
+                  color={COLORS.warning}
+                  tint="warn"
+                  hint="先收款，后续按送达转为履约收入"
                 />
               </Bento>
             </BentoGrid>
@@ -451,12 +474,16 @@ export default function FinanceScreen() {
 
           <View style={styles.block}>
             <SectionLabel>结构分布</SectionLabel>
+            <Text style={styles.filterHint}>
+              绿色=履约收入（已送达确认） · 黄色=预收（办卡/升级/补贴，尚未履约）
+            </Text>
             <BentoGrid gap={SPACING.md}>
               <Bento span={6} mobileSpan={12}>
                 <CategoryBars
                   title="收入结构"
                   items={structureGroups.income}
                   color={COLORS.success}
+                  getColor={incomeCategoryColor}
                 />
               </Bento>
               <Bento span={6} mobileSpan={12}>
@@ -608,10 +635,12 @@ function CategoryBars({
   title,
   items,
   color,
+  getColor,
 }: {
   title: string;
   items: Array<{ key: string; label: string; amount: number }>;
   color: string;
+  getColor?: (key: string) => string;
 }) {
   const categoryMax = Math.max(1, ...items.map((c) => c.amount));
   return (
@@ -637,7 +666,7 @@ function CategoryBars({
                   styles.chartFill,
                   {
                     width: `${Math.max((item.amount / categoryMax) * 100, 8)}%`,
-                    backgroundColor: color,
+                    backgroundColor: getColor?.(item.key) ?? color,
                   },
                 ]}
               />
@@ -838,7 +867,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     marginBottom: SPACING.sm,
   },
-  chartLabel: { ...TYPE.footnote, color: COLORS.text.primary, width: 84 },
+  chartLabel: { ...TYPE.footnote, color: COLORS.text.primary, width: 146, lineHeight: 17 },
   chartTrack: {
     flex: 1,
     height: 10,
@@ -854,7 +883,7 @@ const styles = StyleSheet.create({
   chartValue: {
     ...TYPE.caption,
     color: COLORS.text.secondary,
-    width: 84,
+    width: 92,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
