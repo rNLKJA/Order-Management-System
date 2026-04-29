@@ -4,7 +4,7 @@
  * - GET    /api/orders?member_id=&date=&status=&meal_type=&zone=
  * - GET    /api/orders/today?meal_type=&zone=
  * - GET    /api/orders/:id
- * - POST   /api/orders                 拆 1~2 条 DailyOrder，原子扣卡或写散餐 FinanceEntry
+ * - POST   /api/orders                 拆 1~2 条 DailyOrder，原子扣卡；散客/会员餐收入在「已送达」时入账
  * - PATCH  /api/orders/:id             仅修改 notes + created_by_user_id
  * - PATCH  /api/orders/:id/status      pending/fulfilled/delivered 流转
  * - PATCH  /api/orders/:id/delivery-failed  已出餐送餐失败，或已送达后管理员纠错（退餐理由 + 原子退餐）
@@ -30,7 +30,7 @@ import {
   OrderLockedDeliveredError,
   OrderNotFoundError,
 } from '../services/orders.js';
-import { toShanghaiDate } from '../services/finance.js';
+import { createMealEarnedIncome } from '../services/finance.js';
 import { getOrCreateWalkinMember } from '../services/walkin.js';
 
 export const ordersRouter = new Hono<{ Variables: AuthVariables }>();
@@ -387,24 +387,7 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
       .values(orderValues)
       .returning();
 
-    // 散餐：每条订单写 FinanceEntry
-    if (!hasCard) {
-      const entryDate = toShanghaiDate(new Date());
-      for (const order of insertedOrders) {
-        const who = customerName ? `${customerName} · ` : '';
-        await tx.insert(schema.finance_entries).values({
-          entry_date: entryDate,
-          type: 'income',
-          amount: order.amount,
-          category: 'ad_hoc',
-          description: `散餐：${who}${order.meal_type === 'lunch' ? '午餐' : '晚餐'} ${order.quantity} 份`,
-          ref_order_id: order.id,
-          source: 'auto',
-          voided: false,
-          created_by_user_id: createdByUserId,
-        });
-      }
-    }
+    // 散客/会员餐收入在 PATCH status → delivered 时记入 meal_earned_*（见下方）
 
     // 写 audit_log（每条订单）
     for (const order of insertedOrders) {
@@ -619,19 +602,42 @@ ordersRouter.patch(
       patch.delivered_by_user_id = authUser.id;
     }
 
-    await db
-      .update(schema.daily_orders)
-      .set(patch)
-      .where(eq(schema.daily_orders.id, id));
+    let cardRow: typeof schema.cards.$inferSelect | null = null;
+    if (nextStatus === 'delivered' && order.status === 'fulfilled' && order.card_id != null) {
+      const cr = await db
+        .select()
+        .from(schema.cards)
+        .where(eq(schema.cards.id, order.card_id))
+        .limit(1);
+      cardRow = cr[0] ?? null;
+      if (!cardRow) {
+        throw new HTTPException(422, { message: '订单关联的卡不存在，无法确认餐费' });
+      }
+    }
 
-    await db.insert(schema.audit_logs).values({
-      user_id: authUser.id,
-      action: 'update',
-      entity: 'daily_order',
-      entity_id: id,
-      diff_json: JSON.stringify({
-        status: [order.status, nextStatus],
-      }),
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.daily_orders)
+        .set(patch)
+        .where(eq(schema.daily_orders.id, id));
+
+      if (nextStatus === 'delivered' && order.status === 'fulfilled') {
+        await createMealEarnedIncome(tx, {
+          order,
+          card: cardRow,
+          created_by_user_id: authUser.id,
+        });
+      }
+
+      await tx.insert(schema.audit_logs).values({
+        user_id: authUser.id,
+        action: 'update',
+        entity: 'daily_order',
+        entity_id: id,
+        diff_json: JSON.stringify({
+          status: [order.status, nextStatus],
+        }),
+      });
     });
 
     const updated = await db

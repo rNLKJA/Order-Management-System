@@ -5,7 +5,7 @@
  * 到本模块直接用到的字段；更大的集合等 types 稳定后统一挪去 @meal/shared。
  */
 
-import type { SubscriptionCardCode } from '@meal/shared';
+import type { FinanceCategory, SubscriptionCardCode } from '@meal/shared';
 import { api } from './client';
 
 export type CardStatus = 'active' | 'upgraded' | 'exhausted' | 'refunded';
@@ -37,7 +37,7 @@ export interface Card {
 export interface FinanceEntrySummary {
   id: number;
   amount: number;
-  category: 'hospital_sub' | 'regular_sub';
+  category: FinanceCategory;
   entry_date: string;
   ref_card_id: number;
   source: 'auto';

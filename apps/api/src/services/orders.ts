@@ -138,6 +138,17 @@ export async function cancelOrder(
 
   let updatedCard: typeof schema.cards.$inferSelect | undefined;
 
+  // 任意订单取消：冲销该订单关联的履约收入（含会员卡餐、散客餐）
+  await tx
+    .update(schema.finance_entries)
+    .set({ voided: true, updated_at: new Date() })
+    .where(
+      and(
+        eq(schema.finance_entries.ref_order_id, order.id),
+        eq(schema.finance_entries.voided, false),
+      ),
+    );
+
   if (order.card_id != null) {
     // 卡订单：恢复 used/remaining
     const cardRows = await tx
@@ -177,17 +188,6 @@ export async function cancelOrder(
 
       updatedCard = { ...card, used_meals: newUsed, remaining_meals: newRemaining, status: newStatus };
     }
-  } else {
-    // 散餐：将关联的 FinanceEntry 设 voided=true
-    await tx
-      .update(schema.finance_entries)
-      .set({ voided: true, updated_at: new Date() })
-      .where(
-        and(
-          eq(schema.finance_entries.ref_order_id, order.id),
-          eq(schema.finance_entries.voided, false),
-        ),
-      );
   }
 
   const now = new Date();

@@ -8,8 +8,7 @@
  * - DELETE /api/finance/:id            软删除（设 voided=true）；仅 admin
  *
  * 不在本 slice 范围：
- * - 购卡 / 升级 / 散餐 / 订阅的 income 自动写入，由 MEA-11 cards slice 直接 insert
- * - 订餐履约产生的 ad_hoc income，同样由 cards/orders slice 负责
+ * - 购卡 / 升级预收、送餐履约收入：由 cards / orders slice 写 finance_entries
  *
  * 所有接口都需要登录（requireAuth）；删除额外需要 admin（requireRole）。
  */
@@ -27,6 +26,20 @@ import {
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import { requireAuth, requireRole, requireDataOperator, type AuthVariables } from '../middleware/jwt.js';
+
+const REALIZED_INCOME_CATEGORIES = new Set([
+  'meal_earned_hospital',
+  'meal_earned_regular',
+  'meal_earned_walkin',
+  'ad_hoc',
+]);
+
+const PREPAID_INCOME_CATEGORIES = new Set([
+  'card_prepaid_hospital',
+  'card_prepaid_regular',
+  'hospital_sub',
+  'regular_sub',
+]);
 
 export const financeRouter = new Hono<{ Variables: AuthVariables }>();
 
@@ -136,12 +149,32 @@ financeRouter.get(
     let income = 0;
     let expense = 0;
     const byCategory: Record<string, number> = {};
+    let realized_income = 0;
+    let prepaid_income = 0;
+    const realized_by_channel = { hospital: 0, regular: 0, walkin: 0 };
+
     for (const row of summaryRows) {
       const amt = Number(row.total ?? 0);
       if (row.type === 'income') income += amt;
       else if (row.type === 'expense') expense += amt;
       byCategory[row.category] = (byCategory[row.category] ?? 0) + amt;
+
+      if (row.type === 'income') {
+        if (REALIZED_INCOME_CATEGORIES.has(row.category)) {
+          realized_income += amt;
+          if (row.category === 'meal_earned_hospital') realized_by_channel.hospital += amt;
+          else if (row.category === 'meal_earned_regular') realized_by_channel.regular += amt;
+          else if (row.category === 'meal_earned_walkin' || row.category === 'ad_hoc') {
+            realized_by_channel.walkin += amt;
+          }
+        }
+        if (PREPAID_INCOME_CATEGORIES.has(row.category)) {
+          prepaid_income += amt;
+        }
+      }
     }
+
+    const realized_net = realized_income - expense;
 
     return c.json({
       items,
@@ -150,6 +183,14 @@ financeRouter.get(
         income: round2(income),
         expense: round2(expense),
         net: round2(income - expense),
+        realized_income: round2(realized_income),
+        prepaid_income: round2(prepaid_income),
+        realized_net: round2(realized_net),
+        realized_by_channel: {
+          hospital: round2(realized_by_channel.hospital),
+          regular: round2(realized_by_channel.regular),
+          walkin: round2(realized_by_channel.walkin),
+        },
         byCategory: Object.fromEntries(
           Object.entries(byCategory).map(([k, v]) => [k, round2(v)]),
         ),

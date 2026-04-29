@@ -78,7 +78,16 @@ export default function HomeScreen() {
     (m) => m.active_card && m.active_card.remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS,
   ).length;
 
-  const fin = financeToday.data ?? { income: 0, expense: 0, net: 0 };
+  const fin = financeToday.data ?? {
+    income: 0,
+    expense: 0,
+    net: 0,
+    realized_income: 0,
+    prepaid_income: 0,
+    realized_net: 0,
+    realized_by_channel: { hospital: 0, regular: 0, walkin: 0 },
+    byCategory: {},
+  };
 
   const orders = ordersToday.data ?? [];
   const totalCount = orders
@@ -141,7 +150,7 @@ export default function HomeScreen() {
       title: '财务流水',
       subtitle: financeToday.isLoading
         ? '加载中...'
-        : `今日净额 ${formatCNY(fin.net)} · 可新增支出`,
+        : `今日履约 ${formatCNY(fin.realized_income)} · 预收 ${formatCNY(fin.prepaid_income)}`,
       icon: 'wallet-outline',
       color: COLORS.warning,
       bg: COLORS.warningSoft,
@@ -244,11 +253,12 @@ export default function HomeScreen() {
               <BentoGrid gap={SPACING.md}>
                 <Bento span={3} mobileSpan={6}>
                   <StatTile
-                    label="今日收入"
-                    value={formatCNY(fin.income)}
-                    icon="arrow-up-circle-outline"
-                    color={COLORS.brand}
-                    tint="info"
+                    label="今日履约收入"
+                    value={formatCNY(fin.realized_income)}
+                    icon="restaurant-outline"
+                    color={COLORS.success}
+                    tint="ok"
+                    hint="已送达餐费（院内/院外/散客）"
                   />
                 </Bento>
                 <Bento span={3} mobileSpan={6}>
@@ -262,11 +272,11 @@ export default function HomeScreen() {
                 </Bento>
                 <Bento span={3} mobileSpan={6}>
                   <StatTile
-                    label="今日净额"
-                    value={formatCNY(fin.net)}
-                    icon={fin.net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
-                    color={fin.net >= 0 ? COLORS.success : COLORS.danger}
-                    tint={fin.net >= 0 ? 'ok' : 'danger'}
+                    label="今日净额（履约−支出）"
+                    value={formatCNY(fin.realized_net)}
+                    icon={fin.realized_net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
+                    color={fin.realized_net >= 0 ? COLORS.success : COLORS.danger}
+                    tint={fin.realized_net >= 0 ? 'ok' : 'danger'}
                   />
                 </Bento>
                 <Bento span={3} mobileSpan={6}>

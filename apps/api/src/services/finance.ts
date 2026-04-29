@@ -1,27 +1,24 @@
 /**
  * 财务条目辅助函数。
  *
- * 卡 slice 只负责"购卡 / 升级补差"这两类自动入账；
- * 散餐入账 / 支出录入 / 筛选查询这些归 finance slice（MEA-13）。
+ * - 购卡 / 升级补差：`createAutoSubscriptionIncome` → 预收（card_prepaid_*），
+ *   不在送达前计入「履约收入」。
+ * - 订单标记已送达：`createMealEarnedIncome` → 按卡单价×份数或散客实付写入 meal_earned_*。
  *
- * 这里写的"自动入账"函数保证：
- * - source='auto'
- * - category 按 is_hospital 自动选 'hospital_sub' | 'regular_sub'
- * - entry_date 按 purchased_at 的 Asia/Shanghai 业务日取 YYYY-MM-DD
- *   （MVP 先用 UTC + 8h 偏移；未来接入真 TZ util 时统一替换）
+ * source='auto'；entry_date 业务日：办卡按 purchased_at 转上海日；履约按 order.order_date。
  */
 
 import { schema } from '../db/client.js';
 
-/**
- * 能 insert 的 Drizzle 客户端 —— `Db` 或事务里的 `tx` 都可以塞。
- * 故意不从 drizzle-orm/sqlite-core 导具体类型，因为 libsql 的 tx 泛型签名和 LibSQLDatabase
- * 在类型层面不可互换（batch 方法差异），用最小结构约束绕过。
- */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Inserter = { insert: (table: typeof schema.finance_entries) => any };
 
-export type AutoIncomeCategory = 'hospital_sub' | 'regular_sub';
+export type CardPrepaidCategory = 'card_prepaid_hospital' | 'card_prepaid_regular';
+
+export type MealEarnedCategory =
+  | 'meal_earned_hospital'
+  | 'meal_earned_regular'
+  | 'meal_earned_walkin';
 
 export interface AutoIncomeInput {
   amount: number;
@@ -33,11 +30,12 @@ export interface AutoIncomeInput {
   description?: string;
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 /**
- * 写一条自动收入 FinanceEntry（购卡 / 升级补差共用）。
- *
- * 调用方必须把本函数放在事务里，和"建卡 / 改旧卡"合起来成原子。
- * 返回 FinanceEntry 的 id。
+ * 写一条自动收入 FinanceEntry（购卡 / 升级补差）— **预收**，送达餐费另记 meal_earned_*。
  */
 export async function createAutoSubscriptionIncome(
   db: Inserter,
@@ -45,13 +43,15 @@ export async function createAutoSubscriptionIncome(
 ): Promise<{
   id: number;
   entry_date: string;
-  category: AutoIncomeCategory;
+  category: CardPrepaidCategory;
   amount: number;
   type: 'income';
   source: 'auto';
   ref_card_id: number;
 }> {
-  const category: AutoIncomeCategory = input.is_hospital ? 'hospital_sub' : 'regular_sub';
+  const category: CardPrepaidCategory = input.is_hospital
+    ? 'card_prepaid_hospital'
+    : 'card_prepaid_regular';
   const entry_date = toShanghaiDate(input.purchased_at);
 
   const rows = await db
@@ -81,9 +81,62 @@ export async function createAutoSubscriptionIncome(
   };
 }
 
+export interface MealEarnedInput {
+  order: typeof schema.daily_orders.$inferSelect;
+  /** 有卡订单必填；散客为 null */
+  card: typeof schema.cards.$inferSelect | null;
+  created_by_user_id: number;
+}
+
+/**
+ * 订单 fulfilled → delivered 时调用：按单价确认当日履约收入。
+ */
+export async function createMealEarnedIncome(
+  db: Inserter,
+  input: MealEarnedInput,
+): Promise<{ id: number; category: MealEarnedCategory; amount: number }> {
+  const { order, card, created_by_user_id } = input;
+  const entry_date = order.order_date;
+
+  let category: MealEarnedCategory;
+  let amount: number;
+  let description: string;
+
+  if (order.card_id != null && card) {
+    category = card.is_hospital ? 'meal_earned_hospital' : 'meal_earned_regular';
+    amount = round2(Number(card.unit_price) * order.quantity);
+    const zone = card.is_hospital ? '院内' : '院外';
+    const meal = order.meal_type === 'lunch' ? '午餐' : '晚餐';
+    description = `${zone}会员餐·已送达：${meal} ${order.quantity} 份（卡 #${card.id}）`;
+  } else {
+    category = 'meal_earned_walkin';
+    amount = round2(Number(order.amount));
+    const who = (order.customer_name ?? '').trim();
+    const meal = order.meal_type === 'lunch' ? '午餐' : '晚餐';
+    description = `散客餐·已送达：${who ? `${who} · ` : ''}${meal} ${order.quantity} 份`;
+  }
+
+  const rows = await db
+    .insert(schema.finance_entries)
+    .values({
+      entry_date,
+      type: 'income',
+      amount,
+      category,
+      description,
+      ref_order_id: order.id,
+      source: 'auto',
+      voided: false,
+      created_by_user_id,
+    })
+    .returning({ id: schema.finance_entries.id });
+
+  return { id: rows[0]!.id, category, amount };
+}
+
 /**
  * 把 Date 转成 Asia/Shanghai 的 YYYY-MM-DD。
- * MVP 取 UTC+8 偏移（上海无夏令时），后续统一到 shared/date util 后可替换。
+ * MVP 取 UTC+8 偏移（上海无夏令时），后续统一到 shared/date util。
  */
 export function toShanghaiDate(d: Date): string {
   const shanghai = new Date(d.getTime() + 8 * 60 * 60 * 1000);

@@ -150,7 +150,7 @@ describe('POST /api/cards (新购)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('院外月卡：写卡 + 自动入账 ¥1000 regular_sub', async () => {
+  it('院外月卡：写卡 + 自动入账 ¥1000 card_prepaid_regular', async () => {
     const { id: memberId } = await seedMember(ctx.db, {
       created_by_user_id: ctx.userId,
       is_hospital: false,
@@ -173,7 +173,7 @@ describe('POST /api/cards (新购)', () => {
     expect(body.card.total_meals).toBe(40);
     expect(body.card.remaining_meals).toBe(40);
     expect(body.card.status).toBe('active');
-    expect(body.financeEntry.category).toBe('regular_sub');
+    expect(body.financeEntry.category).toBe('card_prepaid_regular');
 
     const finance = await ctx.db
       .select()
@@ -185,7 +185,7 @@ describe('POST /api/cards (新购)', () => {
     expect(finance[0]!.ref_card_id).toBe(body.card.id);
   });
 
-  it('院内体验卡：category=hospital_sub，¥50，meals=2', async () => {
+  it('院内体验卡：category=card_prepaid_hospital，¥50，meals=2', async () => {
     const { id: memberId } = await seedMember(ctx.db, {
       created_by_user_id: ctx.userId,
       is_hospital: true,
@@ -207,7 +207,7 @@ describe('POST /api/cards (新购)', () => {
     expect(body.card.total_meals).toBe(2);
     expect(body.card.paid_amount).toBe(50);
     expect(body.card.unit_price).toBe(25);
-    expect(body.financeEntry.category).toBe('hospital_sub');
+    expect(body.financeEntry.category).toBe('card_prepaid_hospital');
   });
 
   it('会员已有 active 卡 → 409', async () => {
@@ -441,7 +441,7 @@ describe('POST /api/cards/:id/upgrade', () => {
     expect(body.new_card.paid_amount).toBe(880);
     expect(body.new_card.upgraded_from_id).toBe(old.id);
     expect(body.financeEntry.amount).toBe(830);
-    expect(body.financeEntry.category).toBe('hospital_sub');
+    expect(body.financeEntry.category).toBe('card_prepaid_hospital');
 
     const financeRows = await ctx.db
       .select()

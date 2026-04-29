@@ -8,7 +8,7 @@
  *   - POST 有 active 卡 → 扣减正确
  *   - POST 有 active 卡 → 扣到 0 → exhausted + card_exhausted=true
  *   - POST 余额不足 → 422 INSUFFICIENT_MEAL_BALANCE
- *   - POST 散餐（无卡）→ 自动 FinanceEntry income ad_hoc
+ *   - POST 散餐（无卡）→ 不产生流水；PATCH 已送达后写入 meal_earned_walkin
  *   - POST 会员不存在 → 404
  *   - GET 列表按日期/status/meal_type 过滤
  *   - GET today 快捷接口
@@ -302,6 +302,79 @@ describe('Orders API /api/orders', () => {
     expect(res.status).toBe(422);
     const body = (await res.json()) as { code: string };
     expect(body.code).toBe('INSUFFICIENT_MEAL_BALANCE');
+  });
+
+  it('PATCH 卡订单 出餐→送达 → meal_earned_hospital（单价×份数）', async () => {
+    await deactivateDefaultCard();
+    await seedCard(db, {
+      member_id: memberId,
+      created_by_user_id: staffId,
+      collector_user_id: staffId,
+      card_code: 'month',
+      is_hospital: true,
+      total_meals: 40,
+      used_meals: 0,
+      unit_price: 25,
+      paid_amount: 1000,
+      status: 'active',
+    });
+
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({
+          member_id: memberId,
+          order_date: '2026-04-25',
+          lunch_qty: 3,
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { orders: schema.DailyOrder[] };
+    const orderId = body.orders[0]!.id;
+
+    const before = await db
+      .select()
+      .from(schema.finance_entries)
+      .where(eq(schema.finance_entries.ref_order_id, orderId));
+    expect(before).toHaveLength(0);
+
+    const r2 = await app.fetch(
+      new Request(`http://test.local/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ status: 'fulfilled' }),
+      }),
+    );
+    expect(r2.status).toBe(200);
+
+    const r3 = await app.fetch(
+      new Request(`http://test.local/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ status: 'delivered' }),
+      }),
+    );
+    expect(r3.status).toBe(200);
+
+    const entries = await db
+      .select()
+      .from(schema.finance_entries)
+      .where(eq(schema.finance_entries.ref_order_id, orderId));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.category).toBe('meal_earned_hospital');
+    expect(entries[0]!.amount).toBe(75);
+    expect(entries[0]!.entry_date).toBe('2026-04-25');
   });
 
   it('POST 会员无 active 卡 → 422，提示先开卡或走散客录单', async () => {
@@ -795,7 +868,7 @@ describe('Orders API /api/orders', () => {
       entry_date: '2026-04-24',
       type: 'income',
       amount: 35,
-      category: 'ad_hoc',
+      category: 'meal_earned_walkin',
       ref_order_id: orderId,
       source: 'auto',
       voided: false,
@@ -988,7 +1061,7 @@ describe('Orders API /api/orders', () => {
 
   // ====== 散客 walk-in ======
 
-  it('POST 散客 walk-in：customer_name + 无 member_id → 创建哨兵会员订单 + 写 ad_hoc FinanceEntry', async () => {
+  it('POST 散客 walk-in：下单不产生流水；出餐→送达后写入 meal_earned_walkin', async () => {
     const res = await app.fetch(
       new Request('http://test.local/api/orders', {
         method: 'POST',
@@ -1016,13 +1089,43 @@ describe('Orders API /api/orders', () => {
     expect(body.orders[0]!.card_id).toBeNull();
     expect(body.orders[0]!.notes).toBe('不要辣');
 
-    // FinanceEntry 应该有一条 ad_hoc 收入
+    const orderId = body.orders[0]!.id;
+    const none = await db
+      .select()
+      .from(schema.finance_entries)
+      .where(eq(schema.finance_entries.ref_order_id, orderId));
+    expect(none).toHaveLength(0);
+
+    const r2 = await app.fetch(
+      new Request(`http://test.local/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ status: 'fulfilled' }),
+      }),
+    );
+    expect(r2.status).toBe(200);
+
+    const r3 = await app.fetch(
+      new Request(`http://test.local/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ status: 'delivered' }),
+      }),
+    );
+    expect(r3.status).toBe(200);
+
     const entries = await db
       .select()
       .from(schema.finance_entries)
-      .where(eq(schema.finance_entries.ref_order_id, body.orders[0]!.id));
+      .where(eq(schema.finance_entries.ref_order_id, orderId));
     expect(entries).toHaveLength(1);
-    expect(entries[0]!.category).toBe('ad_hoc');
+    expect(entries[0]!.category).toBe('meal_earned_walkin');
     expect(entries[0]!.amount).toBe(80);
     expect(entries[0]!.description).toContain('张叔叔');
   });

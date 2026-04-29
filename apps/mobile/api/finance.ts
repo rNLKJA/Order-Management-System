@@ -36,6 +36,14 @@ export interface FinanceSummary {
   income: number;
   expense: number;
   net: number;
+  realized_income: number;
+  prepaid_income: number;
+  realized_net: number;
+  realized_by_channel: {
+    hospital: number;
+    regular: number;
+    walkin: number;
+  };
   byCategory: Partial<Record<FinanceCategory, number>> & Record<string, number>;
 }
 

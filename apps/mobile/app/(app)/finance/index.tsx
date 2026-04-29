@@ -57,6 +57,11 @@ type TypeFilter = 'all' | 'income' | 'expense';
 
 const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
   'all',
+  'card_prepaid_hospital',
+  'card_prepaid_regular',
+  'meal_earned_hospital',
+  'meal_earned_regular',
+  'meal_earned_walkin',
   'hospital_sub',
   'regular_sub',
   'ad_hoc',
@@ -195,7 +200,16 @@ export default function FinanceScreen() {
         setData({
           items: [],
           total: 0,
-          summary: { income: 0, expense: 0, net: 0, byCategory: {} },
+          summary: {
+            income: 0,
+            expense: 0,
+            net: 0,
+            realized_income: 0,
+            prepaid_income: 0,
+            realized_net: 0,
+            realized_by_channel: { hospital: 0, regular: 0, walkin: 0 },
+            byCategory: {},
+          },
         });
         setDetailItems([]);
         setFetchError(e instanceof Error ? e.message : '加载失败');
@@ -312,6 +326,58 @@ export default function FinanceScreen() {
               </GlassSurface>
             </View>
           ) : null}
+
+          <View style={styles.block}>
+            <SectionLabel>履约收入（已送达餐费 · 院内 / 院外 / 散客）</SectionLabel>
+            <BentoGrid gap={SPACING.md}>
+              <Bento span={3} mobileSpan={6}>
+                <StatTile
+                  label="履约合计"
+                  value={formatCNY(summary?.realized_income ?? 0)}
+                  icon="restaurant-outline"
+                  color={COLORS.success}
+                  tint="ok"
+                />
+              </Bento>
+              <Bento span={3} mobileSpan={6}>
+                <StatTile
+                  label="院内"
+                  value={formatCNY(summary?.realized_by_channel?.hospital ?? 0)}
+                  icon="medkit-outline"
+                  color={COLORS.brand}
+                  tint="info"
+                />
+              </Bento>
+              <Bento span={3} mobileSpan={6}>
+                <StatTile
+                  label="院外"
+                  value={formatCNY(summary?.realized_by_channel?.regular ?? 0)}
+                  icon="home-outline"
+                  color={COLORS.info}
+                  tint="info"
+                />
+              </Bento>
+              <Bento span={3} mobileSpan={6}>
+                <StatTile
+                  label="散客"
+                  value={formatCNY(summary?.realized_by_channel?.walkin ?? 0)}
+                  icon="walk-outline"
+                  color={COLORS.warning}
+                  tint="warn"
+                />
+              </Bento>
+              <Bento span={6} mobileSpan={12}>
+                <StatTile
+                  label="办卡预收（同期）"
+                  value={formatCNY(summary?.prepaid_income ?? 0)}
+                  icon="card-outline"
+                  color={COLORS.text.secondary}
+                  tint="info"
+                  hint="购卡/升级当天现金预收"
+                />
+              </Bento>
+            </BentoGrid>
+          </View>
 
           {/* 汇总（3 格 Bento） */}
           <View style={styles.block}>

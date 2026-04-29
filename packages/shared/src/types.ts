@@ -53,14 +53,24 @@ export type FinanceCategory =
   | 'hospital_sub'
   | 'regular_sub'
   | 'ad_hoc'
+  | 'card_prepaid_hospital'
+  | 'card_prepaid_regular'
+  | 'meal_earned_hospital'
+  | 'meal_earned_regular'
+  | 'meal_earned_walkin'
   | 'manual_expense'
   | 'legacy_income'
   | 'legacy_expense';
 
 export const FINANCE_CATEGORY_LABEL: Record<FinanceCategory, string> = {
-  hospital_sub: '院内订阅',
-  regular_sub: '院外订阅',
-  ad_hoc: '散餐',
+  hospital_sub: '院内办卡（旧·预收）',
+  regular_sub: '院外办卡（旧·预收）',
+  ad_hoc: '散餐送达（旧口径）',
+  card_prepaid_hospital: '院内办卡（预收）',
+  card_prepaid_regular: '院外办卡（预收）',
+  meal_earned_hospital: '院内餐·已送达',
+  meal_earned_regular: '院外餐·已送达',
+  meal_earned_walkin: '散客餐·已送达',
   manual_expense: '手动支出',
   legacy_income: '历史收入（迁移）',
   legacy_expense: '历史支出（迁移）',
