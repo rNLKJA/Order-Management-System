@@ -409,6 +409,24 @@ describe('财务接口 /api/finance', () => {
     expect(body.entry.voided).toBe(false);
   });
 
+  it('POST expense expense_kind=salary → salary_expense', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/finance/expense', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader(staffToken) },
+        body: JSON.stringify({
+          entry_date: '2026-04-23',
+          amount: 8000,
+          description: '厨房组 4 月工资',
+          expense_kind: 'salary',
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { entry: schema.FinanceEntry };
+    expect(body.entry.category).toBe('salary_expense');
+  });
+
   it('POST expense amount <= 0 返回 422', async () => {
     const res = await app.fetch(
       new Request('http://test.local/api/finance/expense', {

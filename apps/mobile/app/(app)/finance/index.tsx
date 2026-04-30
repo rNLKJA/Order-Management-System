@@ -57,7 +57,7 @@ type TypeFilter = 'all' | 'income' | 'expense';
 
 /** 与 @meal/shared FinanceCategory 中支出类一致，用于从 byCategory 拆出支出结构 */
 function isExpenseCategory(cat: string): boolean {
-  return cat === 'manual_expense' || cat === 'legacy_expense';
+  return cat === 'manual_expense' || cat === 'salary_expense' || cat === 'legacy_expense';
 }
 
 const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
@@ -71,6 +71,7 @@ const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
   'regular_sub',
   'ad_hoc',
   'manual_expense',
+  'salary_expense',
   'legacy_income',
   'legacy_expense',
 ];
@@ -105,9 +106,7 @@ export default function FinanceScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  const [from, setFrom] = useState(() =>
-    startOfMonthShanghai(formatDate(new Date())),
-  );
+  const [from, setFrom] = useState(() => formatDate(new Date()));
   const [to, setTo] = useState(() => formatDate(new Date()));
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [category, setCategory] = useState<FinanceCategory | 'all'>('all');

@@ -73,3 +73,58 @@ export function computeRenew(input: RenewInput): RenewResult {
     carriedMeals: carried,
   };
 }
+
+export interface RenewCustomInput {
+  oldStatus: 'active' | 'upgraded' | 'exhausted' | 'refunded';
+  oldRemainingMeals: number;
+  /** 单次续购档位的餐数（与 custom_pack_meals 一致） */
+  packMeals: number;
+  /** 单次续购实付（新卡 paid_amount） */
+  packPrice: number;
+}
+
+/**
+ * 自定义卡续卡：同价再买一档，剩餐结转；单价 = packPrice / packMeals（与首购逻辑一致）。
+ */
+export function computeRenewCustom(input: RenewCustomInput): RenewResult {
+  const { oldStatus, oldRemainingMeals, packMeals, packPrice } = input;
+
+  if (oldStatus !== 'active') {
+    throw new RenewError(
+      'RENEW_NOT_ALLOWED',
+      `仅 active 状态的卡可续，当前状态：${oldStatus}`,
+    );
+  }
+
+  if (oldRemainingMeals > CARD_RENEWAL_THRESHOLD_MEALS) {
+    throw new RenewError(
+      'RENEW_THRESHOLD_NOT_MET',
+      `续卡前提：剩餐 ≤ ${CARD_RENEWAL_THRESHOLD_MEALS}，当前剩餐 ${oldRemainingMeals}`,
+    );
+  }
+
+  if (packMeals <= 0 || !Number.isFinite(packMeals)) {
+    throw new RenewError('RENEW_NOT_ALLOWED', '自定义卡缺少有效的档位餐数，无法续卡');
+  }
+
+  if (packPrice <= 0 || !Number.isFinite(packPrice)) {
+    throw new RenewError('RENEW_NOT_ALLOWED', '自定义卡缺少有效的档位价格，无法续卡');
+  }
+
+  const carried = Math.max(0, oldRemainingMeals);
+  const newTotal = packMeals + carried;
+  const newUnitPrice = round2(packPrice / packMeals);
+
+  return {
+    newTotalMeals: newTotal,
+    newUsedMeals: 0,
+    newRemainingMeals: newTotal,
+    newUnitPrice,
+    newPaidAmount: round2(packPrice),
+    carriedMeals: carried,
+  };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}

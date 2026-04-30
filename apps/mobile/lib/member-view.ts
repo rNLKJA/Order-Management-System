@@ -25,16 +25,16 @@ export function usersById(users: ApiUser[]): Record<number, ApiUser> {
   return map;
 }
 
-function fallbackSpec(card: Card): { name: string } {
-  return { name: card.card_code };
-}
-
 export function apiCardToMockCard(
   card: Card,
   users: Record<number, ApiUser>,
   cardsById: Record<number, Card> = {},
 ): MockCard {
-  const spec = getCardSpec(card.is_hospital, card.card_code as SubscriptionCardCode) ?? fallbackSpec(card);
+  const spec = getCardSpec(card.is_hospital, card.card_code as SubscriptionCardCode);
+  const cardName =
+    card.card_code === 'custom' && (card.custom_label?.trim() ?? '').length > 0
+      ? card.custom_label!.trim()
+      : (spec?.name ?? card.card_code);
   const collector = users[card.collector_user_id]?.full_name ?? '';
   const recorder = users[card.created_by_user_id]?.full_name;
   const upgradedFromCard = card.upgraded_from_id != null ? cardsById[card.upgraded_from_id] : null;
@@ -42,13 +42,18 @@ export function apiCardToMockCard(
     ? (getCardSpec(
         upgradedFromCard.is_hospital,
         upgradedFromCard.card_code as SubscriptionCardCode,
-      )?.name ?? upgradedFromCard.card_code)
+      )?.name ??
+        (upgradedFromCard.card_code === 'custom' && upgradedFromCard.custom_label?.trim()
+          ? upgradedFromCard.custom_label.trim()
+          : upgradedFromCard.card_code))
     : undefined;
 
   return {
     id: card.id,
     card_code: card.card_code,
-    card_name: spec.name,
+    card_name: cardName,
+    custom_label: card.custom_label ?? undefined,
+    custom_pack_meals: card.custom_pack_meals ?? undefined,
     is_hospital: card.is_hospital,
     total_meals: card.total_meals,
     used_meals: card.used_meals,

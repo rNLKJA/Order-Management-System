@@ -130,6 +130,10 @@ export const cards = sqliteTable(
       .notNull()
       .default(sql`(unixepoch('now') * 1000)`),
     notes: text('notes').notNull().default(''),
+    /** 自定义卡名称；仅 card_code='custom' */
+    custom_label: text('custom_label'),
+    /** 自定义卡单次购买的餐数（续卡按此档加餐）；仅 custom */
+    custom_pack_meals: integer('custom_pack_meals'),
     // 退卡相关（仅 status='refunded' 时有值；新增为 nullable 所以老数据不用迁移）
     refund_amount: real('refund_amount'),
     refund_reason: text('refund_reason'),

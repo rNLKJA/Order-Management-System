@@ -59,6 +59,7 @@ export type FinanceCategory =
   | 'meal_earned_regular'
   | 'meal_earned_walkin'
   | 'manual_expense'
+  | 'salary_expense'
   | 'legacy_income'
   | 'legacy_expense';
 
@@ -72,6 +73,7 @@ export const FINANCE_CATEGORY_LABEL: Record<FinanceCategory, string> = {
   meal_earned_regular: '院外餐·已送达',
   meal_earned_walkin: '散客餐·已送达',
   manual_expense: '手动支出',
+  salary_expense: '工资支出',
   legacy_income: '历史收入（迁移）',
   legacy_expense: '历史支出（迁移）',
 };

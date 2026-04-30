@@ -13,6 +13,10 @@ export interface MockCard {
   id: number;
   card_code: string;
   card_name: string;
+  /** 自定义卡名称（与 API custom_label 对应） */
+  custom_label?: string;
+  /** 自定义卡单次档位餐数 */
+  custom_pack_meals?: number;
   is_hospital: boolean;
   total_meals: number;
   used_meals: number;

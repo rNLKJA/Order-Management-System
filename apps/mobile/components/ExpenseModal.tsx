@@ -15,6 +15,7 @@ import {
   TextInput,
   useTheme,
   HelperText,
+  SegmentedButtons,
 } from 'react-native-paper';
 import { expenseCreateSchema, formatDate } from '@meal/shared';
 import { createExpense } from '../api/finance';
@@ -32,6 +33,7 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
   const [entryDate, setEntryDate] = useState(() => formatDate(new Date()));
   const [amountText, setAmountText] = useState('');
   const [description, setDescription] = useState('');
+  const [expenseKind, setExpenseKind] = useState<'general' | 'salary'>('general');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +42,7 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
       setEntryDate(formatDate(new Date()));
       setAmountText('');
       setDescription('');
+      setExpenseKind('general');
       setError(null);
     }
   }, [visible]);
@@ -57,6 +60,7 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
       entry_date: entryDate,
       amount,
       description: description.trim(),
+      expense_kind: expenseKind,
     });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? '表单不合法');
@@ -87,6 +91,19 @@ export function ExpenseModal({ visible, onDismiss, onSaved }: Props) {
         <Text variant="titleLarge" style={styles.title}>
           新增支出
         </Text>
+
+        <Text variant="labelLarge" style={{ marginBottom: 8, color: COLORS.text.secondary }}>
+          类型
+        </Text>
+        <SegmentedButtons
+          value={expenseKind}
+          onValueChange={(v) => setExpenseKind(v as 'general' | 'salary')}
+          buttons={[
+            { value: 'general', label: '一般支出' },
+            { value: 'salary', label: '工资' },
+          ]}
+          style={{ marginBottom: 12 }}
+        />
 
         <DatePicker
           label="日期"

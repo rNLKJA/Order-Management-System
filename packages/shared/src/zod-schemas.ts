@@ -58,7 +58,7 @@ export type MemberUpdateInput = z.infer<typeof memberUpdateSchema>;
 
 // =========== 卡 ===========
 
-const zCardCode = z.enum([
+const zCatalogCardCode = z.enum([
   'experience',
   'small_week',
   'week',
@@ -67,24 +67,46 @@ const zCardCode = z.enum([
   'year',
 ]);
 
-export const cardPurchaseSchema = z.object({
+const cardPurchaseShared = z.object({
   member_id: z.number().int().positive(),
-  card_code: zCardCode,
   is_hospital: z.boolean(),
   collector_user_id: z.number().int().positive().optional(),
   created_by_user_id: z.number().int().positive().optional(),
   purchased_at: zIsoDateTime.optional(),
   notes: z.string().max(512).optional().default(''),
 });
+
+export const cardPurchaseSchema = z.discriminatedUnion('card_code', [
+  cardPurchaseShared.extend({
+    card_code: zCatalogCardCode,
+  }),
+  cardPurchaseShared.extend({
+    card_code: z.literal('custom'),
+    custom_label: z.string().min(1).max(64).trim(),
+    total_meals: z.number().int().positive().max(50_000),
+    paid_amount: zAmount.positive(),
+  }),
+]);
 export type CardPurchaseInput = z.infer<typeof cardPurchaseSchema>;
 
-export const cardUpgradeSchema = z.object({
-  card_code: zCardCode,
+const cardUpgradeShared = z.object({
   is_hospital: z.boolean(),
   collector_user_id: z.number().int().positive().optional(),
   created_by_user_id: z.number().int().positive().optional(),
   notes: z.string().max(512).optional().default(''),
 });
+
+export const cardUpgradeSchema = z.discriminatedUnion('card_code', [
+  cardUpgradeShared.extend({
+    card_code: zCatalogCardCode,
+  }),
+  cardUpgradeShared.extend({
+    card_code: z.literal('custom'),
+    custom_label: z.string().min(1).max(64).trim(),
+    total_meals: z.number().int().positive().max(50_000),
+    paid_amount: zAmount.positive(),
+  }),
+]);
 export type CardUpgradeInput = z.infer<typeof cardUpgradeSchema>;
 
 /**
@@ -165,6 +187,8 @@ export const expenseCreateSchema = z.object({
   amount: zAmount.positive(),
   description: z.string().min(1).max(512),
   created_by_user_id: z.number().int().positive().optional(),
+  /** general → manual_expense；salary → salary_expense（工资，便于平账统计） */
+  expense_kind: z.enum(['general', 'salary']).optional().default('general'),
 });
 export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
 

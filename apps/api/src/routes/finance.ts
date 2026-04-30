@@ -211,12 +211,15 @@ financeRouter.post(
 
     const createdBy = body.created_by_user_id ?? me.id;
 
+    const expenseCategory =
+      body.expense_kind === 'salary' ? 'salary_expense' : 'manual_expense';
+
     const rows = await db
       .insert(schema.finance_entries)
       .values({
         entry_date: body.entry_date,
         type: 'expense',
-        category: 'manual_expense',
+        category: expenseCategory,
         amount: body.amount,
         description: body.description,
         source: 'manual',

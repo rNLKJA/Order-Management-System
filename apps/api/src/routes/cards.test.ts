@@ -210,6 +210,44 @@ describe('POST /api/cards (新购)', () => {
     expect(body.financeEntry.category).toBe('card_prepaid_hospital');
   });
 
+  it('自定义套餐：定名定价定份数，入账预收', async () => {
+    const { id: memberId } = await seedMember(ctx.db, {
+      created_by_user_id: ctx.userId,
+      is_hospital: false,
+    });
+
+    const res = await authedFetch(ctx.app, ctx.token, '/api/cards', {
+      method: 'POST',
+      body: JSON.stringify({
+        member_id: memberId,
+        card_code: 'custom',
+        custom_label: '瓜包餐',
+        total_meals: 20,
+        paid_amount: 500,
+        is_hospital: false,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      card: {
+        card_code: string;
+        paid_amount: number;
+        total_meals: number;
+        unit_price: number;
+        custom_label: string | null;
+        custom_pack_meals: number | null;
+      };
+      financeEntry: { category: string };
+    };
+    expect(body.card.card_code).toBe('custom');
+    expect(body.card.paid_amount).toBe(500);
+    expect(body.card.total_meals).toBe(20);
+    expect(body.card.unit_price).toBe(25);
+    expect(body.card.custom_label).toBe('瓜包餐');
+    expect(body.card.custom_pack_meals).toBe(20);
+    expect(body.financeEntry.category).toBe('card_prepaid_regular');
+  });
+
   it('会员已有 active 卡 → 409', async () => {
     const { id: memberId } = await seedMember(ctx.db, { created_by_user_id: ctx.userId });
     await seedCard(ctx.db, {

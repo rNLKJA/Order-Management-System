@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CARD_CATALOG,
   AD_HOC_UNIT_PRICE,
+  buildCustomCardSpec,
   getCardSpec,
   listCards,
   listUpgradeOptions,
@@ -101,6 +102,22 @@ describe('card-catalog', () => {
       // 假设有人持 230 元院内大周卡，院内大周卡本身 230 元不作为升级选项
       const options = listUpgradeOptions(true, 230);
       expect(options.map((o) => o.code)).not.toContain('week');
+    });
+  });
+
+  describe('自定义套餐', () => {
+    it('getCardSpec 对 custom 返回 null', () => {
+      expect(getCardSpec(false, 'custom')).toBeNull();
+      expect(getCardSpec(true, 'custom')).toBeNull();
+    });
+
+    it('buildCustomCardSpec 计算单价', () => {
+      const s = buildCustomCardSpec('瓜包餐', 20, 500);
+      expect(s.code).toBe('custom');
+      expect(s.name).toBe('瓜包餐');
+      expect(s.meals).toBe(20);
+      expect(s.totalPrice).toBe(500);
+      expect(s.unitPrice).toBe(25);
     });
   });
 });

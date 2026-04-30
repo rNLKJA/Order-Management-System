@@ -107,14 +107,28 @@ export default function MemberDetailScreen() {
   const handlePurchase = useCallback(
     async (p: CardFlowSubmitPayload) => {
       if (!member) throw new Error('会员不存在');
-      const { card } = await cardsApi.purchase({
-        member_id: member.id,
-        card_code: p.spec.code,
-        is_hospital: p.isHospital,
-        collector_user_id: p.collectorUserId,
-        created_by_user_id: p.createdByUserId,
-        notes: p.notes,
-      });
+      const { card } = await cardsApi.purchase(
+        p.spec.code === 'custom'
+          ? {
+              member_id: member.id,
+              card_code: 'custom',
+              custom_label: p.spec.name,
+              total_meals: p.spec.meals,
+              paid_amount: p.spec.totalPrice,
+              is_hospital: p.isHospital,
+              collector_user_id: p.collectorUserId,
+              created_by_user_id: p.createdByUserId,
+              notes: p.notes,
+            }
+          : {
+              member_id: member.id,
+              card_code: p.spec.code,
+              is_hospital: p.isHospital,
+              collector_user_id: p.collectorUserId,
+              created_by_user_id: p.createdByUserId,
+              notes: p.notes,
+            },
+      );
       setShowPurchaseModal(false);
       await invalidate(member.id);
       triggerSuccessHaptic();
@@ -129,13 +143,27 @@ export default function MemberDetailScreen() {
     async (p: CardFlowSubmitPayload) => {
       if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
       const fromName = member.active_card.card_name;
-      const { new_card, diff } = await cardsApi.upgrade(member.active_card.id, {
-        card_code: p.spec.code,
-        is_hospital: p.isHospital,
-        collector_user_id: p.collectorUserId,
-        created_by_user_id: p.createdByUserId,
-        notes: p.notes,
-      });
+      const { new_card, diff } = await cardsApi.upgrade(
+        member.active_card.id,
+        p.spec.code === 'custom'
+          ? {
+              card_code: 'custom',
+              custom_label: p.spec.name,
+              total_meals: p.spec.meals,
+              paid_amount: p.spec.totalPrice,
+              is_hospital: p.isHospital,
+              collector_user_id: p.collectorUserId,
+              created_by_user_id: p.createdByUserId,
+              notes: p.notes,
+            }
+          : {
+              card_code: p.spec.code,
+              is_hospital: p.isHospital,
+              collector_user_id: p.collectorUserId,
+              created_by_user_id: p.createdByUserId,
+              notes: p.notes,
+            },
+      );
       setShowUpgradeModal(false);
       await invalidate(member.id);
       triggerSuccessHaptic();
@@ -509,6 +537,8 @@ export default function MemberDetailScreen() {
           currentCard={{
             card_name: card.card_name,
             card_code: card.card_code as SubscriptionCardCode,
+            custom_label: card.custom_label,
+            custom_pack_meals: card.custom_pack_meals,
             is_hospital: card.is_hospital,
             paid_amount: card.paid_amount,
             used_meals: card.used_meals,
@@ -531,6 +561,8 @@ export default function MemberDetailScreen() {
           currentCard={{
             card_name: card.card_name,
             card_code: card.card_code as SubscriptionCardCode,
+            custom_label: card.custom_label,
+            custom_pack_meals: card.custom_pack_meals,
             is_hospital: card.is_hospital,
             paid_amount: card.paid_amount,
             used_meals: card.used_meals,

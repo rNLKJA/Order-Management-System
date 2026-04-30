@@ -19,10 +19,11 @@ export type HospitalCardCode =
   | 'month'
   | 'season'
   | 'year';
-export type SubscriptionCardCode = RegularCardCode | HospitalCardCode;
+/** 价目表卡种 + 自定义套餐（不入目录表） */
+export type SubscriptionCardCode = RegularCardCode | HospitalCardCode | 'custom';
 
 export interface CardSpec {
-  /** 机器码，存库用 */
+  /** 机器码，存库用（custom=自定义单价套餐） */
   code: SubscriptionCardCode;
   /** 中文展示名 */
   name: string;
@@ -57,9 +58,29 @@ export const CARD_CATALOG = {
 export const AD_HOC_UNIT_PRICE = 35;
 
 /**
+ * 构造自定义卡规格（仅用于 API/界面计算，定价 arbitrary）。
+ */
+export function buildCustomCardSpec(
+  name: string,
+  meals: number,
+  totalPrice: number,
+): CardSpec {
+  const unitPrice =
+    meals > 0 ? Math.round((totalPrice / meals) * 100) / 100 : 0;
+  return {
+    code: 'custom',
+    name,
+    meals,
+    unitPrice,
+    totalPrice,
+  };
+}
+
+/**
  * 根据"会员是否院内 + 卡代码"取卡规格。
  */
 export function getCardSpec(isHospital: boolean, code: SubscriptionCardCode): CardSpec | null {
+  if (code === 'custom') return null;
   if (isHospital) {
     const hospitalCatalog = CARD_CATALOG.hospital as Record<string, CardSpec>;
     return hospitalCatalog[code] ?? null;

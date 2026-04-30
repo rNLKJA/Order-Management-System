@@ -1,11 +1,14 @@
 /**
  * 卡相关的前端 API 封装。
  *
- * 契约与 apps/api/src/routes/cards.ts 严格对齐，Member 与 User 的 shape 这里简化
- * 到本模块直接用到的字段；更大的集合等 types 稳定后统一挪去 @meal/shared。
+ * 契约与 apps/api/src/routes/cards.ts 严格对齐；购卡/升级 body 见 CardPurchaseInput / CardUpgradeInput。
  */
 
-import type { FinanceCategory, SubscriptionCardCode } from '@meal/shared';
+import type {
+  CardPurchaseInput,
+  CardUpgradeInput,
+  FinanceCategory,
+} from '@meal/shared';
 import { api } from './client';
 
 export type CardStatus = 'active' | 'upgraded' | 'exhausted' | 'refunded';
@@ -13,7 +16,7 @@ export type CardStatus = 'active' | 'upgraded' | 'exhausted' | 'refunded';
 export interface Card {
   id: number;
   member_id: number;
-  card_code: SubscriptionCardCode;
+  card_code: string;
   is_hospital: boolean;
   total_meals: number;
   used_meals: number;
@@ -28,6 +31,8 @@ export interface Card {
   created_at: number;
   updated_at: number;
   notes: string;
+  custom_label: string | null;
+  custom_pack_meals: number | null;
   refund_amount: number | null;
   refund_reason: string | null;
   refunded_at: number | null;
@@ -44,23 +49,8 @@ export interface FinanceEntrySummary {
   type: 'income';
 }
 
-export interface PurchaseInput {
-  member_id: number;
-  card_code: SubscriptionCardCode;
-  is_hospital: boolean;
-  collector_user_id?: number;
-  created_by_user_id?: number;
-  purchased_at?: string;
-  notes?: string;
-}
-
-export interface UpgradeInput {
-  card_code: SubscriptionCardCode;
-  is_hospital: boolean;
-  collector_user_id?: number;
-  created_by_user_id?: number;
-  notes?: string;
-}
+export type PurchaseInput = CardPurchaseInput;
+export type UpgradeInput = CardUpgradeInput;
 
 export interface RenewInput {
   collector_user_id?: number;

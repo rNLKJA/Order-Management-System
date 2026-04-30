@@ -22,6 +22,7 @@ import {
   cardRefundSchema,
   cardRenewSchema,
   cardUpgradeSchema,
+  buildCustomCardSpec,
   getCardSpec,
   type SubscriptionCardCode,
 } from '@meal/shared';
@@ -29,7 +30,7 @@ import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import { requireAuth, requireDataOperator, type AuthVariables } from '../middleware/jwt.js';
 import { computeUpgrade, UpgradeError } from '../services/upgrade.js';
-import { computeRenew, RenewError } from '../services/renew.js';
+import { computeRenew, computeRenewCustom, RenewError } from '../services/renew.js';
 import { createAutoSubscriptionIncome } from '../services/finance.js';
 import { refundCard, CardRefundError } from '../services/refund.js';
 
@@ -73,13 +74,6 @@ cardsRouter.post('/', zValidator('json', cardPurchaseSchema), async (c) => {
   const authUser = c.get('authUser');
   const db = requestDb(c);
 
-  const spec = getCardSpec(input.is_hospital, input.card_code as SubscriptionCardCode);
-  if (!spec) {
-    throw new HTTPException(400, {
-      message: `卡种 ${input.card_code} 不在${input.is_hospital ? '院内' : '院外'}价目表中`,
-    });
-  }
-
   const memberRows = await db
     .select()
     .from(schema.members)
@@ -113,9 +107,39 @@ cardsRouter.post('/', zValidator('json', cardPurchaseSchema), async (c) => {
   const purchasedAt = input.purchased_at ? new Date(input.purchased_at) : new Date();
 
   const result = await db.transaction(async (tx) => {
-    const cardRows = await tx
-      .insert(schema.cards)
-      .values({
+    let insertRow: typeof schema.cards.$inferInsert;
+    let financeAmount: number;
+    let financeDesc: string;
+
+    if (input.card_code === 'custom') {
+      const unitPrice = round2(input.paid_amount / input.total_meals);
+      insertRow = {
+        member_id: input.member_id,
+        card_code: 'custom',
+        is_hospital: input.is_hospital,
+        total_meals: input.total_meals,
+        used_meals: 0,
+        remaining_meals: input.total_meals,
+        unit_price: unitPrice,
+        paid_amount: input.paid_amount,
+        status: 'active',
+        custom_label: input.custom_label,
+        custom_pack_meals: input.total_meals,
+        collector_user_id: collectorUserId,
+        created_by_user_id: createdByUserId,
+        purchased_at: purchasedAt,
+        notes: input.notes ?? '',
+      };
+      financeAmount = input.paid_amount;
+      financeDesc = `购卡：${input.custom_label}`;
+    } else {
+      const spec = getCardSpec(input.is_hospital, input.card_code);
+      if (!spec) {
+        throw new HTTPException(400, {
+          message: `卡种 ${input.card_code} 不在${input.is_hospital ? '院内' : '院外'}价目表中`,
+        });
+      }
+      insertRow = {
         member_id: input.member_id,
         card_code: input.card_code,
         is_hospital: input.is_hospital,
@@ -129,8 +153,12 @@ cardsRouter.post('/', zValidator('json', cardPurchaseSchema), async (c) => {
         created_by_user_id: createdByUserId,
         purchased_at: purchasedAt,
         notes: input.notes ?? '',
-      })
-      .returning();
+      };
+      financeAmount = spec.totalPrice;
+      financeDesc = `购卡：${spec.name}`;
+    }
+
+    const cardRows = await tx.insert(schema.cards).values(insertRow).returning();
     const card = cardRows[0]!;
 
     // 散客升级：把 is_walkin 翻成 false，后续下单会按正式会员处理。
@@ -143,13 +171,13 @@ cardsRouter.post('/', zValidator('json', cardPurchaseSchema), async (c) => {
     }
 
     const finance = await createAutoSubscriptionIncome(tx, {
-      amount: spec.totalPrice,
+      amount: financeAmount,
       is_hospital: input.is_hospital,
       ref_card_id: card.id,
       collector_user_id: collectorUserId,
       created_by_user_id: createdByUserId,
       purchased_at: purchasedAt,
-      description: `购卡：${spec.name}`,
+      description: financeDesc,
     });
 
     return { card, finance, promoted: wasWalkin };
@@ -196,13 +224,26 @@ cardsRouter.post(
       });
     }
 
-    // 升级默认沿用旧卡的 is_hospital；body 里传了就覆盖（但一般保持一致）。
     const isHospital = input.is_hospital ?? oldCard.is_hospital;
-    const newSpec = getCardSpec(isHospital, input.card_code as SubscriptionCardCode);
-    if (!newSpec) {
-      throw new HTTPException(400, {
-        message: `卡种 ${input.card_code} 不在${isHospital ? '院内' : '院外'}价目表中`,
-      });
+
+    let newSpec;
+    let upgradeTitle: string;
+    if (input.card_code === 'custom') {
+      newSpec = buildCustomCardSpec(
+        input.custom_label,
+        input.total_meals,
+        input.paid_amount,
+      );
+      upgradeTitle = input.custom_label;
+    } else {
+      const spec = getCardSpec(isHospital, input.card_code);
+      if (!spec) {
+        throw new HTTPException(400, {
+          message: `卡种 ${input.card_code} 不在${isHospital ? '院内' : '院外'}价目表中`,
+        });
+      }
+      newSpec = spec;
+      upgradeTitle = spec.name;
     }
 
     let computed;
@@ -238,6 +279,8 @@ cardsRouter.post(
           paid_amount: computed.newPaidAmount,
           status: 'active',
           upgraded_from_id: oldCard.id,
+          custom_label: input.card_code === 'custom' ? input.custom_label : null,
+          custom_pack_meals: input.card_code === 'custom' ? input.total_meals : null,
           collector_user_id: collectorUserId,
           created_by_user_id: createdByUserId,
           purchased_at: purchasedAt,
@@ -258,7 +301,7 @@ cardsRouter.post(
         collector_user_id: collectorUserId,
         created_by_user_id: createdByUserId,
         purchased_at: purchasedAt,
-        description: `升级补差：${newSpec.name}（原 ¥${oldCard.paid_amount}）`,
+        description: `升级补差：${upgradeTitle}（原 ¥${oldCard.paid_amount}）`,
       });
 
       const refreshedOld = await tx
@@ -310,26 +353,51 @@ cardsRouter.post(
       throw new HTTPException(404, { message: '待续的卡不存在' });
     }
 
-    const spec = getCardSpec(oldCard.is_hospital, oldCard.card_code as SubscriptionCardCode);
-    if (!spec) {
-      // 理论上进不来：卡种被下架才会触发
-      throw new HTTPException(422, {
-        message: `当前卡种 ${oldCard.card_code} 已不在${oldCard.is_hospital ? '院内' : '院外'}价目表，无法续卡`,
-      });
-    }
-
     let computed;
-    try {
-      computed = computeRenew({
-        oldStatus: oldCard.status,
-        oldRemainingMeals: oldCard.remaining_meals,
-        spec,
-      });
-    } catch (e) {
-      if (e instanceof RenewError) {
-        return c.json({ code: e.code, message: e.message }, 422);
+    let renewLabel: string;
+
+    if (oldCard.card_code === 'custom') {
+      const packMeals = oldCard.custom_pack_meals;
+      if (packMeals == null || packMeals <= 0) {
+        throw new HTTPException(422, {
+          message:
+            '自定义卡缺少档位餐数记录，无法续卡（请联系管理员补数据或改用升级）',
+        });
       }
-      throw e;
+      try {
+        computed = computeRenewCustom({
+          oldStatus: oldCard.status,
+          oldRemainingMeals: oldCard.remaining_meals,
+          packMeals,
+          packPrice: oldCard.paid_amount,
+        });
+      } catch (e) {
+        if (e instanceof RenewError) {
+          return c.json({ code: e.code, message: e.message }, 422);
+        }
+        throw e;
+      }
+      renewLabel = oldCard.custom_label ?? '自定义套餐';
+    } else {
+      const spec = getCardSpec(oldCard.is_hospital, oldCard.card_code as SubscriptionCardCode);
+      if (!spec) {
+        throw new HTTPException(422, {
+          message: `当前卡种 ${oldCard.card_code} 已不在${oldCard.is_hospital ? '院内' : '院外'}价目表，无法续卡`,
+        });
+      }
+      try {
+        computed = computeRenew({
+          oldStatus: oldCard.status,
+          oldRemainingMeals: oldCard.remaining_meals,
+          spec,
+        });
+      } catch (e) {
+        if (e instanceof RenewError) {
+          return c.json({ code: e.code, message: e.message }, 422);
+        }
+        throw e;
+      }
+      renewLabel = spec.name;
     }
 
     const collectorUserId = await resolveCollectorUserId(db, input.collector_user_id, authUser.id);
@@ -350,6 +418,8 @@ cardsRouter.post(
           paid_amount: computed.newPaidAmount,
           status: 'active',
           upgraded_from_id: oldCard.id,
+          custom_label: oldCard.card_code === 'custom' ? oldCard.custom_label : null,
+          custom_pack_meals: oldCard.card_code === 'custom' ? oldCard.custom_pack_meals : null,
           collector_user_id: collectorUserId,
           created_by_user_id: createdByUserId,
           purchased_at: purchasedAt,
@@ -370,7 +440,7 @@ cardsRouter.post(
         collector_user_id: collectorUserId,
         created_by_user_id: createdByUserId,
         purchased_at: purchasedAt,
-        description: `续卡：${spec.name}（结转 ${computed.carriedMeals} 份）`,
+        description: `续卡：${renewLabel}（结转 ${computed.carriedMeals} 份）`,
       });
 
       const refreshedOld = await tx
@@ -578,6 +648,10 @@ cardsRouter.patch(
 );
 
 // ================== helpers ==================
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
 /**
  * 决定最终的 collector_user_id：

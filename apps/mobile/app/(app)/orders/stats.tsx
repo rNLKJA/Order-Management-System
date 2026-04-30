@@ -97,8 +97,8 @@ export default function OrdersStatsScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTopOnFocus(scrollRef);
 
-  const [chartRange, setChartRange] = useState<ChartRange>('month');
-  const [from, setFrom] = useState(() => startOfRange('month', formatDate(new Date())));
+  const [chartRange, setChartRange] = useState<ChartRange>('today');
+  const [from, setFrom] = useState(() => formatDate(new Date()));
   const [to, setTo] = useState(() => formatDate(new Date()));
 
   const [orders, setOrders] = useState<DailyOrder[]>([]);
@@ -248,7 +248,8 @@ export default function OrdersStatsScreen() {
         .sort((a, b) => (a[0] > b[0] ? 1 : -1))
         .map(([date, meals]) => ({ date, meals }));
     }
-    const visibleDays = chartRange === 'week' ? 7 : 30;
+    const visibleDays =
+      chartRange === 'today' ? 1 : chartRange === 'week' ? 7 : 30;
     const base = chartRange === 'custom' ? byDay.slice().reverse() : byDay.slice(0, visibleDays).reverse();
     return base.map((d) => ({ date: d.date, meals: d.meals }));
   }, [byDay, chartRange, days]);

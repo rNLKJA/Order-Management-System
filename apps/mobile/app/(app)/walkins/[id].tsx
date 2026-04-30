@@ -128,14 +128,28 @@ export default function WalkinDetailScreen() {
     async (p: CardFlowSubmitPayload) => {
       setPromoting(true);
       try {
-        await cardsApi.purchase({
-          member_id: walkinId,
-          card_code: p.spec.code,
-          is_hospital: p.isHospital,
-          collector_user_id: p.collectorUserId,
-          created_by_user_id: p.createdByUserId,
-          notes: p.notes,
-        });
+        await cardsApi.purchase(
+          p.spec.code === 'custom'
+            ? {
+                member_id: walkinId,
+                card_code: 'custom',
+                custom_label: p.spec.name,
+                total_meals: p.spec.meals,
+                paid_amount: p.spec.totalPrice,
+                is_hospital: p.isHospital,
+                collector_user_id: p.collectorUserId,
+                created_by_user_id: p.createdByUserId,
+                notes: p.notes,
+              }
+            : {
+                member_id: walkinId,
+                card_code: p.spec.code,
+                is_hospital: p.isHospital,
+                collector_user_id: p.collectorUserId,
+                created_by_user_id: p.createdByUserId,
+                notes: p.notes,
+              },
+        );
         setShowPurchaseModal(false);
         setToast(`已开通【${p.spec.name}】，该散客已转为正式会员`);
         // 后端把 is_walkin 翻成 false 了，失效当前 walkin 详情缓存

@@ -27,6 +27,7 @@ import {
   listCards,
   listUpgradeOptions,
   getCardSpec,
+  buildCustomCardSpec,
   CARD_RENEWAL_THRESHOLD_MEALS,
   type CardSpec,
   type SubscriptionCardCode,
@@ -51,6 +52,8 @@ export type CardFlowMode = 'purchase' | 'upgrade' | 'renew';
 export interface CardFlowCurrentCard {
   card_name?: string;
   card_code?: SubscriptionCardCode;
+  custom_label?: string;
+  custom_pack_meals?: number;
   is_hospital: boolean;
   paid_amount: number;
   used_meals: number;
@@ -96,6 +99,9 @@ export function CardFlowModal(props: CardFlowModalProps) {
 
   const [isHospital, setIsHospital] = useState(memberIsHospital);
   const [selectedCode, setSelectedCode] = useState<SubscriptionCardCode | null>(null);
+  const [customLabel, setCustomLabel] = useState('');
+  const [customMealsText, setCustomMealsText] = useState('');
+  const [customPaidText, setCustomPaidText] = useState('');
   const [collectorId, setCollectorId] = useState<number>(defaultCollectorId);
   const [recorderId, setRecorderId] = useState<number>(defaultRecorderId);
   const [notes, setNotes] = useState('');
@@ -115,6 +121,13 @@ export function CardFlowModal(props: CardFlowModalProps) {
   // 续卡：锁死到当前卡的 spec（同卡种、同价目表、同价格）
   const renewSpec = useMemo<CardSpec | null>(() => {
     if (mode !== 'renew' || !currentCard?.card_code) return null;
+    if (currentCard.card_code === 'custom') {
+      const pack = currentCard.custom_pack_meals;
+      const label = (currentCard.custom_label ?? '').trim() || '自定义套餐';
+      const price = currentCard.paid_amount;
+      if (pack == null || pack <= 0 || !(price > 0)) return null;
+      return buildCustomCardSpec(label, pack, price);
+    }
     return getCardSpec(currentCard.is_hospital, currentCard.card_code);
   }, [mode, currentCard]);
 
@@ -123,6 +136,9 @@ export function CardFlowModal(props: CardFlowModalProps) {
       setIsHospital(currentCard?.is_hospital ?? memberIsHospital);
       // 续卡：初始化选中态为当前卡种，其他模式清空
       setSelectedCode(mode === 'renew' ? (currentCard?.card_code ?? null) : null);
+      setCustomLabel('');
+      setCustomMealsText('');
+      setCustomPaidText('');
       setCollectorId(defaultCollectorId);
       setRecorderId(defaultRecorderId);
       setNotes('');
@@ -134,20 +150,42 @@ export function CardFlowModal(props: CardFlowModalProps) {
   const allCards = useMemo(() => listCards(isHospital), [isHospital]);
   const allowedCodes = useMemo(() => {
     if (mode === 'upgrade' && currentCard) {
-      return new Set(
+      const set = new Set<SubscriptionCardCode>(
         listUpgradeOptions(isHospital, currentCard.paid_amount).map((c) => c.code),
       );
+      set.add('custom');
+      return set;
     }
     if (mode === 'renew' && currentCard?.card_code) {
       return new Set<SubscriptionCardCode>([currentCard.card_code]);
+    }
+    if (mode === 'purchase') {
+      const set = new Set<SubscriptionCardCode>(allCards.map((c) => c.code));
+      set.add('custom');
+      return set;
     }
     return new Set(allCards.map((c) => c.code));
   }, [mode, currentCard, isHospital, allCards]);
 
   const selectedSpec = useMemo<CardSpec | null>(() => {
     if (mode === 'renew') return renewSpec;
+    if (selectedCode === 'custom') {
+      const label = customLabel.trim();
+      const meals = parseInt(customMealsText.replace(/[^\d]/g, ''), 10);
+      const paid = Number(customPaidText);
+      if (
+        !label ||
+        !Number.isFinite(meals) ||
+        meals <= 0 ||
+        !Number.isFinite(paid) ||
+        paid <= 0
+      ) {
+        return null;
+      }
+      return buildCustomCardSpec(label, meals, paid);
+    }
     return allCards.find((c) => c.code === selectedCode) ?? null;
-  }, [mode, renewSpec, allCards, selectedCode]);
+  }, [mode, renewSpec, allCards, selectedCode, customLabel, customMealsText, customPaidText]);
 
   const crossZone =
     mode === 'upgrade' &&
@@ -176,7 +214,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
 
   const canSubmit =
     !!selectedSpec &&
-    allowedCodes.has(selectedSpec.code) &&
+    (selectedSpec.code === 'custom' ? allowedCodes.has('custom') : allowedCodes.has(selectedSpec.code)) &&
     !submitting &&
     (mode !== 'renew' || renewThresholdOk);
 
@@ -304,6 +342,9 @@ export function CardFlowModal(props: CardFlowModalProps) {
                         onPress={() => {
                           setIsHospital(v);
                           setSelectedCode(null);
+                          setCustomLabel('');
+                          setCustomMealsText('');
+                          setCustomPaidText('');
                         }}
                       >
                         <Text
@@ -346,79 +387,193 @@ export function CardFlowModal(props: CardFlowModalProps) {
             }
           />
           <View style={styles.cardGrid}>
-            {allCards.map((opt) => {
-              const enabled = allowedCodes.has(opt.code);
-              const active = enabled && opt.code === selectedCode;
-              const iconName = cardIconByCode(opt.code);
-              return (
+            {mode === 'renew' && currentCard?.card_code === 'custom' ? (
+              renewSpec ? (
                 <Pressable
-                  key={opt.code}
-                  disabled={!enabled || submitting || mode === 'renew'}
-                  onPress={() => setSelectedCode(opt.code)}
+                  disabled
                   style={[
                     styles.cardOption,
                     isCompactPhone && styles.cardOptionCompact,
-                    active && styles.cardOptionActive,
-                    !enabled && styles.cardOptionDisabled,
+                    styles.cardOptionActive,
                   ]}
                 >
                   <View style={styles.cardOptionTop}>
                     <View style={styles.cardInfoLeft}>
                       <View style={styles.cardIconWrap}>
                         <Ionicons
-                          name={iconName}
+                          name={cardIconByCode('custom')}
                           size={16}
-                          color={enabled ? IOS_COLORS.blue : IOS_COLORS.labelTertiary}
+                          color={IOS_COLORS.blue}
                         />
                       </View>
                       <View style={{ minWidth: 0, flex: 1 }}>
-                        <Text
-                          style={[
-                            styles.cardOptionName,
-                            isCompactPhone && styles.cardOptionNameCompact,
-                            !enabled && styles.cardOptionTextDisabled,
-                          ]}
-                        >
-                          {opt.name}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.cardOptionMeals,
-                            !enabled && styles.cardOptionTextDisabled,
-                          ]}
-                        >
-                          {opt.meals} 份
+                        <Text style={styles.cardOptionName}>{renewSpec.name}</Text>
+                        <Text style={styles.cardOptionMeals}>
+                          续费档 {renewSpec.meals} 份
                         </Text>
                       </View>
                     </View>
-                    <Text
+                    <Text style={styles.cardOptionPrice}>¥{renewSpec.totalPrice}</Text>
+                  </View>
+                  <Text style={styles.cardOptionUnit}>¥{renewSpec.unitPrice}/份</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.warnBanner}>
+                  <Text style={styles.warnText}>自定义卡缺少档位数据，无法续卡</Text>
+                </View>
+              )
+            ) : (
+              <>
+                {allCards.map((opt) => {
+                  const enabled = allowedCodes.has(opt.code);
+                  const active = enabled && opt.code === selectedCode;
+                  const iconName = cardIconByCode(opt.code);
+                  return (
+                    <Pressable
+                      key={opt.code}
+                      disabled={!enabled || submitting || mode === 'renew'}
+                      onPress={() => {
+                        setSelectedCode(opt.code);
+                        setCustomLabel('');
+                        setCustomMealsText('');
+                        setCustomPaidText('');
+                      }}
                       style={[
-                        styles.cardOptionPrice,
-                        isCompactPhone && styles.cardOptionPriceCompact,
-                        !enabled && styles.cardOptionTextDisabled,
+                        styles.cardOption,
+                        isCompactPhone && styles.cardOptionCompact,
+                        active && styles.cardOptionActive,
+                        !enabled && styles.cardOptionDisabled,
                       ]}
                     >
-                      ¥{opt.totalPrice}
-                    </Text>
-                  </View>
-                  <Text
+                      <View style={styles.cardOptionTop}>
+                        <View style={styles.cardInfoLeft}>
+                          <View style={styles.cardIconWrap}>
+                            <Ionicons
+                              name={iconName}
+                              size={16}
+                              color={enabled ? IOS_COLORS.blue : IOS_COLORS.labelTertiary}
+                            />
+                          </View>
+                          <View style={{ minWidth: 0, flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.cardOptionName,
+                                isCompactPhone && styles.cardOptionNameCompact,
+                                !enabled && styles.cardOptionTextDisabled,
+                              ]}
+                            >
+                              {opt.name}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.cardOptionMeals,
+                                !enabled && styles.cardOptionTextDisabled,
+                              ]}
+                            >
+                              {opt.meals} 份
+                            </Text>
+                          </View>
+                        </View>
+                        <Text
+                          style={[
+                            styles.cardOptionPrice,
+                            isCompactPhone && styles.cardOptionPriceCompact,
+                            !enabled && styles.cardOptionTextDisabled,
+                          ]}
+                        >
+                          ¥{opt.totalPrice}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.cardOptionUnit,
+                          !enabled && styles.cardOptionTextDisabled,
+                        ]}
+                      >
+                        ¥{opt.unitPrice}/份
+                      </Text>
+                      {!enabled && mode === 'upgrade' ? (
+                        <Text style={styles.disabledReason}>不支持降级 / 同价</Text>
+                      ) : null}
+                      {!enabled && mode === 'renew' ? (
+                        <Text style={styles.disabledReason}>续卡只能同级</Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+                {(mode === 'purchase' || mode === 'upgrade') && (
+                  <Pressable
+                    key="custom-plan"
+                    disabled={!allowedCodes.has('custom') || submitting}
+                    onPress={() => setSelectedCode('custom')}
                     style={[
-                      styles.cardOptionUnit,
-                      !enabled && styles.cardOptionTextDisabled,
+                      styles.cardOption,
+                      isCompactPhone && styles.cardOptionCompact,
+                      selectedCode === 'custom' && styles.cardOptionActive,
+                      !allowedCodes.has('custom') && styles.cardOptionDisabled,
                     ]}
                   >
-                    ¥{opt.unitPrice}/份
-                  </Text>
-                  {!enabled && mode === 'upgrade' ? (
-                    <Text style={styles.disabledReason}>不支持降级 / 同价</Text>
-                  ) : null}
-                  {!enabled && mode === 'renew' ? (
-                    <Text style={styles.disabledReason}>续卡只能同级</Text>
-                  ) : null}
-                </Pressable>
-              );
-            })}
+                    <View style={styles.cardOptionTop}>
+                      <View style={styles.cardInfoLeft}>
+                        <View style={styles.cardIconWrap}>
+                          <Ionicons
+                            name={cardIconByCode('custom')}
+                            size={16}
+                            color={
+                              allowedCodes.has('custom')
+                                ? IOS_COLORS.blue
+                                : IOS_COLORS.labelTertiary
+                            }
+                          />
+                        </View>
+                        <View style={{ minWidth: 0, flex: 1 }}>
+                          <Text style={styles.cardOptionName}>自定义套餐</Text>
+                          <Text style={styles.cardOptionMeals}>自定名称 · 餐数 · 总价</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.cardOptionPrice, { fontSize: 22 }]}>自定</Text>
+                    </View>
+                    <Text style={styles.cardOptionUnit}>单价按总价÷份数计</Text>
+                  </Pressable>
+                )}
+              </>
+            )}
           </View>
+
+          {(mode === 'purchase' || mode === 'upgrade') && selectedCode === 'custom' ? (
+            <>
+              <SectionLabel text="自定义内容" hint="填名称、份数、套餐总价" />
+              <View style={styles.card}>
+                <TextInput
+                  style={styles.customField}
+                  placeholder="套餐名称，如：瓜包餐"
+                  placeholderTextColor={IOS_COLORS.labelTertiary}
+                  value={customLabel}
+                  editable={!submitting}
+                  onChangeText={setCustomLabel}
+                  maxLength={64}
+                />
+                <TextInput
+                  style={styles.customField}
+                  placeholder="餐次（整数），如：20"
+                  placeholderTextColor={IOS_COLORS.labelTertiary}
+                  value={customMealsText}
+                  editable={!submitting}
+                  onChangeText={(t) => setCustomMealsText(t.replace(/[^\d]/g, ''))}
+                  keyboardType="number-pad"
+                />
+                <TextInput
+                  style={styles.customField}
+                  placeholder="套餐总价（¥），如：500"
+                  placeholderTextColor={IOS_COLORS.labelTertiary}
+                  value={customPaidText}
+                  editable={!submitting}
+                  onChangeText={(t) => setCustomPaidText(t.replace(/[^0-9.]/g, ''))}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </>
+          ) : null}
 
           {/* 收款人 */}
           <SectionLabel text="收款人" />
@@ -579,6 +734,8 @@ function round2(n: number): number {
 
 function cardIconByCode(code: SubscriptionCardCode): keyof typeof Ionicons.glyphMap {
   switch (code) {
+    case 'custom':
+      return 'pricetag-outline';
     case 'experience':
       return 'sparkles-outline';
     case 'small_week':
@@ -707,6 +864,15 @@ const styles = StyleSheet.create({
   notesInput: {
     fontSize: 15, color: IOS_COLORS.label,
     padding: 14, minHeight: 64, textAlignVertical: 'top',
+  },
+
+  customField: {
+    fontSize: 15,
+    color: IOS_COLORS.label,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: IOS_COLORS.separatorLight,
   },
 
   errorBanner: {
