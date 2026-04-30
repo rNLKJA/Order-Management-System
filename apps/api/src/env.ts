@@ -34,7 +34,7 @@ const envSchema = z.object({
   JWT_SECRET: z
     .string()
     .min(32, 'JWT_SECRET 必须至少 32 字符（建议 64 hex）'),
-  JWT_EXPIRES_IN: z.string().default('7d'),
+  JWT_EXPIRES_IN: z.string().default('1d'),
 
   CRON_SECRET: z.string().min(16).optional(),
 

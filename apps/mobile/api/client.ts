@@ -23,7 +23,8 @@
  */
 
 import Constants from 'expo-constants';
-import { getToken, clearToken } from '../hooks/useAuth';
+import { clearCredentials, getToken } from '../lib/authStorage';
+import { emitAuthSessionReset } from '../lib/authSession';
 
 // Web 本地预览在部分环境拿不到 expoConfig.extra，兜底统一走生产 API。
 const DEFAULT_BASE_URL = 'https://api.anshun-healthy-food.com';
@@ -75,7 +76,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       : undefined;
 
     if (res.status === 401) {
-      await clearToken();
+      await clearCredentials();
+      emitAuthSessionReset();
     }
     throw new ApiError(msg, res.status, code);
   }
