@@ -10,6 +10,10 @@ type ScrollableRef = {
     animated?: boolean;
     viewOffset?: number;
   }) => void;
+  getScrollResponder?: () =>
+    | { scrollTo?: (options: { x?: number; y?: number; animated?: boolean }) => void }
+    | null
+    | undefined;
 };
 
 /**
@@ -29,8 +33,19 @@ export function useScrollToTopOnFocus(ref: RefObject<ScrollableRef | null>) {
           node.scrollToOffset({ offset: 0, animated: false });
           return;
         }
+        // SectionList 在 sections 为空时 scrollToLocation 会抛 invariant；用底层 ScrollView 安全
+        const responder =
+          typeof node.getScrollResponder === 'function' ? node.getScrollResponder() : null;
+        if (responder && typeof responder.scrollTo === 'function') {
+          responder.scrollTo({ x: 0, y: 0, animated: false });
+          return;
+        }
         if (typeof node.scrollToLocation === 'function') {
-          node.scrollToLocation({ sectionIndex: 0, itemIndex: 0, animated: false, viewOffset: 0 });
+          try {
+            node.scrollToLocation({ sectionIndex: 0, itemIndex: 0, animated: false, viewOffset: 0 });
+          } catch {
+            /* empty list / no sections */
+          }
         }
       };
 

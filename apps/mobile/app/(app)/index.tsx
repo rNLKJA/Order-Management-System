@@ -342,19 +342,13 @@ export default function HomeScreen() {
                   </View>
                 </Bento>
 
-                {['finance', 'orders-stats', 'users', 'admin', 'audit-logs']
+                {['finance', 'orders-stats', 'users', 'admin', 'audit-logs', 'profile']
                   .filter((key) => Boolean(entriesByKey[key]))
                   .map((key) => (
                     <Bento key={key} span={6} mobileSpan={12}>
                       <QuickEntryCard entry={entriesByKey[key]!} compact compactPhone={isCompactPhone} />
                     </Bento>
                   ))}
-
-                {entriesByKey.profile ? (
-                  <Bento span={12}>
-                    <QuickEntryCard entry={entriesByKey.profile} compactPhone={isCompactPhone} />
-                  </Bento>
-                ) : null}
               </BentoGrid>
             </View>
           </View>

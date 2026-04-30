@@ -120,6 +120,8 @@ export default function FinanceScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  /** 期间 KPI：默认汇总；切换到「履约收入」看已送达拆分与预收 */
+  const [periodKpiTab, setPeriodKpiTab] = useState<'summary' | 'fulfillment'>('summary');
 
   /** 期间总览：只按日期，便于履约/预收与下方列表筛选解耦 */
   const periodParams = useMemo<ListFinanceParams>(
@@ -387,93 +389,122 @@ export default function FinanceScreen() {
           </View>
 
           <View style={styles.block}>
-            <SectionLabel>履约收入（按已送达确认）</SectionLabel>
-            <BentoGrid gap={SPACING.md}>
-              <Bento span={3} mobileSpan={6}>
-                <StatTile
-                  label="履约合计"
-                  value={formatCNY(summary?.realized_income ?? 0)}
-                  icon="restaurant-outline"
-                  color={COLORS.success}
-                  tint="ok"
-                />
-              </Bento>
-              <Bento span={3} mobileSpan={6}>
-                <StatTile
-                  label="院内履约"
-                  value={formatCNY(summary?.realized_by_channel?.hospital ?? 0)}
-                  icon="medkit-outline"
-                  color={COLORS.brand}
-                  tint="info"
-                />
-              </Bento>
-              <Bento span={3} mobileSpan={6}>
-                <StatTile
-                  label="院外履约"
-                  value={formatCNY(summary?.realized_by_channel?.regular ?? 0)}
-                  icon="home-outline"
-                  color={COLORS.info}
-                  tint="info"
-                />
-              </Bento>
-              <Bento span={3} mobileSpan={6}>
-                <StatTile
-                  label="散客履约"
-                  value={formatCNY(summary?.realized_by_channel?.walkin ?? 0)}
-                  icon="walk-outline"
-                  color={COLORS.info}
-                  tint="info"
-                />
-              </Bento>
-              <Bento span={6} mobileSpan={12}>
-                <StatTile
-                  label="办卡预收（未履约）"
-                  value={formatCNY(summary?.prepaid_income ?? 0)}
-                  icon="time-outline"
-                  color={COLORS.warning}
-                  tint="warn"
-                  hint="先收款，后续按送达转为履约收入"
-                />
-              </Bento>
-            </BentoGrid>
-          </View>
+            <SectionLabel>{`期间总览 · ${from} ~ ${to}`}</SectionLabel>
+            <GlassSurface padding={SPACING.md} style={[styles.filterCard, { marginBottom: SPACING.md }]}>
+              <View style={styles.segmentedBar}>
+                <Pressable
+                  style={[styles.segment, periodKpiTab === 'summary' && styles.segmentActive]}
+                  onPress={() => setPeriodKpiTab('summary')}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      periodKpiTab === 'summary' && styles.segmentTextActive,
+                    ]}
+                  >
+                    汇总
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.segment, periodKpiTab === 'fulfillment' && styles.segmentActive]}
+                  onPress={() => setPeriodKpiTab('fulfillment')}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      periodKpiTab === 'fulfillment' && styles.segmentTextActive,
+                    ]}
+                  >
+                    履约收入
+                  </Text>
+                </Pressable>
+              </View>
+            </GlassSurface>
 
-          {/* 汇总（3 格 Bento） */}
-          <View style={styles.block}>
-            <SectionLabel>{`汇总 · ${from} ~ ${to}`}</SectionLabel>
-            <BentoGrid gap={SPACING.md}>
-              <Bento span={4} mobileSpan={6}>
-                <StatTile
-                  label="总收入"
-                  value={formatCNY(summary?.income ?? 0)}
-                  icon="arrow-up-circle-outline"
-                  color={COLORS.brand}
-                  tint="info"
-                />
-              </Bento>
-              <Bento span={4} mobileSpan={6}>
-                <StatTile
-                  label="总支出"
-                  value={formatCNY(summary?.expense ?? 0)}
-                  icon="arrow-down-circle-outline"
-                  color={COLORS.danger}
-                  tint="danger"
-                />
-              </Bento>
-              <Bento span={4} mobileSpan={12}>
-                <StatTile
-                  label="净额"
-                  value={formatCNY(summary?.net ?? 0)}
-                  icon={
-                    (summary?.net ?? 0) >= 0
-                      ? 'checkmark-circle-outline'
-                      : 'close-circle-outline'
-                  }
-                  color={(summary?.net ?? 0) >= 0 ? COLORS.success : COLORS.danger}
-                  tint={(summary?.net ?? 0) >= 0 ? 'ok' : 'danger'}
-                />
-              </Bento>
-            </BentoGrid>
+            {periodKpiTab === 'summary' ? (
+              <BentoGrid gap={SPACING.md}>
+                <Bento span={4} mobileSpan={6}>
+                  <StatTile
+                    label="总收入"
+                    value={formatCNY(summary?.income ?? 0)}
+                    icon="arrow-up-circle-outline"
+                    color={COLORS.brand}
+                    tint="info"
+                  />
+                </Bento>
+                <Bento span={4} mobileSpan={6}>
+                  <StatTile
+                    label="总支出"
+                    value={formatCNY(summary?.expense ?? 0)}
+                    icon="arrow-down-circle-outline"
+                    color={COLORS.danger}
+                    tint="danger"
+                  />
+                </Bento>
+                <Bento span={4} mobileSpan={12}>
+                  <StatTile
+                    label="净额"
+                    value={formatCNY(summary?.net ?? 0)}
+                    icon={
+                      (summary?.net ?? 0) >= 0
+                        ? 'checkmark-circle-outline'
+                        : 'close-circle-outline'
+                    }
+                    color={(summary?.net ?? 0) >= 0 ? COLORS.success : COLORS.danger}
+                    tint={(summary?.net ?? 0) >= 0 ? 'ok' : 'danger'}
+                  />
+                </Bento>
+              </BentoGrid>
+            ) : (
+              <BentoGrid gap={SPACING.md}>
+                <Bento span={3} mobileSpan={6}>
+                  <StatTile
+                    label="履约合计"
+                    value={formatCNY(summary?.realized_income ?? 0)}
+                    icon="restaurant-outline"
+                    color={COLORS.success}
+                    tint="ok"
+                  />
+                </Bento>
+                <Bento span={3} mobileSpan={6}>
+                  <StatTile
+                    label="院内履约"
+                    value={formatCNY(summary?.realized_by_channel?.hospital ?? 0)}
+                    icon="medkit-outline"
+                    color={COLORS.brand}
+                    tint="info"
+                  />
+                </Bento>
+                <Bento span={3} mobileSpan={6}>
+                  <StatTile
+                    label="院外履约"
+                    value={formatCNY(summary?.realized_by_channel?.regular ?? 0)}
+                    icon="home-outline"
+                    color={COLORS.info}
+                    tint="info"
+                  />
+                </Bento>
+                <Bento span={3} mobileSpan={6}>
+                  <StatTile
+                    label="散客履约"
+                    value={formatCNY(summary?.realized_by_channel?.walkin ?? 0)}
+                    icon="walk-outline"
+                    color={COLORS.info}
+                    tint="info"
+                  />
+                </Bento>
+                <Bento span={6} mobileSpan={12}>
+                  <StatTile
+                    label="办卡预收（未履约）"
+                    value={formatCNY(summary?.prepaid_income ?? 0)}
+                    icon="time-outline"
+                    color={COLORS.warning}
+                    tint="warn"
+                    hint="先收款，后续按送达转为履约收入"
+                  />
+                </Bento>
+              </BentoGrid>
+            )}
           </View>
 
           <View style={styles.block}>
