@@ -3,8 +3,8 @@
  * 布局：欢迎卡（左图标右文案）→ 速览 4 连格 → 余餐提醒 → 快捷操作分层。
  */
 
-import { useRef } from 'react';
-import { StyleSheet, ScrollView, View, useWindowDimensions } from 'react-native';
+import { useRef, useState } from 'react';
+import { StyleSheet, ScrollView, View, useWindowDimensions, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
@@ -63,6 +63,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isCompactPhone = width <= 430;
+  const [todayQuickTab, setTodayQuickTab] = useState<'summary' | 'fulfillment'>('summary');
   const hour = new Date().getHours();
   const timeGreeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
 
@@ -251,47 +252,123 @@ export default function HomeScreen() {
               </GlassSurface>
             </View>
 
-            {/* 今日速览（4 格 Bento，统一 tint 风格） */}
+            {/* 今日速览：默认账本汇总；可切换到履约口径 */}
             <View style={styles.block}>
               <SectionLabel>今日速览</SectionLabel>
+              <GlassSurface padding={SPACING.md} style={[styles.quickToggleCard]}>
+                <View style={styles.segmentedBar}>
+                  <Pressable
+                    style={[styles.segment, todayQuickTab === 'summary' && styles.segmentActive]}
+                    onPress={() => setTodayQuickTab('summary')}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        todayQuickTab === 'summary' && styles.segmentTextActive,
+                      ]}
+                    >
+                      汇总
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.segment, todayQuickTab === 'fulfillment' && styles.segmentActive]}
+                    onPress={() => setTodayQuickTab('fulfillment')}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        todayQuickTab === 'fulfillment' && styles.segmentTextActive,
+                      ]}
+                    >
+                      履约
+                    </Text>
+                  </Pressable>
+                </View>
+              </GlassSurface>
               <BentoGrid gap={SPACING.md}>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile
-                    label="今日履约收入"
-                    value={formatCNY(fin.realized_income)}
-                    icon="restaurant-outline"
-                    color={COLORS.success}
-                    tint="ok"
-                    hint="已送达餐费（院内/院外/散客）"
-                  />
-                </Bento>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile
-                    label="今日支出"
-                    value={formatCNY(fin.expense)}
-                    icon="arrow-down-circle-outline"
-                    color={COLORS.danger}
-                    tint="danger"
-                  />
-                </Bento>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile
-                    label="今日净额（履约−支出）"
-                    value={formatCNY(fin.realized_net)}
-                    icon={fin.realized_net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
-                    color={fin.realized_net >= 0 ? COLORS.success : COLORS.danger}
-                    tint={fin.realized_net >= 0 ? 'ok' : 'danger'}
-                  />
-                </Bento>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile
-                    label="待出餐"
-                    value={`${pendingCount} 份`}
-                    icon="time-outline"
-                    color={COLORS.warning}
-                    tint="warn"
-                  />
-                </Bento>
+                {todayQuickTab === 'summary' ? (
+                  <>
+                    <Bento span={3} mobileSpan={6}>
+                      <StatTile
+                        label="今日总收入"
+                        value={formatCNY(fin.income)}
+                        icon="arrow-up-circle-outline"
+                        color={COLORS.brand}
+                        tint="info"
+                        hint="账本全部收入（含预收等）"
+                      />
+                    </Bento>
+                    <Bento span={3} mobileSpan={6}>
+                      <StatTile
+                        label="今日支出"
+                        value={formatCNY(fin.expense)}
+                        icon="arrow-down-circle-outline"
+                        color={COLORS.danger}
+                        tint="danger"
+                      />
+                    </Bento>
+                    <Bento span={3} mobileSpan={6}>
+                      <StatTile
+                        label="今日净额"
+                        value={formatCNY(fin.net)}
+                        icon={fin.net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
+                        color={fin.net >= 0 ? COLORS.success : COLORS.danger}
+                        tint={fin.net >= 0 ? 'ok' : 'danger'}
+                        hint="总收入减总支出"
+                      />
+                    </Bento>
+                    <Bento span={3} mobileSpan={6}>
+                      <StatTile
+                        label="待出餐"
+                        value={`${pendingCount} 份`}
+                        icon="time-outline"
+                        color={COLORS.warning}
+                        tint="warn"
+                      />
+                    </Bento>
+                  </>
+                ) : (
+                  <>
+                    <Bento span={3} mobileSpan={6}>
+                      <StatTile
+                        label="今日履约收入"
+                        value={formatCNY(fin.realized_income)}
+                        icon="restaurant-outline"
+                        color={COLORS.success}
+                        tint="ok"
+                        hint="已送达餐费（院内/院外/散客）"
+                      />
+                    </Bento>
+                    <Bento span={3} mobileSpan={6}>
+                      <StatTile
+                        label="今日支出"
+                        value={formatCNY(fin.expense)}
+                        icon="arrow-down-circle-outline"
+                        color={COLORS.danger}
+                        tint="danger"
+                      />
+                    </Bento>
+                    <Bento span={3} mobileSpan={6}>
+                      <StatTile
+                        label="今日净额"
+                        value={formatCNY(fin.realized_net)}
+                        icon={fin.realized_net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
+                        color={fin.realized_net >= 0 ? COLORS.success : COLORS.danger}
+                        tint={fin.realized_net >= 0 ? 'ok' : 'danger'}
+                        hint="履约收入减当日支出"
+                      />
+                    </Bento>
+                    <Bento span={3} mobileSpan={6}>
+                      <StatTile
+                        label="待出餐"
+                        value={`${pendingCount} 份`}
+                        icon="time-outline"
+                        color={COLORS.warning}
+                        tint="warn"
+                      />
+                    </Bento>
+                  </>
+                )}
               </BentoGrid>
             </View>
 
@@ -444,6 +521,34 @@ const styles = StyleSheet.create({
   greetingName: { ...TYPE.title1, color: COLORS.text.primary },
 
   block: { marginBottom: SPACING.lg },
+
+  quickToggleCard: {
+    marginBottom: SPACING.md,
+    borderRadius: 14,
+  },
+  segmentedBar: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(118,118,128,0.12)',
+    borderRadius: 10,
+    padding: 2,
+  },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  segmentActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  segmentText: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '500' },
+  segmentTextActive: { color: COLORS.text.primary, fontWeight: '600' },
 
   reminderRow: { flexDirection: 'row', alignItems: 'center' },
   reminderTextWrap: { flex: 1, marginLeft: SPACING.md },

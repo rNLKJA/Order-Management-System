@@ -21,39 +21,78 @@ export interface StatTileProps {
 export function StatTile({ label, value, icon, color, tint, hint }: StatTileProps) {
   return (
     <GlassSurface level={1} tint={tint} padding={SPACING.base} style={styles.tile}>
-      <View style={styles.row}>
+      <View style={styles.iconSlot}>
         {icon ? (
           <Ionicons
             name={icon}
-            size={16}
+            size={18}
             color={color ?? COLORS.text.tertiary}
-            style={styles.icon}
           />
         ) : null}
-        <Text style={styles.label} numberOfLines={1}>{label}</Text>
       </View>
+      <Text style={styles.label} numberOfLines={2}>
+        {label}
+      </Text>
       <Text
         style={[styles.value, color ? { color } : null]}
         numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
       >
         {value}
       </Text>
-      {hint ? <Text style={styles.hint} numberOfLines={1}>{hint}</Text> : null}
+      <View style={styles.hintSlot}>
+        {hint ? (
+          <Text style={styles.hint} numberOfLines={2}>
+            {hint}
+          </Text>
+        ) : null}
+      </View>
     </GlassSurface>
   );
 }
 
 const styles = StyleSheet.create({
-  tile: { alignItems: 'center', justifyContent: 'center', minHeight: 86 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  icon: {},
-  label: { ...TYPE.caption, color: COLORS.text.tertiary, textAlign: 'center' },
+  tile: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    minHeight: 160,
+    width: '100%',
+  },
+  iconSlot: {
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  label: {
+    ...TYPE.caption,
+    color: COLORS.text.tertiary,
+    textAlign: 'center',
+    lineHeight: 17,
+    width: '100%',
+    minHeight: 34,
+  },
   value: {
     ...TYPE.title2,
     color: COLORS.text.primary,
-    marginTop: 4,
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
+    width: '100%',
+    marginTop: 4,
+    minHeight: 30,
   },
-  hint: { ...TYPE.caption, color: COLORS.text.quaternary, marginTop: 2, textAlign: 'center' },
+  hintSlot: {
+    width: '100%',
+    minHeight: 32,
+    marginTop: 4,
+    justifyContent: 'flex-start',
+  },
+  hint: {
+    ...TYPE.caption,
+    color: COLORS.text.quaternary,
+    textAlign: 'center',
+    lineHeight: 15,
+    width: '100%',
+  },
 });
