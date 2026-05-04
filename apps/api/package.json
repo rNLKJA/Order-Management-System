@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "postinstall": "node ./scripts/vercel-migrate.mjs",
     "build": "node ./scripts/vercel-migrate.mjs && tsc --noEmit",
     "build:prod": "node ./scripts/vercel-migrate.mjs && tsc -p tsconfig.json",
     "start": "tsx src/server.ts",
