@@ -80,7 +80,15 @@ export function useMembersViewWithLimit(limit: 10 | 50 | 100 | 200): UseMembersV
       const usersMap = usersQuery.data ?? {};
       const results = await Promise.all(
         items.map(async (m) => {
-          const { cards } = await cardsApi.list(m.id, 'all');
+          let cards: Card[] = [];
+          try {
+            const r = await cardsApi.list(m.id, 'all');
+            cards = r.cards;
+          } catch {
+            // 常见原因：生产 SQLite 未跑 cards 相关 migration，/api/cards 500。
+            // 仍返回会员行，避免整页「会员档案」空白。
+            cards = [];
+          }
           return apiToMockMember(m, cards, usersMap);
         }),
       );
@@ -142,10 +150,14 @@ export function useMemberView(id: number): UseMemberViewResult {
       { member: MockMember } | { notFound: true }
     > => {
       try {
-        const [{ member }, { cards }] = await Promise.all([
-          membersApi.detail(id),
-          cardsApi.list(id, 'all'),
-        ]);
+        const { member } = await membersApi.detail(id);
+        let cards: Card[] = [];
+        try {
+          const r = await cardsApi.list(id, 'all');
+          cards = r.cards;
+        } catch {
+          cards = [];
+        }
         return {
           member: apiToMockMember(member, cards, usersQuery.data ?? {}),
         };

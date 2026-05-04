@@ -30,6 +30,16 @@ import {
   recomputeUid,
 } from '../services/members.js';
 
+/** 兼容部分网关把查询参数重复塞成 string[]、或传空串、或单值 number。 */
+function queryStringish(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v === 'number' && Number.isFinite(v)) return String(Math.floor(v));
+  const s = Array.isArray(v) ? v[0] : v;
+  if (typeof s !== 'string') return undefined;
+  const t = s.trim();
+  return t.length > 0 ? t : undefined;
+}
+
 export const membersRouter = new Hono<{ Variables: AuthVariables }>();
 
 // 全部接口需要登录
@@ -37,40 +47,58 @@ membersRouter.use('*', requireAuth());
 membersRouter.use('*', requireDataOperator());
 
 const listQuerySchema = z.object({
-  q: z.string().optional(),
-  is_hospital: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === 'true')),
-  is_active: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === 'true')),
-  include_archived: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((v) => v === 'true'),
+  q: z.preprocess(queryStringish, z.string().optional()),
+  is_hospital: z.preprocess(
+    queryStringish,
+    z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v === 'true')),
+  ),
+  is_active: z.preprocess(
+    queryStringish,
+    z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v === 'true')),
+  ),
+  include_archived: z.preprocess(
+    queryStringish,
+    z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((v) => v === 'true'),
+  ),
   /**
    * 会员 / 散客 / 全部过滤：
    *  - 'member'（默认）：只返回正式会员（is_walkin=false）
    *  - 'walkin'：只返回散客目录（is_walkin=true）
    *  - 'all'：两者都返回
    */
-  type: z.enum(['member', 'walkin', 'all']).optional().default('member'),
-  limit: z
-    .string()
-    .optional()
-    .transform((v) => {
-      const n = v === undefined ? 50 : Number(v);
-      return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 500) : 50;
-    }),
-  offset: z
-    .string()
-    .optional()
-    .transform((v) => {
-      const n = v === undefined ? 0 : Number(v);
-      return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
-    }),
+  type: z.preprocess(
+    queryStringish,
+    z.enum(['member', 'walkin', 'all']).default('member'),
+  ),
+  limit: z.preprocess(
+    queryStringish,
+    z
+      .string()
+      .optional()
+      .transform((v) => {
+        const n = v === undefined ? 50 : Number(v);
+        return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 500) : 50;
+      }),
+  ),
+  offset: z.preprocess(
+    queryStringish,
+    z
+      .string()
+      .optional()
+      .transform((v) => {
+        const n = v === undefined ? 0 : Number(v);
+        return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+      }),
+  ),
 });
 
 // =========== 列表 ===========
