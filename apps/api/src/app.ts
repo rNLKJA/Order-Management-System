@@ -47,7 +47,14 @@ export function createApp(deps: AppDeps = {}) {
 
   // 全局中间件
   app.use('*', logger());
-  app.use('*', secureHeaders());
+  // 默认 secureHeaders 带 Cross-Origin-Resource-Policy: same-origin，浏览器跨站 fetch
+  //（如 Expo Web → 独立 API 域名）会在已通过 CORS 的情况下仍读不到 JSON。
+  app.use(
+    '*',
+    secureHeaders({
+      crossOriginResourcePolicy: 'cross-origin',
+    }),
+  );
   // CORS：白名单 + 移动端透传（详见 cors-policy.ts）
   const corsOrigin = buildCorsOriginChecker({
     extra: corsInternal.parseExtra(process.env.CORS_ALLOWED_ORIGINS),
