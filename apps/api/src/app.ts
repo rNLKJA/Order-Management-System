@@ -64,7 +64,8 @@ export function createApp(deps: AppDeps = {}) {
     cors({
       origin: corsOrigin,
       allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+      // 不设 allowHeaders：OPTIONS 预检时回显浏览器的 Access-Control-Request-Headers，
+      // 避免 Expo Web / 监控 SDK 多带标头时预检被拒（固定白名单易漏）。
       credentials: true,
       maxAge: 600,
     }),
@@ -103,6 +104,26 @@ export function createApp(deps: AppDeps = {}) {
     }
     // eslint-disable-next-line no-console
     console.error('[unhandled]', err);
+    if (isSqlSchemaMismatchError(err)) {
+      return c.json(
+        {
+          code: 'SCHEMA_MISMATCH',
+          message:
+            '数据库结构与当前代码不一致（常见：未执行迁移）。请在服务端执行 apps/api 下的 pnpm db:migrate 后再试。',
+        },
+        503,
+      );
+    }
+    if (isSqlForeignKeyError(err)) {
+      return c.json(
+        {
+          code: 'CONSTRAINT_FAILED',
+          message:
+            '数据约束失败：请确认收款人、录入者等仍是在职账号，或刷新员工列表后重试。',
+        },
+        409,
+      );
+    }
     return c.json({ code: 'INTERNAL_ERROR', message: '服务器内部错误' }, 500);
   });
 
@@ -130,4 +151,17 @@ function codeFromStatus(status: number): string {
     default:
       return status >= 500 ? 'SERVER_ERROR' : 'ERROR';
   }
+}
+
+function isSqlSchemaMismatchError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes('no such column') || msg.includes('has no column named');
+}
+
+function isSqlForeignKeyError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes('FOREIGN KEY constraint failed') ||
+    msg.includes('SQLITE_CONSTRAINT_FOREIGNKEY')
+  );
 }
