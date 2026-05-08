@@ -30,6 +30,20 @@ import { apiToMockMember } from '../../lib/member-view';
 // ============================================================
 type EntryMode = 'member' | 'adhoc';
 
+/** 与 POST /api/orders/batch 单请求上限一致 */
+const MEMBER_BATCH_QUEUE_MAX = 30;
+
+function memberMeetsBatchCardRules(
+  m: MockMember,
+  lunch: number,
+  dinner: number,
+  isGift: boolean,
+): boolean {
+  if (isGift) return true;
+  const c = m.active_card;
+  return !!c && c.remaining_meals >= lunch + dinner;
+}
+
 export function EntryPanel({
   onAddMemberOrder,
   onAddMemberBatchOrder,
@@ -104,6 +118,8 @@ export function EntryPanel({
       isGift: boolean;
     }>
   >([]);
+  /** 批量模式：在搜索结果中多选会员，再统一填份数加入列表 */
+  const [batchPickedMembers, setBatchPickedMembers] = useState<MockMember[]>([]);
 
   // 散餐 state
   const [adhocName,       setAdhocName]       = useState('');
@@ -178,6 +194,7 @@ export function EntryPanel({
     setMemberIsGift(false);
     setMemberBatchMode(false);
     setMemberBatchQueue([]);
+    setBatchPickedMembers([]);
     setAdhocName(''); setAdhocPhone(''); setAdhocAddress('');
     setAdhocWechat('');
     setAdhocLunchQty(0); setAdhocDinnerQty(0);
@@ -283,29 +300,53 @@ export function EntryPanel({
       flashToast('请先上传凭证截图');
       return;
     }
-    if (
-      !selectedMember ||
-      lunchQty + dinnerQty === 0 ||
-      (!memberIsGift && (!memberHasCard || !memberCardEnough))
-    ) {
+    if (batchPickedMembers.length < 1) {
+      flashToast('请先在列表里点选至少一位会员');
       return;
+    }
+    if (lunchQty + dinnerQty === 0) {
+      flashToast('午餐或晚餐份数请至少填一项');
+      return;
+    }
+    const ineligible = batchPickedMembers.filter(
+      (m) => !memberMeetsBatchCardRules(m, lunchQty, dinnerQty, memberIsGift),
+    );
+    if (ineligible.length > 0) {
+      const label = ineligible.map((m) => m.nickname || m.name).join('、');
+      flashToast(`以下会员无卡或次数不足（可改赠送餐或减少份数）：${label}`);
+      return;
+    }
+    const queuedIds = new Set(memberBatchQueue.map((r) => r.member.id));
+    const unique = batchPickedMembers.filter((m) => !queuedIds.has(m.id));
+    if (unique.length === 0) {
+      flashToast('所选会员均已存在于待提交列表');
+      return;
+    }
+    if (memberBatchQueue.length + unique.length > MEMBER_BATCH_QUEUE_MAX) {
+      flashToast(
+        `待提交最多 ${MEMBER_BATCH_QUEUE_MAX} 条，当前还可加 ${MEMBER_BATCH_QUEUE_MAX - memberBatchQueue.length} 条`,
+      );
+      return;
+    }
+    if (unique.length < batchPickedMembers.length) {
+      flashToast(`已跳过 ${batchPickedMembers.length - unique.length} 位已在列表中的会员`);
     }
     setMemberBatchQueue([
       ...memberBatchQueue,
-      {
-        member: selectedMember,
+      ...unique.map((m) => ({
+        member: m,
         lunch: lunchQty,
         dinner: dinnerQty,
         notes: memberNotes.trim(),
         isGift: memberIsGift,
-      },
+      })),
     ]);
-    setSelectedMember(null);
+    setBatchPickedMembers([]);
     setMemberQuery('');
     setLunchQty(0);
     setDinnerQty(0);
     setMemberNotes('');
-    flashToast('已加入列表');
+    flashToast(`已加入 ${unique.length} 条`);
   };
 
   const handleSubmitMemberBatch = async () => {
@@ -354,11 +395,17 @@ export function EntryPanel({
     memberQtyOk &&
     proofOk &&
     !submitting;
+  const batchAddTargets = memberBatchMode ? batchPickedMembers : [];
+  const allPickedEligibleForBatch =
+    batchAddTargets.length > 0 &&
+    batchAddTargets.every((m) =>
+      memberMeetsBatchCardRules(m, lunchQty, dinnerQty, memberIsGift),
+    );
   const canAddToBatch =
     memberBatchMode &&
     !!onAddMemberBatchOrder &&
-    !!selectedMember &&
-    memberCardOk &&
+    batchAddTargets.length > 0 &&
+    allPickedEligibleForBatch &&
     memberQtyOk &&
     proofOk &&
     !submitting;
@@ -387,7 +434,27 @@ export function EntryPanel({
 
   const setBatchMode = (on: boolean) => {
     setMemberBatchMode(on);
-    if (!on) setMemberBatchQueue([]);
+    if (!on) {
+      setMemberBatchQueue([]);
+      setBatchPickedMembers([]);
+    } else {
+      setSelectedMember(null);
+      setBatchPickedMembers([]);
+    }
+  };
+
+  const toggleBatchPickMember = (m: MockMember) => {
+    setBatchPickedMembers((prev) => {
+      const has = prev.some((x) => x.id === m.id);
+      if (has) return prev.filter((x) => x.id !== m.id);
+      if (prev.length >= MEMBER_BATCH_QUEUE_MAX) {
+        requestAnimationFrame(() =>
+          flashToast(`单次最多选 ${MEMBER_BATCH_QUEUE_MAX} 人，可先加入列表再继续选`),
+        );
+        return prev;
+      }
+      return [...prev, m];
+    });
   };
 
   return (
@@ -492,7 +559,7 @@ export function EntryPanel({
                 </View>
                 {memberBatchMode ? (
                   <Text style={entryStyles.dateHint}>
-                    批量模式：选好会员与份数后点「加入列表」，可多次添加，最后用「批量录入」一次提交（共用上方凭证）。
+                    批量模式：在搜索结果里逐个点选多位会员（可多选），设好午餐/晚餐份数后点「加入列表」；可多次加入，最后「批量录入」一次提交（共用上方凭证）。
                   </Text>
                 ) : null}
               </>
@@ -508,13 +575,51 @@ export function EntryPanel({
                     placeholder="姓名 / 昵称 / 手机号搜索"
                     placeholderTextColor={IOS_COLORS.labelTertiary}
                     value={memberQuery}
-                    onChangeText={(q) => {
-                      setMemberQuery(q);
+                    onChangeText={(text) => {
+                      setMemberQuery(text);
                       if (selectedMember) setSelectedMember(null);
                     }}
                     clearButtonMode="while-editing"
                   />
                 </View>
+
+                {memberBatchMode && batchPickedMembers.length > 0 ? (
+                  <View style={{ marginTop: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={entryStyles.sectionLabel}>
+                        已选 {batchPickedMembers.length} 人
+                      </Text>
+                      <Pressable onPress={() => setBatchPickedMembers([])} hitSlop={8}>
+                        <Text style={entryStyles.changeBtn}>清空</Text>
+                      </Pressable>
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {batchPickedMembers.map((m) => (
+                        <Pressable
+                          key={m.id}
+                          onPress={() =>
+                            setBatchPickedMembers((prev) => prev.filter((x) => x.id !== m.id))
+                          }
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            backgroundColor: IOS_COLORS.blueLight,
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 20,
+                            maxWidth: '100%',
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, color: IOS_COLORS.label, fontWeight: '600' }} numberOfLines={1}>
+                            {m.nickname || m.name}
+                          </Text>
+                          <Ionicons name="close-circle" size={18} color={IOS_COLORS.labelSecondary} />
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
 
                 {/* 已选会员卡片 */}
                 {selectedMember ? (
@@ -585,37 +690,58 @@ export function EntryPanel({
                     </View>
                   ) : filteredMembers.length > 0 ? (
                     <View style={entryStyles.memberList}>
-                      {filteredMembers.map((m, i) => (
-                        <Pressable
-                          key={m.id}
-                          style={({ pressed }) => [
-                            entryStyles.memberRow,
-                            i === filteredMembers.length - 1 && entryStyles.memberRowLast,
-                            pressed && { backgroundColor: IOS_COLORS.fillLight },
-                          ]}
-                          onPress={() => {
-                            setSelectedMember(m);
-                            setMemberQuery(m.nickname || m.name);
-                          }}
-                        >
-                          <View style={[entryStyles.memberAvatar, { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
-                            <Text style={entryStyles.memberAvatarText}>{(m.nickname || m.name)[0]}</Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={entryStyles.memberName}>{m.name}</Text>
-                            <Text style={entryStyles.memberNick}>
-                              「{m.nickname}」· {m.is_hospital ? '院内' : '院外'}
-                            </Text>
-                          </View>
-                          {m.active_card ? (
-                            <Text style={entryStyles.memberCardBadge}>
-                              {m.active_card.card_name} 剩{m.active_card.remaining_meals}份
-                            </Text>
-                          ) : (
-                            <Text style={entryStyles.memberNoCard}>无卡 · 需先开卡</Text>
-                          )}
-                        </Pressable>
-                      ))}
+                      {memberBatchMode ? (
+                        <Text style={[entryStyles.dateHint, { paddingHorizontal: 14, paddingVertical: 8 }]}>
+                          点选行即可多选；所有人将使用下方相同的午餐/晚餐份数。
+                        </Text>
+                      ) : null}
+                      {filteredMembers.map((m, i) => {
+                        const picked = batchPickedMembers.some((x) => x.id === m.id);
+                        return (
+                          <Pressable
+                            key={m.id}
+                            style={({ pressed }) => [
+                              entryStyles.memberRow,
+                              i === filteredMembers.length - 1 && entryStyles.memberRowLast,
+                              pressed && { backgroundColor: IOS_COLORS.fillLight },
+                              memberBatchMode && picked && { backgroundColor: '#E3F2FD' },
+                            ]}
+                            onPress={() => {
+                              if (memberBatchMode) {
+                                toggleBatchPickMember(m);
+                              } else {
+                                setSelectedMember(m);
+                                setMemberQuery(m.nickname || m.name);
+                              }
+                            }}
+                          >
+                            {memberBatchMode ? (
+                              <Ionicons
+                                name={picked ? 'checkbox' : 'square-outline'}
+                                size={22}
+                                color={picked ? IOS_COLORS.blue : IOS_COLORS.labelSecondary}
+                                style={{ marginRight: 4 }}
+                              />
+                            ) : null}
+                            <View style={[entryStyles.memberAvatar, { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+                              <Text style={entryStyles.memberAvatarText}>{(m.nickname || m.name)[0]}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={entryStyles.memberName}>{m.name}</Text>
+                              <Text style={entryStyles.memberNick}>
+                                「{m.nickname}」· {m.is_hospital ? '院内' : '院外'}
+                              </Text>
+                            </View>
+                            {m.active_card ? (
+                              <Text style={entryStyles.memberCardBadge}>
+                                {m.active_card.card_name} 剩{m.active_card.remaining_meals}份
+                              </Text>
+                            ) : (
+                              <Text style={entryStyles.memberNoCard}>无卡 · 需先开卡</Text>
+                            )}
+                          </Pressable>
+                        );
+                      })}
                     </View>
                   ) : (
                     <View style={entryStyles.dropdownEmpty}>
@@ -844,7 +970,10 @@ export function EntryPanel({
             <>
               <Text style={entryStyles.submitMain}>批量录入</Text>
               <Text style={entryStyles.submitSub}>
-                已加入 {memberBatchQueue.length} 条
+                待提交 {memberBatchQueue.length} 条
+                {batchPickedMembers.length > 0
+                  ? ` · 已选 ${batchPickedMembers.length} 人 · 午${lunchQty} 晚${dinnerQty}`
+                  : ''}
                 {proofOk ? '' : ' · 请先上传凭证'}
               </Text>
             </>
@@ -890,7 +1019,9 @@ export function EntryPanel({
               disabled={!canAddToBatch}
               onPress={handleAddToMemberBatch}
             >
-              <Text style={entryStyles.submitBtnSecondaryText}>加入列表</Text>
+              <Text style={entryStyles.submitBtnSecondaryText}>
+                加入列表{batchPickedMembers.length > 0 ? ` (${batchPickedMembers.length}人)` : ''}
+              </Text>
             </Pressable>
             <Pressable
               style={[entryStyles.submitBtn, !canSubmitBatch && entryStyles.submitBtnDisabled]}
