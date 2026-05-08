@@ -188,6 +188,18 @@ membersRouter.post('/', zValidator('json', memberCreateSchema), async (c) => {
 
   const uid = buildUid(input.nickname ?? '', input.name, input.phone);
 
+  const uidTaken = await db
+    .select({ id: schema.members.id })
+    .from(schema.members)
+    .where(eq(schema.members.uid, uid))
+    .limit(1);
+  if (uidTaken.length > 0) {
+    throw new HTTPException(409, {
+      message:
+        '已存在相同「昵称/姓名 + 手机号」的会员，无法重复建档。家人共用手机号时，请为不同成员填写不同姓名或昵称。',
+    });
+  }
+
   const inserted = await db
     .insert(schema.members)
     .values({

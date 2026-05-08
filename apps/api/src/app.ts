@@ -124,6 +124,19 @@ export function createApp(deps: AppDeps = {}) {
         409,
       );
     }
+    if (isSqlUniqueConstraintError(err)) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const uidHint = msg.includes('members.uid') || msg.includes('uid');
+      return c.json(
+        {
+          code: 'DUPLICATE_KEY',
+          message: uidHint
+            ? '「姓名/昵称 + 手机号」与已有会员冲突，请区分姓名或昵称后再试。'
+            : '记录与已有数据冲突，请检查后重试。',
+        },
+        409,
+      );
+    }
     return c.json({ code: 'INTERNAL_ERROR', message: '服务器内部错误' }, 500);
   });
 
@@ -163,5 +176,13 @@ function isSqlForeignKeyError(err: unknown): boolean {
   return (
     msg.includes('FOREIGN KEY constraint failed') ||
     msg.includes('SQLITE_CONSTRAINT_FOREIGNKEY')
+  );
+}
+
+function isSqlUniqueConstraintError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes('UNIQUE constraint failed') ||
+    msg.includes('SQLITE_CONSTRAINT_UNIQUE')
   );
 }

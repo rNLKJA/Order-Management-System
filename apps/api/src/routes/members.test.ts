@@ -231,6 +231,23 @@ describe('members routes - MEA-10', () => {
     expect(second.duplicatePhone?.existing_uid).toBe(first.member.uid);
   });
 
+  it('POST 同 uid（姓名/昵称+手机与已有完全一致）→ 409', async () => {
+    await createMember(staffToken, {
+      name: '赵六',
+      phone: '13900000002',
+    });
+    const res = await app.fetch(
+      new Request('http://test.local/api/members', {
+        method: 'POST',
+        headers: authHeaders(staffToken),
+        body: JSON.stringify({ name: '赵六', phone: '13900000002' }),
+      }),
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { code?: string; message?: string };
+    expect(body.message).toMatch(/已存在相同/);
+  });
+
   // =========== GET /api/members ===========
 
   it('GET 列表默认排除 is_active=false 会员', async () => {
