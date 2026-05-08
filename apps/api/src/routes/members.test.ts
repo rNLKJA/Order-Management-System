@@ -310,6 +310,11 @@ describe('members routes - MEA-10', () => {
       phone: '13799998888',
       wechat_id: 'li_si_88',
     });
+    await createMember(staffToken, {
+      name: '武亚敏',
+      nickname: '',
+      phone: '13800001111',
+    });
 
     async function query(q: string): Promise<ListResp> {
       const r = await app.fetch(
@@ -322,6 +327,8 @@ describe('members routes - MEA-10', () => {
     }
 
     expect((await query('王')).items.length).toBe(1);
+    expect((await query('武')).items.length).toBe(1);
+    expect((await query('亚敏')).items.length).toBe(1);
     expect((await query('王大')).items.length).toBe(1);
     expect((await query('1371111')).items.length).toBe(1);
     expect((await query('wang_boss')).items.length).toBe(1);

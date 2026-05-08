@@ -41,10 +41,15 @@ export default function MembersScreen() {
   // 会员档案只显示正式会员，散客走 /walkins 独立目录
   const members = (data ?? []).filter((m) => !m.is_walkin);
 
+  const normalizedQuery = query.trim().normalize('NFC');
+  const qLower = normalizedQuery.toLowerCase();
+
   const filtered = members.filter((m) => {
-    const q = query.toLowerCase();
-    const matchQ = !q || [m.name, m.nickname, m.phone, m.wechat_id, m.uid]
-      .some((v) => v.toLowerCase().includes(q));
+    const matchQ =
+      !normalizedQuery ||
+      [m.name, m.nickname, m.phone, m.wechat_id, m.uid].some((v) =>
+        v.normalize('NFC').toLowerCase().includes(qLower),
+      );
     const matchFilter =
       filter === 'all' ||
       (filter === 'hospital' && m.is_hospital) ||

@@ -20,6 +20,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../../api/client';
 import { ordersApi } from '../../../api/orders';
+import { type Member, type MemberListResp } from '../../../api/members';
 import {
   AppHeader,
   Button,
@@ -76,8 +77,10 @@ export default function QuickOrderScreen() {
     }
     setSearching(true);
     try {
-      const res = await api.get<{ members: Member[] }>(`/api/members?q=${encodeURIComponent(q)}&limit=8`);
-      setSearchResults(res.members);
+      const res = await api.get<MemberListResp>(
+        `/api/members?q=${encodeURIComponent(q)}&limit=8&type=member`,
+      );
+      setSearchResults(res.items);
     } catch {
       setSearchResults([]);
     } finally {

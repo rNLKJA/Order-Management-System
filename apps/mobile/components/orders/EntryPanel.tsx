@@ -1,7 +1,7 @@
 /**
  * 录入 Tab — 会员餐 / 散餐（从 orders/index 拆分）
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   View,
@@ -21,19 +21,21 @@ import { ADHOC_DEFAULT_PRICE } from './constants';
 import { tomorrowStr } from './date-utils';
 import { entryStyles } from './entryStyles';
 import { OrderProofSection } from './OrderProofSection';
+import { membersApi } from '../../api/members';
+import { cardsApi } from '../../api/cards';
+import { useUsersMap } from '../../hooks/useMembersView';
+import { apiToMockMember } from '../../lib/member-view';
 
 // EntryPanel — 快速录入（会员餐 / 散餐），内嵌在「录入」Tab 中
 // ============================================================
 type EntryMode = 'member' | 'adhoc';
 
 export function EntryPanel({
-  members,
   onAddMemberOrder,
   onAddMemberBatchOrder,
   onAddWalkinOrder,
   onJumpToOverview,
 }: {
-  members: MockMember[];
   onAddMemberOrder: (payload: {
     memberId: number;
     orderDate: string;
@@ -116,18 +118,51 @@ export function EntryPanel({
   const [adhocIsGift, setAdhocIsGift] = useState(false);
   const adhocTotalQty = adhocLunchQty + adhocDinnerQty;
 
+  /** 服务端模糊搜索命中（含拉卡），避免仅在这页已缓存的 ~200 人里本地过滤 */
+  const [memberSearchHits, setMemberSearchHits] = useState<MockMember[] | null>(null);
+  const memberSearchReq = useRef(0);
+  const usersMapQuery = useUsersMap();
+
+  useEffect(() => {
+    const q = memberQuery.trim();
+    if (q.length === 0) {
+      setMemberSearchHits(null);
+      return;
+    }
+    const usersMap = usersMapQuery.data;
+    if (!usersMap) {
+      setMemberSearchHits(null);
+      return;
+    }
+    setMemberSearchHits(null);
+    const reqId = ++memberSearchReq.current;
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const { items } = await membersApi.list({ q, limit: 24, type: 'member' });
+          const enriched = await Promise.all(
+            items.map(async (m) => {
+              try {
+                const { cards } = await cardsApi.list(m.id, 'all');
+                return apiToMockMember(m, cards, usersMap);
+              } catch {
+                return apiToMockMember(m, [], usersMap);
+              }
+            }),
+          );
+          if (memberSearchReq.current === reqId) setMemberSearchHits(enriched);
+        } catch {
+          if (memberSearchReq.current === reqId) setMemberSearchHits([]);
+        }
+      })();
+    }, 200);
+    return () => clearTimeout(t);
+  }, [memberQuery, usersMapQuery.data]);
+
   const q = memberQuery.trim();
-  const filteredMembers = q
-    ? members
-        .filter(
-          (m) =>
-            m.name.includes(q) ||
-            m.nickname.includes(q) ||
-            m.phone.includes(q),
-        )
-        .slice(0, 8)
-    : [];
   const dropdownOpen = !selectedMember && q.length > 0;
+  const memberSearchPending = dropdownOpen && memberSearchHits === null;
+  const filteredMembers = memberSearchHits ?? [];
 
   const memberHasCard = !!selectedMember?.active_card;
   const memberCardEnough = memberHasCard
@@ -541,8 +576,14 @@ export function EntryPanel({
                     ) : null}
                   </>
                 ) : dropdownOpen ? (
-                  /* 搜索结果下拉 */
-                  filteredMembers.length > 0 ? (
+                  memberSearchPending ? (
+                    <View style={entryStyles.dropdownEmpty}>
+                      <ActivityIndicator color={IOS_COLORS.blue} />
+                      <Text style={[entryStyles.dropdownEmptyText, { marginTop: 8 }]}>
+                        正在搜索会员…
+                      </Text>
+                    </View>
+                  ) : filteredMembers.length > 0 ? (
                     <View style={entryStyles.memberList}>
                       {filteredMembers.map((m, i) => (
                         <Pressable

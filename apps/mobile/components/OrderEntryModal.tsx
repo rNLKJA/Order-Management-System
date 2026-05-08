@@ -26,18 +26,10 @@ import {
   Switch,
 } from 'react-native-paper';
 import { api } from '../api/client';
-import { ordersApi, type CreateOrderResponse } from '../api/orders';
+import { type Member, type MemberListResp } from '../api/members';
 import { createIdempotencyKey } from '../lib/idempotencyKey';
 import { formatDate } from '@meal/shared';
 import { OrderProofSection } from './orders/OrderProofSection';
-
-interface Member {
-  id: number;
-  name: string;
-  nickname: string;
-  phone: string;
-  is_hospital: boolean;
-}
 
 interface OrderEntryModalProps {
   visible: boolean;
@@ -75,8 +67,10 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
     }
     setSearching(true);
     try {
-      const res = await api.get<{ members: Member[] }>(`/api/members?q=${encodeURIComponent(q)}&limit=10`);
-      setSearchResults(res.members);
+      const res = await api.get<MemberListResp>(
+        `/api/members?q=${encodeURIComponent(q)}&limit=10&type=member`,
+      );
+      setSearchResults(res.items);
     } catch {
       setSearchResults([]);
     } finally {

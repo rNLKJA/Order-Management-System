@@ -47,10 +47,10 @@ export default function WalkinsScreen() {
   );
 
   const walkins = q.data ?? [];
-  const filtered = query.trim()
-    ? walkins.filter((w) =>
-        w.name.toLowerCase().includes(query.trim().toLowerCase()),
-      )
+  const qNorm = query.trim().normalize('NFC');
+  const qLc = qNorm.toLowerCase();
+  const filtered = qNorm
+    ? walkins.filter((w) => w.name.normalize('NFC').toLowerCase().includes(qLc))
     : walkins;
   const withOrders = filtered.filter((w) => w.stats.active_order_count > 0).length;
   const totalMeals = filtered.reduce((sum, w) => sum + w.stats.total_meals, 0);

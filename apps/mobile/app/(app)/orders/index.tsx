@@ -486,7 +486,6 @@ export default function OrdersScreen() {
       {/* —— 录入 —— */}
       {activeTab === 'entry' && (
         <EntryPanel
-          members={membersView.data ?? []}
           onAddMemberOrder={handleAddMemberOrder}
           onAddMemberBatchOrder={handleAddMemberBatchOrder}
           onAddWalkinOrder={handleAddWalkinOrder}
