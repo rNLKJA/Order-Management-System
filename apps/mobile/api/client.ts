@@ -53,6 +53,30 @@ export class ApiError extends Error implements ApiErrorShape {
   }
 }
 
+/** @hono/zod-validator 校验失败时返回 { success: false, error: { issues: [...] } }，无顶层 message */
+function messageFromErrorBody(data: unknown, status: number): string {
+  const fallback = `请求失败 (${status})`;
+  if (!data || typeof data !== 'object') return fallback;
+  const o = data as Record<string, unknown>;
+  if (typeof o.message === 'string' && o.message.trim()) return o.message;
+
+  if (o.success === false && o.error && typeof o.error === 'object') {
+    const errObj = o.error as Record<string, unknown>;
+    const issues = errObj.issues;
+    if (Array.isArray(issues) && issues.length > 0) {
+      const lines: string[] = [];
+      for (const issue of issues) {
+        if (!issue || typeof issue !== 'object') continue;
+        const m = (issue as { message?: unknown }).message;
+        if (typeof m === 'string' && m.trim()) lines.push(m);
+        if (lines.length >= 4) break;
+      }
+      if (lines.length > 0) return lines.join('；');
+    }
+  }
+  return fallback;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getToken();
   const headers = new Headers(init?.headers);
@@ -68,9 +92,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const data = text ? safeJson(text) : null;
 
   if (!res.ok) {
-    const msg = (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string')
-      ? data.message
-      : `请求失败 (${res.status})`;
+    const msg = messageFromErrorBody(data, res.status);
     const code = data && typeof data === 'object' && 'code' in data && typeof data.code === 'string'
       ? data.code
       : undefined;

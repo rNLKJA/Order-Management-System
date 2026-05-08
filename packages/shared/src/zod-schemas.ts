@@ -148,8 +148,8 @@ export const zOrderProofImageDataUrl = z
   .string()
   .min(24)
   .refine(
-    (s) => /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(s),
-    '须为 JPEG/PNG/WebP 截图（data URL）',
+    (s) => /^data:image\/(jpeg|jpg|png|webp|heic|heif);base64,/i.test(s),
+    '须为 JPEG/PNG/WebP/HEIC 截图（data URL）',
   );
 
 export const zOrderProofImages = z

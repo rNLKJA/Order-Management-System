@@ -1,15 +1,45 @@
 /**
  * 订餐凭证截图：相册多选 → data URL，与 API proof_images 对齐。
+ *
+ * Web：expo-image-picker 在部分浏览器下拿不到 base64，改用隐藏 file input + FileReader。
  */
 
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
-import { View, Image, Pressable, StyleSheet, ScrollView } from 'react-native';
+import {
+  createElement,
+  useCallback,
+  useRef,
+  useState,
+  type ChangeEventHandler,
+} from 'react';
+import { View, Image, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../theme/paperTheme';
 
 const MAX_PROOF = 12;
+
+async function readBrowserFilesAsDataUrls(
+  files: FileList,
+  maxCount: number,
+): Promise<string[]> {
+  const list = Array.from(files).slice(0, maxCount);
+  return Promise.all(
+    list.map(
+      (file) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const r = reader.result;
+            if (typeof r === 'string') resolve(r);
+            else reject(new Error('读图失败'));
+          };
+          reader.onerror = () => reject(reader.error ?? new Error('读图失败'));
+          reader.readAsDataURL(file);
+        }),
+    ),
+  );
+}
 
 export async function launchProofImagePicker(): Promise<string[]> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -41,9 +71,33 @@ interface Props {
 
 export function OrderProofSection({ images, onChange, disabled }: Props) {
   const [picking, setPicking] = useState(false);
+  const webFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const onWebFileChange: ChangeEventHandler<HTMLInputElement> = useCallback(
+    async (e) => {
+      const files = e.target.files;
+      e.target.value = '';
+      if (disabled || !files?.length) return;
+      setPicking(true);
+      try {
+        const room = MAX_PROOF - images.length;
+        if (room <= 0) return;
+        const next = await readBrowserFilesAsDataUrls(files, room);
+        if (next.length === 0) return;
+        onChange([...images, ...next].slice(0, MAX_PROOF));
+      } finally {
+        setPicking(false);
+      }
+    },
+    [disabled, images, onChange],
+  );
 
   const add = async () => {
     if (disabled || picking) return;
+    if (Platform.OS === 'web') {
+      webFileInputRef.current?.click();
+      return;
+    }
     setPicking(true);
     try {
       const next = await launchProofImagePicker();
@@ -61,6 +115,18 @@ export function OrderProofSection({ images, onChange, disabled }: Props) {
 
   return (
     <View style={styles.wrap}>
+      {Platform.OS === 'web'
+        ? createElement('input', {
+            type: 'file',
+            accept: 'image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif',
+            multiple: true,
+            style: { display: 'none' },
+            ref: (el: HTMLInputElement | null) => {
+              webFileInputRef.current = el;
+            },
+            onChange: onWebFileChange,
+          })
+        : null}
       <Text variant="titleSmall" style={styles.label}>
         订餐凭证截图（至少 1 张）<Text style={styles.req}>*</Text>
       </Text>
