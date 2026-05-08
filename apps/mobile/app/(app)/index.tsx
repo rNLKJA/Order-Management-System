@@ -131,11 +131,11 @@ export default function HomeScreen() {
       title: '录入 / 总览',
       subtitle: ordersToday.isLoading
         ? '加载中...'
-        : `${totalCount} 份 · 待出 ${pendingCount}`,
+        : `${totalCount} 份 · 待出 ${pendingCount} · 点开即录入（可多选会员）`,
       icon: 'restaurant-outline',
       color: COLORS.success,
       bg: COLORS.successSoft,
-      route: '/(app)/orders?group=manage',
+      route: '/(app)/orders?group=manage&tab=entry',
     },
     {
       key: 'orders-fulfillment',

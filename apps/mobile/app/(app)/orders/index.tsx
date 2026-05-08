@@ -45,7 +45,7 @@ export default function OrdersScreen() {
 
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const { group } = useLocalSearchParams<{ group?: string }>();
+  const { group, tab } = useLocalSearchParams<{ group?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [activePrimary, setActivePrimary] = useState<PrimaryTab>('manage');
   const [displayLimit, setDisplayLimit] = useState<LimitOption>(50);
@@ -349,8 +349,8 @@ export default function OrdersScreen() {
       return;
     }
     setActivePrimary('manage');
-    setActiveTab('overview');
-  }, [group]);
+    setActiveTab(tab === 'entry' ? 'entry' : 'overview');
+  }, [group, tab]);
 
   const currentOrdersQuery = activeTab === 'overview' ? overviewOrdersQuery : todayOrdersQuery;
   const currentLoadError = currentOrdersQuery.error;
