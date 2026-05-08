@@ -121,6 +121,8 @@ async function repairLegacyColumnsAfterJournalSkip() {
     'ALTER TABLE `users` ADD `avatar_url` text',
     "ALTER TABLE `daily_orders` ADD `delivery_channel` text DEFAULT 'self' NOT NULL",
     "ALTER TABLE `daily_orders` ADD `courier_ref` text DEFAULT '' NOT NULL",
+    'ALTER TABLE `daily_orders` ADD `is_gift` integer DEFAULT false NOT NULL',
+    "ALTER TABLE `daily_orders` ADD `proof_images_json` text DEFAULT '[]' NOT NULL",
     'CREATE INDEX IF NOT EXISTS `orders_delivery_channel_idx` ON `daily_orders` (`delivery_channel`)',
   ];
 

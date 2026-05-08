@@ -34,6 +34,7 @@ import { COLORS, GLASS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme'
 import { createIdempotencyKey } from '../../../lib/idempotencyKey';
 import { formatDate } from '@meal/shared';
 import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
+import { OrderProofSection } from '../../../components/orders/OrderProofSection';
 
 interface Member {
   id: number;
@@ -64,6 +65,8 @@ export default function QuickOrderScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [snackMsg, setSnackMsg] = useState<string | null>(null);
+  const [proofImages, setProofImages] = useState<string[]>([]);
+  const [isGift, setIsGift] = useState(false);
 
   const handleSearch = async (q: string) => {
     setSearchQuery(q);
@@ -97,6 +100,10 @@ export default function QuickOrderScreen() {
       setError('午餐份数和晚餐份数至少有一项 > 0');
       return;
     }
+    if (proofImages.length < 1) {
+      setError('请上传至少一张订餐凭证截图');
+      return;
+    }
 
     setError(null);
     setSubmitting(true);
@@ -108,6 +115,8 @@ export default function QuickOrderScreen() {
           lunch_qty: lunchQty > 0 ? lunchQty : undefined,
           dinner_qty: dinnerQty > 0 ? dinnerQty : undefined,
           notes: notes.trim() || undefined,
+          proof_images: proofImages,
+          is_gift: isGift,
         },
         createIdempotencyKey(),
       );
@@ -124,6 +133,8 @@ export default function QuickOrderScreen() {
       setLunchQty(0);
       setDinnerQty(0);
       setNotes('');
+      setProofImages([]);
+      setIsGift(false);
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string };
       if (e.code === 'INSUFFICIENT_MEAL_BALANCE') {
@@ -211,6 +222,22 @@ export default function QuickOrderScreen() {
             ) : null}
           </GlassSurface>
 
+          <SectionLabel>订餐凭证</SectionLabel>
+          <GlassSurface padding={SPACING.base} style={styles.card}>
+            <OrderProofSection images={proofImages} onChange={setProofImages} disabled={submitting} />
+            <View style={[styles.giftRow, { marginTop: SPACING.sm }]}>
+              <Text style={styles.qtyLabel}>赠送餐（不扣次）</Text>
+              <Pressable
+                onPress={() => !submitting && setIsGift(!isGift)}
+                style={[styles.giftToggle, isGift && styles.giftToggleOn]}
+              >
+                <Text style={[styles.giftToggleText, isGift && styles.giftToggleTextOn]}>
+                  {isGift ? '是' : '否'}
+                </Text>
+              </Pressable>
+            </View>
+          </GlassSurface>
+
           <SectionLabel>订餐信息</SectionLabel>
           <GlassSurface padding={SPACING.base} style={styles.card}>
             <QtyRow label="午餐份数" value={lunchQty} onDecrease={() => setLunchQty(Math.max(0, lunchQty - 1))} onIncrease={() => setLunchQty(lunchQty + 1)} />
@@ -238,7 +265,9 @@ export default function QuickOrderScreen() {
             <Button
               label={submitting ? '提交中...' : '确认录入'}
               onPress={() => void handleSubmit()}
-              disabled={submitting || !selectedMember || lunchQty + dinnerQty === 0}
+              disabled={
+                submitting || !selectedMember || lunchQty + dinnerQty === 0 || proofImages.length < 1
+              }
               style={styles.actionBtn}
             />
           </View>
@@ -397,6 +426,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: COLORS.text.primary,
     fontVariant: ['tabular-nums'],
+  },
+  giftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  giftToggle: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: GLASS.border,
+    backgroundColor: GLASS.surface2,
+  },
+  giftToggleOn: {
+    borderColor: COLORS.brand,
+    backgroundColor: COLORS.brandSoft,
+  },
+  giftToggleText: {
+    ...TYPE.footnote,
+    color: COLORS.text.secondary,
+    fontWeight: '600',
+  },
+  giftToggleTextOn: {
+    color: COLORS.brand,
   },
   notesInput: {
     minHeight: 44,

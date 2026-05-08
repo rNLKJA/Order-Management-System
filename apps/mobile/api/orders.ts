@@ -30,6 +30,10 @@ export interface DailyOrder {
   created_at: string;
   updated_at: string;
   notes: string;
+  /** 赠送餐：不扣次、送达不计收入 */
+  is_gift: boolean;
+  /** JSON 数组字符串，客户端可 JSON.parse */
+  proof_images_json: string;
 }
 
 export interface Card {
@@ -66,12 +70,23 @@ export interface CreateOrderInput {
   /** 快递承运方标识（快递公司 / 骑手 id） */
   courier_ref?: string;
   created_by_user_id?: number;
+  /** 赠送餐：不扣会员卡次数 */
+  is_gift?: boolean;
+  /** 订餐凭证截图 data URL，至少 1 张 */
+  proof_images: string[];
 }
 
 export interface CreateOrderResponse {
   orders: DailyOrder[];
   card?: Card;
   card_exhausted?: boolean;
+}
+
+export interface OrderBatchCreateInput {
+  proof_images: string[];
+  entries: Array<
+    Omit<CreateOrderInput, 'proof_images'>
+  >;
 }
 
 export interface OrderListParams {
@@ -125,6 +140,9 @@ export const ordersApi = {
       input,
       idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined,
     ),
+
+  batchCreate: (input: OrderBatchCreateInput) =>
+    api.post<CreateOrderResponse>('/api/orders/batch', input),
 
   updateNotes: (id: number, notes: string) =>
     api.patch<{ order: DailyOrder }>(`/api/orders/${id}`, { notes }),

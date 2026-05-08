@@ -82,6 +82,8 @@ export interface MockOrder {
   courier_ref?: string;
   /** 散客姓名（非空 → walk-in，不关联会员卡） */
   customer_name?: string;
+  /** 赠送餐：不扣次、送达不计收入 */
+  is_gift?: boolean;
 }
 
 export interface MockFinance {

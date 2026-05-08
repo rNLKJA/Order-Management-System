@@ -143,28 +143,116 @@ export const CARD_RENEWAL_THRESHOLD_MEALS = 2;
 
 // =========== 订餐 ===========
 
-export const orderCreateSchema = z
-  .object({
-    member_id: z.number().int().positive().optional(),
-    order_date: zDate,
-    lunch_qty: z.number().int().nonnegative().default(0),
-    dinner_qty: z.number().int().nonnegative().default(0),
-    notes: z.string().max(512).optional().default(''),
-    /** 散客姓名；填了就是 walk-in，可以不传 member_id */
-    customer_name: z.string().max(64).optional().default(''),
-    adhoc_unit_price: zAmount.optional(),
-    is_hospital: z.boolean().optional(),
-    created_by_user_id: z.number().int().positive().optional(),
-  })
-  .refine((v) => v.lunch_qty + v.dinner_qty > 0, {
-    message: '午餐和晚餐份数至少有一项 > 0',
-    path: ['lunch_qty'],
-  })
-  .refine((v) => (v.member_id ?? 0) > 0 || (v.customer_name ?? '').trim().length > 0, {
-    message: '请选择会员或填写散客姓名',
-    path: ['member_id'],
-  });
+/** 截图凭证：须为 data URL，便于与会员头像一致存 DB */
+export const zOrderProofImageDataUrl = z
+  .string()
+  .min(24)
+  .refine(
+    (s) => /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(s),
+    '须为 JPEG/PNG/WebP 截图（data URL）',
+  );
+
+export const zOrderProofImages = z
+  .array(zOrderProofImageDataUrl)
+  .min(1, '请至少上传一张订餐凭证截图')
+  .max(12, '凭证最多 12 张')
+  .refine(
+    (arr) => arr.reduce((sum, s) => sum + s.length, 0) <= 6_000_000,
+    '凭证总体积过大，请减少张数或压缩图片',
+  );
+
+const orderCreateEntryFields = {
+  member_id: z.number().int().positive().optional(),
+  order_date: zDate,
+  lunch_qty: z.number().int().min(0).optional().default(0),
+  dinner_qty: z.number().int().min(0).optional().default(0),
+  notes: z.string().max(512).optional().default(''),
+  customer_name: z.string().max(64).optional().default(''),
+  customer_phone: z.string().max(32).optional().default(''),
+  customer_wechat: z.string().max(64).optional().default(''),
+  customer_address: z.string().max(256).optional().default(''),
+  customer_is_hospital: z.boolean().optional(),
+  adhoc_unit_price: z.number().nonnegative().optional(),
+  delivery_channel: z.enum(['self', 'courier']).optional().default('self'),
+  courier_ref: z.string().max(64).optional().default(''),
+  created_by_user_id: z.number().int().positive().optional(),
+  /** 赠送餐：不扣卡、不记 meal_earned */
+  is_gift: z.boolean().optional().default(false),
+} satisfies z.ZodRawShape;
+
+type OrderCreateRefineFields = {
+  member_id?: number;
+  lunch_qty?: number;
+  dinner_qty?: number;
+  customer_name?: string;
+  customer_phone?: string;
+  customer_wechat?: string;
+  customer_address?: string;
+};
+
+function withOrderCreateRefines<T extends z.ZodRawShape>(obj: z.ZodObject<T>) {
+  return obj
+    .refine((d) => {
+      const v = d as OrderCreateRefineFields;
+      return (v.lunch_qty ?? 0) + (v.dinner_qty ?? 0) > 0;
+    }, {
+      message: '午餐份数和晚餐份数至少有一项 > 0',
+    })
+    .refine(
+      (d) => {
+        const v = d as OrderCreateRefineFields;
+        return (v.member_id ?? 0) > 0 || (v.customer_name ?? '').trim().length > 0;
+      },
+      { message: '请选择会员或填写散客姓名' },
+    )
+    .refine(
+      (d) => {
+        const v = d as OrderCreateRefineFields;
+        const isWalkin = !v.member_id && (v.customer_name ?? '').trim().length > 0;
+        if (!isWalkin) return true;
+        return /^1[3-9]\d{9}$/.test((v.customer_phone ?? '').trim());
+      },
+      { message: '散客手机号必填，11 位且以 1 开头', path: ['customer_phone'] },
+    )
+    .refine(
+      (d) => {
+        const v = d as OrderCreateRefineFields;
+        const isWalkin = !v.member_id && (v.customer_name ?? '').trim().length > 0;
+        if (!isWalkin) return true;
+        return (v.customer_wechat ?? '').trim().length > 0;
+      },
+      { message: '散客微信号必填', path: ['customer_wechat'] },
+    )
+    .refine(
+      (d) => {
+        const v = d as OrderCreateRefineFields;
+        const isWalkin = !v.member_id && (v.customer_name ?? '').trim().length > 0;
+        if (!isWalkin) return true;
+        return (v.customer_address ?? '').trim().length > 0;
+      },
+      { message: '散客地址必填', path: ['customer_address'] },
+    );
+}
+
+export const orderCreateEntrySchema = withOrderCreateRefines(
+  z.object(orderCreateEntryFields),
+);
+export type OrderCreateEntryInput = z.infer<typeof orderCreateEntrySchema>;
+
+export const orderCreateSchema = withOrderCreateRefines(
+  z.object({
+    ...orderCreateEntryFields,
+    proof_images: zOrderProofImages,
+  }),
+);
 export type OrderCreateInput = z.infer<typeof orderCreateSchema>;
+
+/** 批量录入：共用一组凭证截图 */
+export const orderBatchCreateSchema = z.object({
+  proof_images: zOrderProofImages,
+  entries: z.array(orderCreateEntrySchema).min(1).max(30),
+});
+export type OrderBatchCreateInput = z.infer<typeof orderBatchCreateSchema>;
 
 export const orderUpdateSchema = z.object({
   order_date: zDate.optional(),

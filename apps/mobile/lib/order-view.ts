@@ -42,6 +42,7 @@ export function dailyOrderToMockOrder(
     customer_name: walkin ? order.customer_name : undefined,
     delivery_channel: order.delivery_channel ?? 'self',
     courier_ref: order.courier_ref || undefined,
+    is_gift: order.is_gift,
   };
 }
 

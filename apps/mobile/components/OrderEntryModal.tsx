@@ -23,11 +23,13 @@ import {
   Chip,
   ActivityIndicator,
   Banner,
+  Switch,
 } from 'react-native-paper';
 import { api } from '../api/client';
 import { ordersApi, type CreateOrderResponse } from '../api/orders';
 import { createIdempotencyKey } from '../lib/idempotencyKey';
 import { formatDate } from '@meal/shared';
+import { OrderProofSection } from './orders/OrderProofSection';
 
 interface Member {
   id: number;
@@ -62,6 +64,8 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [proofImages, setProofImages] = useState<string[]>([]);
+  const [isGift, setIsGift] = useState(false);
 
   const handleSearch = useCallback(async (q: string) => {
     setSearchQuery(q);
@@ -95,6 +99,10 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
       setError('午餐份数和晚餐份数至少有一项 > 0');
       return;
     }
+    if (proofImages.length < 1) {
+      setError('请上传至少一张订餐凭证截图');
+      return;
+    }
 
     setError(null);
     setSubmitting(true);
@@ -106,6 +114,8 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
           lunch_qty: lunchQty > 0 ? lunchQty : undefined,
           dinner_qty: dinnerQty > 0 ? dinnerQty : undefined,
           notes: notes.trim() || undefined,
+          proof_images: proofImages,
+          is_gift: isGift,
         },
         createIdempotencyKey(),
       );
@@ -136,6 +146,8 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
     setLunchQty(0);
     setDinnerQty(0);
     setNotes('');
+    setProofImages([]);
+    setIsGift(false);
     setOrderDate(defaultDate ?? todayDate());
   };
 
@@ -300,6 +312,13 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
             numberOfLines={2}
           />
 
+          <View style={styles.giftRow}>
+            <Text variant="bodyLarge">赠送餐（不扣次）</Text>
+            <Switch value={isGift} onValueChange={setIsGift} disabled={submitting} />
+          </View>
+
+          <OrderProofSection images={proofImages} onChange={setProofImages} disabled={submitting} />
+
           <Divider style={styles.divider} />
 
           {/* 操作按钮 */}
@@ -310,7 +329,12 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
             <Button
               mode="contained"
               onPress={handleSubmit}
-              disabled={submitting || !selectedMember || lunchQty + dinnerQty === 0}
+              disabled={
+                submitting ||
+                !selectedMember ||
+                lunchQty + dinnerQty === 0 ||
+                proofImages.length < 1
+              }
               style={styles.actionBtn}
             >
               {submitting ? <ActivityIndicator size={16} color="white" /> : '确认录入'}
@@ -378,6 +402,12 @@ const styles = StyleSheet.create({
     minWidth: 32,
     textAlign: 'center',
     fontWeight: '700',
+  },
+  giftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   actions: {
     flexDirection: 'row',

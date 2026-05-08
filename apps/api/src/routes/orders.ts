@@ -22,16 +22,15 @@ import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import { requireAuth, requireDataOperator, type AuthVariables } from '../middleware/jwt.js';
 import {
-  deductMeals,
   cancelOrder,
-  getAdHocPrice,
   todayShanghai,
   InsufficientMealBalanceError,
   OrderLockedDeliveredError,
   OrderNotFoundError,
 } from '../services/orders.js';
 import { createMealEarnedIncome } from '../services/finance.js';
-import { getOrCreateWalkinMember } from '../services/walkin.js';
+import { insertOrdersInTransaction } from '../services/order-create.js';
+import { orderCreateSchema, orderBatchCreateSchema, type OrderCreateInput } from '@meal/shared';
 
 export const ordersRouter = new Hono<{ Variables: AuthVariables }>();
 
@@ -193,75 +192,11 @@ ordersRouter.get('/:id', zValidator('param', idParamSchema), async (c) => {
 
 // ==================== POST /api/orders ====================
 
-const createOrderSchema = z
-  .object({
-    member_id: z.number().int().positive().optional(),
-    order_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'order_date 格式 YYYY-MM-DD'),
-    lunch_qty: z.number().int().min(0).optional().default(0),
-    dinner_qty: z.number().int().min(0).optional().default(0),
-    notes: z.string().optional().default(''),
-    /** 散客姓名；填了就是 walk-in，不关联任何会员卡 */
-    customer_name: z.string().max(64).optional().default(''),
-    /** 散客联系方式；第一次录单时把这些写到 walk-in member 上，送餐卡片就能看到 */
-    customer_phone: z.string().max(32).optional().default(''),
-    customer_wechat: z.string().max(64).optional().default(''),
-    customer_address: z.string().max(256).optional().default(''),
-    customer_is_hospital: z.boolean().optional(),
-    /** 散客模式下指定单价（覆盖 settings.ad_hoc_price） */
-    adhoc_unit_price: z.number().nonnegative().optional(),
-    /** 送餐渠道：self=员工自送（默认）；courier=外包快递 */
-    delivery_channel: z.enum(['self', 'courier']).optional().default('self'),
-    /** 外包渠道下的承运方标识（快递公司名 / 骑手 id） */
-    courier_ref: z.string().max(64).optional().default(''),
-    created_by_user_id: z.number().int().positive().optional(),
-  })
-  .refine((d) => (d.lunch_qty ?? 0) + (d.dinner_qty ?? 0) > 0, {
-    message: '午餐份数和晚餐份数至少有一项 > 0',
-  })
-  .refine(
-    (d) => (d.member_id ?? 0) > 0 || (d.customer_name ?? '').trim().length > 0,
-    { message: '请选择会员或填写散客姓名' },
-  )
-  .refine(
-    (d) => {
-      const isWalkin = !d.member_id && (d.customer_name ?? '').trim().length > 0;
-      if (!isWalkin) return true;
-      return /^1[3-9]\d{9}$/.test((d.customer_phone ?? '').trim());
-    },
-    {
-      message: '散客手机号必填，11 位且以 1 开头',
-      path: ['customer_phone'],
-    },
-  )
-  .refine(
-    (d) => {
-      const isWalkin = !d.member_id && (d.customer_name ?? '').trim().length > 0;
-      if (!isWalkin) return true;
-      return (d.customer_wechat ?? '').trim().length > 0;
-    },
-    {
-      message: '散客微信号必填',
-      path: ['customer_wechat'],
-    },
-  )
-  .refine(
-    (d) => {
-      const isWalkin = !d.member_id && (d.customer_name ?? '').trim().length > 0;
-      if (!isWalkin) return true;
-      return (d.customer_address ?? '').trim().length > 0;
-    },
-    {
-      message: '散客地址必填',
-      path: ['customer_address'],
-    },
-  );
-
-ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
+ordersRouter.post('/', zValidator('json', orderCreateSchema), async (c) => {
   const input = c.req.valid('json');
   const authUser = c.get('authUser');
   const db = requestDb(c);
 
-  // 处理 Idempotency-Key
   const idempotencyKey = c.req.header('Idempotency-Key');
   if (idempotencyKey) {
     const existing = await db
@@ -271,7 +206,6 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
       .limit(1);
 
     if (existing[0]) {
-      // 检查 TTL 10 分钟
       const age = Date.now() - existing[0].created_at.getTime();
       if (age < 10 * 60 * 1000) {
         const cached = JSON.parse(existing[0].response_json) as object;
@@ -281,136 +215,12 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
   }
 
   const createdByUserId = input.created_by_user_id ?? authUser.id;
-  const lunchQty = input.lunch_qty ?? 0;
-  const dinnerQty = input.dinner_qty ?? 0;
-  const totalQty = lunchQty + dinnerQty;
-  const customerName = (input.customer_name ?? '').trim();
-  const isWalkin = customerName.length > 0 && !input.member_id;
 
-  // 会员模式：校验会员存在且活跃
-  if (!isWalkin) {
-    const memberRows = await db
-      .select()
-      .from(schema.members)
-      .where(eq(schema.members.id, input.member_id!))
-      .limit(1);
-    const member = memberRows[0];
-    if (!member) {
-      throw new HTTPException(404, { message: '会员不存在' });
-    }
-    if (!member.is_active) {
-      throw new HTTPException(422, { message: '会员已归档，不能录入订餐' });
-    }
-  }
-
-  const runTransaction = async () => {
-    return db.transaction(async (tx) => {
-    // 散客模式：按姓名找/建一个 is_walkin=true 的 member
-    // 顺便把本次填的手机/地址/院内外合并写回，送餐卡片才有东西可显示。
-    const memberId = isWalkin
-      ? (
-          await getOrCreateWalkinMember(tx, customerName, createdByUserId, {
-            phone: input.customer_phone,
-            wechat_id: input.customer_wechat,
-            address: input.customer_address,
-            is_hospital: input.customer_is_hospital,
-          })
-        ).id
-      : input.member_id!;
-
-    // 读 ad_hoc_price（散客模式优先 body.adhoc_unit_price）
-    const adHocPrice =
-      input.adhoc_unit_price != null && input.adhoc_unit_price >= 0
-        ? input.adhoc_unit_price
-        : await getAdHocPrice(tx);
-
-    // 散客模式完全跳过扣卡
-    let deductResult: Awaited<ReturnType<typeof deductMeals>> = null;
-    if (!isWalkin) {
-      deductResult = await deductMeals(tx, {
-        memberId,
-        totalQty,
-        createdByUserId,
-      });
-      // 会员必须有进行中的卡才能下单；没有的话上层应改走散客录单或者先开卡
-      if (deductResult === null) {
-        throw new HTTPException(422, {
-          message: '该会员暂无进行中的卡，请先开卡或走散客录单',
-        });
-      }
-    }
-
-    const hasCard = deductResult !== null;
-    const cardId = hasCard ? deductResult!.card.id : null;
-
-    // 构建要插入的订单行
-    const orderValues: Array<typeof schema.daily_orders.$inferInsert> = [];
-
-    const deliveryChannel = input.delivery_channel ?? 'self';
-    const courierRef = (input.courier_ref ?? '').trim();
-
-    if (lunchQty > 0) {
-      orderValues.push({
-        member_id: memberId,
-        card_id: cardId,
-        order_date: input.order_date,
-        meal_type: 'lunch',
-        quantity: lunchQty,
-        amount: hasCard ? 0 : adHocPrice * lunchQty,
-        status: 'pending',
-        created_by_user_id: createdByUserId,
-        notes: input.notes ?? '',
-        customer_name: customerName,
-        delivery_channel: deliveryChannel,
-        courier_ref: courierRef,
-      });
-    }
-    if (dinnerQty > 0) {
-      orderValues.push({
-        member_id: memberId,
-        card_id: cardId,
-        order_date: input.order_date,
-        meal_type: 'dinner',
-        quantity: dinnerQty,
-        amount: hasCard ? 0 : adHocPrice * dinnerQty,
-        status: 'pending',
-        created_by_user_id: createdByUserId,
-        notes: input.notes ?? '',
-        customer_name: customerName,
-        delivery_channel: deliveryChannel,
-        courier_ref: courierRef,
-      });
-    }
-
-    const insertedOrders = await tx
-      .insert(schema.daily_orders)
-      .values(orderValues)
-      .returning();
-
-    // 散客/会员餐收入在 PATCH status → delivered 时记入 meal_earned_*（见下方）
-
-    // 写 audit_log（每条订单）
-    for (const order of insertedOrders) {
-      await tx.insert(schema.audit_logs).values({
-        user_id: createdByUserId,
-        action: 'create',
-        entity: 'daily_order',
-        entity_id: order.id,
-        diff_json: JSON.stringify({ after: order }),
-      });
-    }
-
-    return {
-      orders: insertedOrders,
-      card: deductResult?.card ?? null,
-      card_exhausted: deductResult?.card_exhausted ?? false,
-    };
-   });
-  };
-
-  let result: Awaited<ReturnType<typeof runTransaction>>;
+  let result: Awaited<ReturnType<typeof insertOrdersInTransaction>>;
   try {
-    result = await runTransaction();
+    result = await db.transaction(async (tx) => {
+      return insertOrdersInTransaction(tx, input, createdByUserId);
+    });
   } catch (err) {
     if (err instanceof InsufficientMealBalanceError) {
       return c.json({ code: err.code, message: err.message }, 422);
@@ -423,7 +233,6 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
     ...(result.card ? { card: result.card, card_exhausted: result.card_exhausted } : {}),
   };
 
-  // 缓存 Idempotency-Key
   if (idempotencyKey) {
     await db
       .insert(schema.idempotency_keys)
@@ -435,6 +244,46 @@ ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
   }
 
   return c.json(responseBody, 201);
+});
+
+// ==================== POST /api/orders/batch ====================
+
+ordersRouter.post('/batch', zValidator('json', orderBatchCreateSchema), async (c) => {
+  const { proof_images, entries } = c.req.valid('json');
+  const authUser = c.get('authUser');
+  const db = requestDb(c);
+
+  try {
+    const batchResult = await db.transaction(async (tx) => {
+      const allOrders: (typeof schema.daily_orders.$inferSelect)[] = [];
+      let lastCard: typeof schema.cards.$inferSelect | null = null;
+      let anyExhausted = false;
+      for (const entry of entries) {
+        const createdBy = entry.created_by_user_id ?? authUser.id;
+        const merged: OrderCreateInput = { ...entry, proof_images };
+        const r = await insertOrdersInTransaction(tx, merged, createdBy);
+        allOrders.push(...r.orders);
+        if (r.card) {
+          lastCard = r.card;
+          anyExhausted = anyExhausted || r.card_exhausted;
+        }
+      }
+      return { orders: allOrders, card: lastCard, card_exhausted: anyExhausted };
+    });
+
+    const responseBody = {
+      orders: batchResult.orders,
+      ...(batchResult.card
+        ? { card: batchResult.card, card_exhausted: batchResult.card_exhausted }
+        : {}),
+    };
+    return c.json(responseBody, 201);
+  } catch (err) {
+    if (err instanceof InsufficientMealBalanceError) {
+      return c.json({ code: err.code, message: err.message }, 422);
+    }
+    throw err;
+  }
 });
 
 // ==================== PATCH /api/orders/:id ====================
@@ -621,7 +470,7 @@ ordersRouter.patch(
         .set(patch)
         .where(eq(schema.daily_orders.id, id));
 
-      if (nextStatus === 'delivered' && order.status === 'fulfilled') {
+      if (nextStatus === 'delivered' && order.status === 'fulfilled' && !order.is_gift) {
         await createMealEarnedIncome(tx, {
           order,
           card: cardRow,

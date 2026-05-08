@@ -235,6 +235,7 @@ export const orderScreenStyles = StyleSheet.create({
     fontWeight: '600',
   },
   adhocTag: { fontSize: 12, color: '#FF9500', backgroundColor: '#FFF4E5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  giftTag: { fontSize: 12, color: '#AF52DE', backgroundColor: '#F5EEFB', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, fontWeight: '600' },
   orderQty: { fontSize: 14, fontWeight: '600', color: IOS_COLORS.label },
   orderNote: { fontSize: 13, color: IOS_COLORS.orange, lineHeight: 18 },
   orderNoteLabel: { fontWeight: '700' },

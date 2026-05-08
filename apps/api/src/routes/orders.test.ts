@@ -42,6 +42,14 @@ describe('Orders API /api/orders', () => {
   let memberId: number;
   let defaultCardId: number;
 
+  /** 订餐 API 必填：凭证截图（测试中 1×1 PNG data URL） */
+  const TEST_PROOF =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+  function withProof(body: Record<string, unknown>): string {
+    return JSON.stringify({ ...body, proof_images: [TEST_PROOF] });
+  }
+
   /** 把默认卡标成 exhausted，给"需要自己定制卡"的用例用 */
   async function deactivateDefaultCard() {
     await db
@@ -102,7 +110,7 @@ describe('Orders API /api/orders', () => {
       new Request('http://test.local/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: memberId, order_date: '2026-04-24', lunch_qty: 1 }),
+        body: withProof({ member_id: memberId, order_date: '2026-04-24', lunch_qty: 1 }),
       }),
     );
     expect(res.status).toBe(401);
@@ -118,7 +126,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-24',
           lunch_qty: 1,
@@ -135,7 +143,7 @@ describe('Orders API /api/orders', () => {
     expect(body.orders[0]!.card_id).toBe(defaultCardId);
   });
 
-  it('POST 晚餐单独（dinner_qty=2）- 创建 1 条订单', async () => {
+  it('POST 缺凭证截图 → 400', async () => {
     const res = await app.fetch(
       new Request('http://test.local/api/orders', {
         method: 'POST',
@@ -144,6 +152,152 @@ describe('Orders API /api/orders', () => {
           Authorization: `Bearer ${staffToken}`,
         },
         body: JSON.stringify({
+          member_id: memberId,
+          order_date: '2026-04-24',
+          lunch_qty: 1,
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('POST 赠送餐：无 active 卡也可录入，不扣卡', async () => {
+    await deactivateDefaultCard();
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: withProof({
+          member_id: memberId,
+          order_date: '2026-04-26',
+          lunch_qty: 2,
+          is_gift: true,
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { orders: schema.DailyOrder[] };
+    expect(body.orders[0]!.is_gift).toBe(true);
+    expect(body.orders[0]!.card_id).toBeNull();
+    expect(body.orders[0]!.amount).toBe(0);
+  });
+
+  it('POST /api/orders/batch 一次录入多条', async () => {
+    const m2 = await seedMember(db, { created_by_user_id: staffId, name: '会员乙' });
+    await seedCard(db, {
+      member_id: m2.id,
+      created_by_user_id: staffId,
+      collector_user_id: staffId,
+      card_code: 'year',
+      is_hospital: false,
+      total_meals: 100,
+      used_meals: 0,
+      unit_price: 20,
+      paid_amount: 2000,
+      status: 'active',
+    });
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({
+          proof_images: [TEST_PROOF],
+          entries: [
+            {
+              member_id: memberId,
+              order_date: '2026-04-27',
+              lunch_qty: 1,
+              dinner_qty: 0,
+            },
+            {
+              member_id: m2.id,
+              order_date: '2026-04-27',
+              lunch_qty: 0,
+              dinner_qty: 1,
+            },
+          ],
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const j = (await res.json()) as { orders: schema.DailyOrder[] };
+    expect(j.orders).toHaveLength(2);
+  });
+
+  it('PATCH 赠送餐已送达 → 不写 meal_earned', async () => {
+    await deactivateDefaultCard();
+    await seedCard(db, {
+      member_id: memberId,
+      created_by_user_id: staffId,
+      collector_user_id: staffId,
+      card_code: 'giftcard',
+      is_hospital: false,
+      total_meals: 5,
+      used_meals: 0,
+      unit_price: 20,
+      paid_amount: 100,
+      status: 'active',
+    });
+    const cr = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: withProof({
+          member_id: memberId,
+          order_date: '2026-04-28',
+          lunch_qty: 1,
+          is_gift: true,
+        }),
+      }),
+    );
+    expect(cr.status).toBe(201);
+    const ord = ((await cr.json()) as { orders: schema.DailyOrder[] }).orders[0]!;
+    const oid = ord.id;
+    await app.fetch(
+      new Request(`http://test.local/api/orders/${oid}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ status: 'fulfilled' }),
+      }),
+    );
+    await app.fetch(
+      new Request(`http://test.local/api/orders/${oid}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ status: 'delivered' }),
+      }),
+    );
+    const fin = await db
+      .select()
+      .from(schema.finance_entries)
+      .where(eq(schema.finance_entries.ref_order_id, oid));
+    expect(fin).toHaveLength(0);
+  });
+
+  it('POST 晚餐单独（dinner_qty=2）- 创建 1 条订单', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-24',
           dinner_qty: 2,
@@ -165,7 +319,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-24',
           lunch_qty: 1,
@@ -202,7 +356,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-24',
           lunch_qty: 1,
@@ -250,7 +404,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-24',
           lunch_qty: 1,
@@ -291,7 +445,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-24',
           lunch_qty: 1,
@@ -326,7 +480,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-25',
           lunch_qty: 3,
@@ -388,7 +542,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-24',
           lunch_qty: 1,
@@ -397,7 +551,7 @@ describe('Orders API /api/orders', () => {
     );
     expect(res.status).toBe(422);
     const body = (await res.json()) as { message: string };
-    expect(body.message).toContain('先开卡');
+    expect(body.message).toContain('开卡');
   });
 
   it('POST 会员不存在 → 404', async () => {
@@ -408,7 +562,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: 99999,
           order_date: '2026-04-24',
           lunch_qty: 1,
@@ -426,7 +580,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-24',
           lunch_qty: 0,
@@ -440,7 +594,7 @@ describe('Orders API /api/orders', () => {
   it('POST Idempotency-Key 防重复提交', async () => {
     const idempotencyKey = 'test-idem-key-12345';
 
-    const body = JSON.stringify({
+    const body = withProof({
       member_id: memberId,
       order_date: '2026-04-25',
       lunch_qty: 1,
@@ -1069,7 +1223,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           order_date: '2026-04-24',
           lunch_qty: 2,
           customer_name: '张叔叔',
@@ -1138,7 +1292,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           order_date: '2026-04-24',
           lunch_qty: 1,
         }),
@@ -1155,7 +1309,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           order_date: '2026-04-24',
           lunch_qty: 1,
           customer_name: '没填手机',
@@ -1173,7 +1327,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           order_date: '2026-04-24',
           lunch_qty: 1,
           customer_name: '格式错',
@@ -1192,7 +1346,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           order_date: '2026-04-24',
           lunch_qty: 1,
           customer_name: '没填微信',
@@ -1212,7 +1366,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           order_date: '2026-04-24',
           lunch_qty: 1,
           customer_name: '没填地址',
@@ -1233,7 +1387,7 @@ describe('Orders API /api/orders', () => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${staffToken}`,
           },
-          body: JSON.stringify(body),
+          body: withProof(body),
         }),
       );
 
@@ -1305,7 +1459,7 @@ describe('Orders API /api/orders', () => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${staffToken}`,
           },
-          body: JSON.stringify({
+          body: withProof({
             order_date: '2026-04-24',
             lunch_qty: 1,
             customer_name: name,
@@ -1344,7 +1498,7 @@ describe('Orders API /api/orders', () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${staffToken}`,
         },
-        body: JSON.stringify({
+        body: withProof({
           member_id: memberId,
           order_date: '2026-04-24',
           lunch_qty: 1,
@@ -1364,7 +1518,7 @@ describe('Orders API /api/orders', () => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${staffToken}`,
           },
-          body: JSON.stringify({
+          body: withProof({
             order_date: '2026-04-24',
             lunch_qty: 2,
             customer_name: name,

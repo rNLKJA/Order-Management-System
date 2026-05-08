@@ -129,6 +129,8 @@ export default function OrdersScreen() {
       notes?: string;
       deliveryChannel: 'self' | 'courier';
       courierRef?: string;
+      proofImages: string[];
+      isGift?: boolean;
     }) => {
       try {
         await ordersApi.create(
@@ -140,6 +142,8 @@ export default function OrdersScreen() {
             notes: payload.notes ?? '',
             delivery_channel: payload.deliveryChannel,
             courier_ref: payload.courierRef,
+            proof_images: payload.proofImages,
+            is_gift: payload.isGift,
           },
           createIdempotencyKey(),
         );
@@ -147,6 +151,43 @@ export default function OrdersScreen() {
         await Promise.all([invalidateOrders(), invalidateMembers(payload.memberId)]);
       } catch (e) {
         flashToast(e instanceof Error ? e.message : '录入失败');
+        throw e;
+      }
+    },
+    [invalidateOrders, invalidateMembers, flashToast],
+  );
+
+  const handleAddMemberBatchOrder = useCallback(
+    async (payload: {
+      proof_images: string[];
+      entries: Array<{
+        memberId: number;
+        orderDate: string;
+        lunchQty: number;
+        dinnerQty: number;
+        notes?: string;
+        isGift: boolean;
+        deliveryChannel: 'self' | 'courier';
+        courierRef?: string;
+      }>;
+    }) => {
+      try {
+        await ordersApi.batchCreate({
+          proof_images: payload.proof_images,
+          entries: payload.entries.map((e) => ({
+            member_id: e.memberId,
+            order_date: e.orderDate,
+            lunch_qty: e.lunchQty,
+            dinner_qty: e.dinnerQty,
+            notes: e.notes ?? '',
+            is_gift: e.isGift,
+            delivery_channel: e.deliveryChannel,
+            courier_ref: e.courierRef,
+          })),
+        });
+        await Promise.all([invalidateOrders(), invalidateMembers()]);
+      } catch (e) {
+        flashToast(e instanceof Error ? e.message : '批量录入失败');
         throw e;
       }
     },
@@ -167,6 +208,8 @@ export default function OrdersScreen() {
       notes?: string;
       deliveryChannel: 'self' | 'courier';
       courierRef?: string;
+      proofImages: string[];
+      isGift?: boolean;
     }) => {
       try {
         await ordersApi.create(
@@ -183,6 +226,8 @@ export default function OrdersScreen() {
             adhoc_unit_price: payload.unitPrice,
             delivery_channel: payload.deliveryChannel,
             courier_ref: payload.courierRef,
+            proof_images: payload.proofImages,
+            is_gift: payload.isGift,
           },
           createIdempotencyKey(),
         );
@@ -443,6 +488,7 @@ export default function OrdersScreen() {
         <EntryPanel
           members={membersView.data ?? []}
           onAddMemberOrder={handleAddMemberOrder}
+          onAddMemberBatchOrder={handleAddMemberBatchOrder}
           onAddWalkinOrder={handleAddWalkinOrder}
           onJumpToOverview={() => setActiveTab('overview')}
         />

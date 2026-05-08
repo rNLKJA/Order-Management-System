@@ -192,6 +192,10 @@ export const daily_orders = sqliteTable(
       .notNull()
       .default(sql`(unixepoch('now') * 1000)`),
     notes: text('notes').notNull().default(''),
+    /** 赠送餐：不扣会员卡次数；送达时不记 meal_earned 收入 */
+    is_gift: integer('is_gift', { mode: 'boolean' }).notNull().default(false),
+    /** JSON 数组：订餐凭证截图 data URL 列表（审计用） */
+    proof_images_json: text('proof_images_json').notNull().default('[]'),
   },
   (t) => ({
     memberIdx: index('orders_member_idx').on(t.member_id),

@@ -17,7 +17,7 @@ export function OrderRow({
   onPress: () => void;
 }) {
   const s = STATUS_MAP[order.status];
-  const isAdhoc = order.card_type === null;
+  const isWalkinAdhoc = order.card_type === null && !!order.customer_name;
   const deliveryFailed = order.status === 'cancelled' && (order.cancel_reason ?? '').startsWith('配送失败');
   const remainingMeals = member?.active_card?.remaining_meals;
 
@@ -53,7 +53,9 @@ export function OrderRow({
         </View>
 
         <View style={styles.orderMeta}>
-          {isAdhoc ? (
+          {order.is_gift ? (
+            <Text style={styles.giftTag}>赠送餐</Text>
+          ) : isWalkinAdhoc ? (
             <Text style={styles.adhocTag}>散餐 ¥{order.amount}</Text>
           ) : (
             <>
