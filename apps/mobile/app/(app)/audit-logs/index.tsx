@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   AUDIT_ACTION_LABEL,
   AUDIT_ENTITY_LABEL,
+  formatDateTimeWithSeconds,
   type AuditEntity,
 } from '@meal/shared';
 import { auditApi, type AuditLogRow } from '../../../api/audit';
@@ -49,14 +50,7 @@ const ENTITY_FILTERS: { key: FilterKey; label: string }[] = [
 
 function formatTimeMs(ms: number): string {
   try {
-    return new Date(ms).toLocaleString('zh-CN', {
-      hour12: false,
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
+    return formatDateTimeWithSeconds(new Date(ms));
   } catch {
     return '—';
   }

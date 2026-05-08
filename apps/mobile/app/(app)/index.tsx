@@ -15,7 +15,6 @@ import {
   displayUserRole,
   formatCNY,
   formatDate,
-  shanghaiCalendarMetaLine,
 } from '@meal/shared';
 import { useAuth } from '../../hooks/useAuth';
 import { useFinanceToday, useMembersView } from '../../hooks/useMembersView';
@@ -243,7 +242,7 @@ export default function HomeScreen() {
                   bg="rgba(0,122,255,0.14)"
                 />
                 <View style={styles.heroTextWrap}>
-                  <Text style={styles.greetingDate}>{shanghaiCalendarMetaLine()}</Text>
+                  <Text style={styles.greetingDate}>{formatDate(new Date())}</Text>
                   <View style={styles.greetingRow}>
                     <Text style={styles.greetingHello}>{timeGreeting}，</Text>
                     <Text style={styles.greetingName}>{user?.full_name ?? '朋友'}</Text>

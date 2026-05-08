@@ -58,6 +58,25 @@ export function formatDateTime(date: Date | string, tz: string = DEFAULT_TZ): st
   return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
 }
 
+/** YYYY-MM-DD HH:mm:ss（Asia/Shanghai），审计日志等用 */
+export function formatDateTimeWithSeconds(date: Date | string, tz: string = DEFAULT_TZ): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const fmt = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '00';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
 /** "10 餐" / "剩余 4 餐" */
 export function formatMeals(qty: number, prefix = ''): string {
   return prefix ? `${prefix} ${qty} 餐` : `${qty} 餐`;
@@ -165,39 +184,12 @@ export function diffCalendarDaysInclusiveShanghai(from: string, to: string): num
   return Math.floor(ms / 86_400_000) + 1;
 }
 
-/** 首页副标题：「M月D日  星期一」口径（上海日历） */
+/** 首页等副标题：上海日历日，展示为 YYYY-MM-DD */
 export function shanghaiCalendarMetaLine(now: Date = new Date()): string {
-  const iso = formatDate(now);
-  const d = shanghaiNoon(iso);
-  if (!Number.isFinite(d.getTime())) return '';
-  const weekdayFmt = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: DEFAULT_TZ,
-    weekday: 'long',
-  });
-  const mdFmt = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: DEFAULT_TZ,
-    month: 'numeric',
-    day: 'numeric',
-  });
-  const mdParts = mdFmt.formatToParts(d);
-  const month = mdParts.find((p) => p.type === 'month')?.value ?? '';
-  const day = mdParts.find((p) => p.type === 'day')?.value ?? '';
-  const weekday = weekdayFmt.format(d);
-  return `${month}月${day}日  ${weekday}`;
+  return formatDate(now);
 }
 
-/** 「M月D日」（上海日历），用于页内「今日 …」文案 */
+/** 页内「今日 …」等：YYYY-MM-DD */
 export function shanghaiMonthDayLine(now: Date = new Date()): string {
-  const iso = formatDate(now);
-  const d = shanghaiNoon(iso);
-  if (!Number.isFinite(d.getTime())) return '';
-  const mdFmt = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: DEFAULT_TZ,
-    month: 'numeric',
-    day: 'numeric',
-  });
-  const mdParts = mdFmt.formatToParts(d);
-  const month = mdParts.find((p) => p.type === 'month')?.value ?? '';
-  const day = mdParts.find((p) => p.type === 'day')?.value ?? '';
-  return `${month}月${day}日`;
+  return formatDate(now);
 }

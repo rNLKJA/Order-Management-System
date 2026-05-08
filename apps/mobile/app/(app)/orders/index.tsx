@@ -8,7 +8,7 @@ import { ActivityIndicator, View, Text, Pressable, SectionList } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { shanghaiMonthDayLine } from '@meal/shared';
+import { formatDate } from '@meal/shared';
 import { IOS_COLORS } from '../../../theme/paperTheme';
 import { type MockMember, type MockOrder } from '../../../constants/mockData';
 import { ordersApi } from '../../../api/orders';
@@ -371,7 +371,7 @@ export default function OrdersScreen() {
         onTabChange={setActiveTab}
       />
       <View style={styles.pageMetaRow}>
-        <Text style={styles.pageMetaText}>{`今日 ${shanghaiMonthDayLine(now)}`}</Text>
+        <Text style={styles.pageMetaText}>{`今日 ${formatDate(now)}`}</Text>
         {activeTab !== 'entry' ? (
           <View style={styles.limitRowInline}>
             <Text style={styles.limitLabel}>每次加载</Text>

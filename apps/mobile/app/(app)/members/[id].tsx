@@ -28,7 +28,7 @@ import {
   IconAvatar,
   StatusChip,
 } from '../../../components/ui';
-import { CARD_RENEWAL_THRESHOLD_MEALS, formatCNY, type SubscriptionCardCode } from '@meal/shared';
+import { CARD_RENEWAL_THRESHOLD_MEALS, formatCNY, formatDate, type SubscriptionCardCode } from '@meal/shared';
 import { type MockCard } from '../../../constants/mockData';
 import { cardsApi } from '../../../api/cards';
 import { membersApi } from '../../../api/members';
@@ -367,7 +367,7 @@ export default function MemberDetailScreen() {
               <Text style={styles.cardCollector}>
                 收款人：{card.collector}
                 {card.recorder ? ` · 录入：${card.recorder}` : ''} ·{' '}
-                {new Date(card.purchased_at).toLocaleDateString('zh-CN')}
+                {formatDate(card.purchased_at)}
               </Text>
               {card.notes ? (
                 <Text style={styles.cardNotes}>备注：{card.notes}</Text>
@@ -855,12 +855,12 @@ function HistoryCardRow({
           ) : null}
           <Text style={styles.historyMeta}>
             {card.used_meals}/{card.total_meals}份 · ¥{card.paid_amount} ·{' '}
-            {new Date(card.purchased_at).toLocaleDateString('zh-CN')}
+            {formatDate(card.purchased_at)}
           </Text>
           {card.status === 'refunded' && card.refund_amount != null ? (
             <Text style={styles.historyRefund}>
               退卡退款 ¥{card.refund_amount}
-              {card.refunded_at ? ` · ${new Date(card.refunded_at).toLocaleDateString('zh-CN')}` : ''}
+              {card.refunded_at ? ` · ${formatDate(card.refunded_at)}` : ''}
               {card.refund_reason ? ` · ${card.refund_reason}` : ''}
             </Text>
           ) : null}

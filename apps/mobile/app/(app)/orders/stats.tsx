@@ -402,8 +402,10 @@ export default function OrdersStatsScreen() {
                             </View>
                             <Text style={styles.trendLabel}>
                               {chartRange === 'year' || (chartRange === 'custom' && days > 62)
-                                ? d.date.slice(2).replace('-', '/')
-                                : d.date.slice(5)}
+                                ? d.date.length === 7
+                                  ? `${d.date}-01`
+                                  : d.date
+                                : d.date}
                             </Text>
                           </View>
                         );

@@ -3,6 +3,7 @@ import {
   formatCNY,
   formatDate,
   formatDateTime,
+  formatDateTimeWithSeconds,
   formatMeals,
   buildUid,
   businessDate,
@@ -50,6 +51,11 @@ describe('formatDate / formatDateTime（Asia/Shanghai）', () => {
   it('HH:mm 拼接', () => {
     const s = formatDateTime('2026-04-21T14:30:00+08:00');
     expect(s).toBe('2026-04-21 14:30');
+  });
+
+  it('HH:mm:ss 拼接', () => {
+    const s = formatDateTimeWithSeconds('2026-04-21T14:30:05+08:00');
+    expect(s).toBe('2026-04-21 14:30:05');
   });
 });
 
