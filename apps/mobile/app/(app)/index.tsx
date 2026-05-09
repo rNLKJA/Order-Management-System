@@ -128,10 +128,10 @@ export default function HomeScreen() {
     },
     {
       key: 'orders-manage',
-      title: '录入 / 总览',
+      title: '每日订餐',
       subtitle: ordersToday.isLoading
         ? '加载中...'
-        : `${totalCount} 份 · 待出 ${pendingCount} · 点开即录入（可多选会员）`,
+        : `今日 ${totalCount} 份 · 待出 ${pendingCount}`,
       icon: 'restaurant-outline',
       color: COLORS.success,
       bg: COLORS.successSoft,

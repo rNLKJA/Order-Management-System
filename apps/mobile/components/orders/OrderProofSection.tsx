@@ -1,19 +1,14 @@
 /**
  * 订餐凭证截图：相册多选 → data URL，与 API proof_images 对齐。
  *
- * Web：expo-image-picker 在部分浏览器下拿不到 base64，改用隐藏 file input + FileReader。
+ * Web：与 lib/avatar.ts 一致——用 document.createElement('input') 挂到 body 再 click()，
+ * 不用 RN Web 里的隐藏 input（ref 与 change 在移动端浏览器/Safari 上常失灵）。
  * 原生：多选时若仅返回 uri、无 base64，则用 expo-file-system 读文件再生成 data URL。
  */
 
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
-import {
-  createElement,
-  useCallback,
-  useRef,
-  useState,
-  type ChangeEventHandler,
-} from 'react';
+import { useState } from 'react';
 import {
   View,
   Image,
@@ -49,6 +44,52 @@ async function readBrowserFilesAsDataUrls(
         }),
     ),
   );
+}
+
+/**
+ * Web 选多图：与 pickAvatarWeb 同源写法，避免 React 树内的 <input> 不触发 onChange。
+ */
+function pickProofImagesWeb(maxCount: number): Promise<string[]> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') {
+      resolve([]);
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif';
+    input.multiple = true;
+    input.style.position = 'fixed';
+    input.style.left = '-9999px';
+    let done = false;
+    const finalize = (urls: string[]) => {
+      if (done) return;
+      done = true;
+      try {
+        document.body.removeChild(input);
+      } catch {
+        /* ignore */
+      }
+      resolve(urls.slice(0, maxCount));
+    };
+    input.onchange = async () => {
+      const files = input.files;
+      if (!files?.length) {
+        finalize([]);
+        return;
+      }
+      try {
+        const urls = await readBrowserFilesAsDataUrls(files, maxCount);
+        finalize(urls);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[order-proof] read failed', err);
+        finalize([]);
+      }
+    };
+    document.body.appendChild(input);
+    input.click();
+  });
 }
 
 function normalizeProofMime(mimeType: string | undefined, uri: string): string {
@@ -134,33 +175,24 @@ export function OrderProofSection({
   pairColumn,
 }: Props) {
   const [picking, setPicking] = useState(false);
-  const webFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const onWebFileChange: ChangeEventHandler<HTMLInputElement> = useCallback(
-    async (e) => {
-      const files = e.target.files;
-      e.target.value = '';
-      if (disabled || !files?.length) return;
+  const add = async () => {
+    if (disabled || picking) return;
+    const room = MAX_PROOF - images.length;
+    if (room <= 0) return;
+
+    if (Platform.OS === 'web') {
       setPicking(true);
       try {
-        const room = MAX_PROOF - images.length;
-        if (room <= 0) return;
-        const next = await readBrowserFilesAsDataUrls(files, room);
+        const next = await pickProofImagesWeb(room);
         if (next.length === 0) return;
         onChange([...images, ...next].slice(0, MAX_PROOF));
       } finally {
         setPicking(false);
       }
-    },
-    [disabled, images, onChange],
-  );
-
-  const add = async () => {
-    if (disabled || picking) return;
-    if (Platform.OS === 'web') {
-      webFileInputRef.current?.click();
       return;
     }
+
     setPicking(true);
     try {
       const next = await launchProofImagePicker();
@@ -180,18 +212,6 @@ export function OrderProofSection({
 
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact, hideTitle && styles.wrapNoTitle]}>
-      {Platform.OS === 'web'
-        ? createElement('input', {
-            type: 'file',
-            accept: 'image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif',
-            multiple: true,
-            style: { display: 'none' },
-            ref: (el: HTMLInputElement | null) => {
-              webFileInputRef.current = el;
-            },
-            onChange: onWebFileChange,
-          })
-        : null}
       {!hideTitle ? (
         <>
           <Text variant="titleSmall" style={styles.label}>

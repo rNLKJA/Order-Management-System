@@ -450,22 +450,34 @@ export function EntryPanel({
 
   return (
     <View style={{ flex: 1 }}>
-      {/* 模式切换（会员餐 / 散餐） */}
+      {/* 模式切换 + 录入日期（同一行）；说明在下一行，凭证区全宽 */}
       <View style={entryStyles.modeRow}>
-        <View style={entryStyles.modeGroup}>
-          {(['member', 'adhoc'] as const).map((m) => (
-            <Pressable
-              key={m}
-              style={[entryStyles.modeBtn, mode === m && entryStyles.modeBtnActive]}
-              onPress={() => setMode(m)}
-            >
-              <Text style={[entryStyles.modeBtnText, mode === m && entryStyles.modeBtnTextActive]}>
-                {m === 'member' ? '会员餐' : '散餐'}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={entryStyles.modeRowInner}>
+          <View style={entryStyles.modeGroup}>
+            {(['member', 'adhoc'] as const).map((m) => (
+              <Pressable
+                key={m}
+                style={[entryStyles.modeBtn, mode === m && entryStyles.modeBtnActive]}
+                onPress={() => setMode(m)}
+              >
+                <Text style={[entryStyles.modeBtnText, mode === m && entryStyles.modeBtnTextActive]}>
+                  {m === 'member' ? '会员餐' : '散餐'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={entryStyles.modeDateWrap}>
+            <DatePicker
+              label="录入日期"
+              value={entryDate}
+              onChange={setEntryDate}
+              labelMinWidth={52}
+              disabled={submitting}
+              style={entryStyles.modeRowDatePicker}
+            />
+          </View>
         </View>
-        <Text style={entryStyles.modeHint} numberOfLines={2}>
+        <Text style={entryStyles.modeHint} numberOfLines={3}>
           {mode === 'member'
             ? memberIsGift
               ? '赠送餐：每行一位会员，午/晚份数分开填'
@@ -482,28 +494,17 @@ export function EntryPanel({
           contentContainerStyle={entryStyles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-            <View style={entryStyles.dateProofCard}>
-              <View style={entryStyles.dateProofCol}>
-                <Text style={entryStyles.dateProofColTitle}>录入日期</Text>
-                <View style={entryStyles.dateProofControlSlot}>
-                  <DatePicker value={entryDate} onChange={setEntryDate} label="" />
-                </View>
-              </View>
-              <View style={entryStyles.dateProofCol}>
-                <Text style={entryStyles.dateProofColTitle}>
-                  订餐凭证 <Text style={{ color: IOS_COLORS.red }}>*</Text>
-                </Text>
-                <View style={entryStyles.dateProofControlSlot}>
-                  <OrderProofSection
-                    images={proofImages}
-                    onChange={setProofImages}
-                    disabled={submitting}
-                    compact
-                    hideTitle
-                    pairColumn
-                  />
-                </View>
-              </View>
+            <View style={entryStyles.proofCard}>
+              <Text style={entryStyles.proofCardTitle}>
+                订餐凭证 <Text style={{ color: IOS_COLORS.red }}>*</Text>
+              </Text>
+              <OrderProofSection
+                images={proofImages}
+                onChange={setProofImages}
+                disabled={submitting}
+                compact
+                hideTitle
+              />
             </View>
             <Text style={entryStyles.dateHint}>
               默认次日；须至少一张截图。点「添加截图」可选多图。

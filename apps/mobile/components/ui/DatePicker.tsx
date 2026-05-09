@@ -91,7 +91,7 @@ export function DatePicker({
 }
 
 const webInputStyle = {
-  fontSize: 15,
+  fontSize: 16,
   color: COLORS.text.primary,
   paddingTop: 6,
   paddingBottom: 6,
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   },
   nativeInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.text.primary,
     paddingVertical: 4,
     fontVariant: ['tabular-nums'],

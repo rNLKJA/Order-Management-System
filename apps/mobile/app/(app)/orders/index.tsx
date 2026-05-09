@@ -367,7 +367,7 @@ export default function OrdersScreen() {
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <AppHeader
-        title={activePrimary === 'manage' ? '录入 / 总览' : '出餐 / 配送'}
+        title={activePrimary === 'manage' ? '每日订餐' : '出餐 / 配送'}
       />
 
       {/* 当前分组内的功能筛选 */}

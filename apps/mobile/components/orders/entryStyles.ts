@@ -16,28 +16,55 @@ export const entryStyles = StyleSheet.create({
   title: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
   confirm: { fontSize: 17, color: IOS_COLORS.blue, fontWeight: '600' },
 
+  /** 上：会员餐/散餐 + 录入日期；下：模式说明（给下面凭证区留全宽） */
   modeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
     backgroundColor: IOS_COLORS.card,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: IOS_COLORS.separatorLight,
+    gap: 8,
+  },
+  modeRowInner: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
     gap: 10,
+    width: '100%',
+  },
+  /** 录入日期紧挨模式切换，占满右侧剩余宽度，与左侧分段同高 */
+  modeDateWrap: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  /** 与 modeGroup 同高，避免上下错缝 */
+  modeRowDatePicker: {
+    flex: 1,
+    minHeight: 44,
+    alignSelf: 'stretch',
   },
   modeGroup: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     backgroundColor: IOS_COLORS.fillMedium,
     borderRadius: 10,
     padding: 3,
-    alignSelf: 'flex-start',
+    flexShrink: 0,
+    alignSelf: 'stretch',
+    minHeight: 44,
   },
-  modeBtn: { paddingHorizontal: 20, paddingVertical: 7, borderRadius: 8 },
+  modeBtn: {
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    minWidth: 76,
+  },
   modeBtnActive: { backgroundColor: IOS_COLORS.card },
-  modeBtnText: { fontSize: 15, color: IOS_COLORS.labelSecondary },
+  modeBtnText: { fontSize: 16, color: IOS_COLORS.labelSecondary },
   modeBtnTextActive: { color: IOS_COLORS.label, fontWeight: '600' },
-  modeHint: { flex: 1, fontSize: 12, color: IOS_COLORS.labelTertiary },
+  modeHint: { fontSize: 12, color: IOS_COLORS.labelTertiary, lineHeight: 17 },
 
   scroll: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
 
@@ -51,11 +78,8 @@ export const entryStyles = StyleSheet.create({
     paddingLeft: 4,
   },
 
-  /** 日期 + 凭证：双列 flex，空凭证时为全宽添加条，避免「大头针」缩在角上 */
-  dateProofCard: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 12,
+  /** 仅订餐凭证：全宽卡片（录入日期已移到顶部模式行） */
+  proofCard: {
     backgroundColor: IOS_COLORS.card,
     borderRadius: 16,
     padding: 14,
@@ -63,21 +87,12 @@ export const entryStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(17,17,17,0.06)',
   },
-  dateProofCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  dateProofColTitle: {
+  proofCardTitle: {
     fontSize: 13,
     fontWeight: '600',
     color: IOS_COLORS.labelSecondary,
     marginBottom: 8,
     letterSpacing: 0.2,
-  },
-  dateProofControlSlot: {
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 44,
   },
 
   searchBox: {
