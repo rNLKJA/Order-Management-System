@@ -51,6 +51,35 @@ export const entryStyles = StyleSheet.create({
     paddingLeft: 4,
   },
 
+  /** 日期 + 凭证：双列 flex，空凭证时为全宽添加条，避免「大头针」缩在角上 */
+  dateProofCard: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+    backgroundColor: IOS_COLORS.card,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(17,17,17,0.06)',
+  },
+  dateProofCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  dateProofColTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: IOS_COLORS.labelSecondary,
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  dateProofControlSlot: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+
   searchBox: {
     backgroundColor: IOS_COLORS.card,
     borderRadius: 12,
@@ -224,16 +253,14 @@ export const entryStyles = StyleSheet.create({
     paddingTop: 6,
   },
 
-  toggleGroup: {
-    flexDirection: 'row',
-    backgroundColor: IOS_COLORS.fillMedium,
-    borderRadius: 8,
-    padding: 2,
+  /** Switch 行：主标题 + 灰色说明（贴 iOS 设置项） */
+  switchLabelCol: { flex: 1, paddingRight: 12 },
+  switchHint: {
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
+    marginTop: 4,
+    lineHeight: 16,
   },
-  toggleBtn: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 6 },
-  toggleBtnActive: { backgroundColor: IOS_COLORS.card },
-  toggleText: { fontSize: 14, color: IOS_COLORS.labelSecondary },
-  toggleTextActive: { color: IOS_COLORS.label, fontWeight: '600' },
 
   adhocTotal: {
     flexDirection: 'row',

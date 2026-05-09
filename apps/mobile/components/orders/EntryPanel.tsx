@@ -11,6 +11,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../theme/paperTheme';
@@ -33,6 +34,16 @@ type EntryMode = 'member' | 'adhoc';
 /** 与 POST /api/orders/batch 单请求上限一致 */
 const MEMBER_BATCH_QUEUE_MAX = 30;
 
+/** 与顶部 Tab（录入 / 批量 / 赠送）对齐 */
+export type MemberQuickEntryPreset = 'single' | 'batch' | 'gift';
+
+function memberPresetState(preset?: MemberQuickEntryPreset): { batch: boolean; gift: boolean } {
+  if (preset === 'single') return { batch: false, gift: false };
+  if (preset === 'batch') return { batch: true, gift: false };
+  if (preset === 'gift') return { batch: true, gift: true };
+  return { batch: true, gift: false };
+}
+
 function memberMeetsBatchCardRules(
   m: MockMember,
   lunch: number,
@@ -45,11 +56,14 @@ function memberMeetsBatchCardRules(
 }
 
 export function EntryPanel({
+  memberQuickEntry,
   onAddMemberOrder,
   onAddMemberBatchOrder,
   onAddWalkinOrder,
   onJumpToOverview,
 }: {
+  /** 自订餐页 Tab 传入时，锁定对应会员餐模式且不再显示「批量/赠送」开关 */
+  memberQuickEntry?: MemberQuickEntryPreset;
   onAddMemberOrder: (payload: {
     memberId: number;
     orderDate: string;
@@ -92,6 +106,9 @@ export function EntryPanel({
   }) => Promise<void>;
   onJumpToOverview?: () => void;
 }) {
+  const quickInitial = memberPresetState(memberQuickEntry);
+  const lockMemberPreset = memberQuickEntry != null;
+
   const [toast, setToast] = useState<string | null>(null);
   const [mode, setMode] = useState<EntryMode>('member');
   const [submitting, setSubmitting] = useState(false);
@@ -100,15 +117,14 @@ export function EntryPanel({
   const [deliveryChannel, setDeliveryChannel] = useState<'self' | 'courier'>('self');
   const [courierRef, setCourierRef] = useState('');
 
-  // 会员餐：默认批量（每人可不同午/晚）；关 → 单人 + 共用份数
-  const [memberBatchMode, setMemberBatchMode] = useState(true);
+  const [memberBatchMode, setMemberBatchMode] = useState(quickInitial.batch);
+  const [memberIsGift, setMemberIsGift] = useState(quickInitial.gift);
   const [selectedMember, setSelectedMember] = useState<MockMember | null>(null);
   const [memberQuery, setMemberQuery] = useState('');
   const [lunchQty, setLunchQty] = useState(0);
   const [dinnerQty, setDinnerQty] = useState(0);
   const [memberNotes, setMemberNotes] = useState('');
   const [proofImages, setProofImages] = useState<string[]>([]);
-  const [memberIsGift, setMemberIsGift] = useState(false);
   /** 批量：已加入本单的会员，每人独立午/晚（上限与 API 一致） */
   const [memberBatchRows, setMemberBatchRows] = useState<
     Array<{ member: MockMember; lunch: number; dinner: number }>
@@ -174,16 +190,17 @@ export function EntryPanel({
   const filteredMembers = memberSearchHits ?? [];
 
   const reset = () => {
+    const nextPreset = memberPresetState(memberQuickEntry);
     setMode('member');
     setEntryDate(tomorrowStr());
-    setMemberBatchMode(true);
+    setMemberBatchMode(nextPreset.batch);
     setMemberQuery('');
     setSelectedMember(null);
     setLunchQty(0);
     setDinnerQty(0);
     setMemberNotes('');
     setProofImages([]);
-    setMemberIsGift(false);
+    setMemberIsGift(nextPreset.gift);
     setMemberBatchRows([]);
     setAdhocName(''); setAdhocPhone(''); setAdhocAddress('');
     setAdhocWechat('');
@@ -451,7 +468,7 @@ export function EntryPanel({
         <Text style={entryStyles.modeHint} numberOfLines={2}>
           {mode === 'member'
             ? memberIsGift
-              ? '赠送餐：不扣会员卡次数'
+              ? '赠送餐：每行一位会员，午/晚份数分开填'
               : '从会员档案中选择，自动扣卡'
             : '无需会员账户，现金收费'}
         </Text>
@@ -465,72 +482,73 @@ export function EntryPanel({
           contentContainerStyle={entryStyles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-            <Text style={entryStyles.sectionLabel}>录入日期</Text>
-            <View style={entryStyles.dateCard}>
-              <DatePicker
-                value={entryDate}
-                onChange={setEntryDate}
-                label="日期"
-              />
+            <View style={entryStyles.dateProofCard}>
+              <View style={entryStyles.dateProofCol}>
+                <Text style={entryStyles.dateProofColTitle}>录入日期</Text>
+                <View style={entryStyles.dateProofControlSlot}>
+                  <DatePicker value={entryDate} onChange={setEntryDate} label="" />
+                </View>
+              </View>
+              <View style={entryStyles.dateProofCol}>
+                <Text style={entryStyles.dateProofColTitle}>
+                  订餐凭证 <Text style={{ color: IOS_COLORS.red }}>*</Text>
+                </Text>
+                <View style={entryStyles.dateProofControlSlot}>
+                  <OrderProofSection
+                    images={proofImages}
+                    onChange={setProofImages}
+                    disabled={submitting}
+                    compact
+                    hideTitle
+                    pairColumn
+                  />
+                </View>
+              </View>
             </View>
             <Text style={entryStyles.dateHint}>
-              默认是次日，可按需要改成今天或任意日期。
+              默认次日；须至少一张截图。点「添加截图」可选多图。
             </Text>
 
-            <OrderProofSection images={proofImages} onChange={setProofImages} disabled={submitting} />
-
-            {mode === 'member' && (
+            {mode === 'member' && !lockMemberPreset && (
               <>
                 <Text style={[entryStyles.sectionLabel, { marginTop: 4 }]}>选项</Text>
                 <View style={entryStyles.inlineCard}>
                   <View style={entryStyles.fieldRow}>
-                    <Text style={entryStyles.fieldLabel}>赠送餐（不扣次）</Text>
-                    <View style={entryStyles.toggleGroup}>
-                      {([false, true] as const).map((v) => (
-                        <Pressable
-                          key={String(v)}
-                          style={[entryStyles.toggleBtn, memberIsGift === v && entryStyles.toggleBtnActive]}
-                          onPress={() => setMemberIsGift(v)}
-                          disabled={submitting}
-                        >
-                          <Text style={[entryStyles.toggleText, memberIsGift === v && entryStyles.toggleTextActive]}>
-                            {v ? '是' : '否'}
-                          </Text>
-                        </Pressable>
-                      ))}
+                    <View style={entryStyles.switchLabelCol}>
+                      <Text style={entryStyles.fieldLabel}>赠送餐</Text>
+                      <Text style={entryStyles.switchHint}>打开后不扣会员卡次数</Text>
                     </View>
+                    <Switch
+                      value={memberIsGift}
+                      onValueChange={setMemberIsGift}
+                      disabled={submitting}
+                      trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
+                      thumbColor={Platform.OS === 'android' ? (memberIsGift ? IOS_COLORS.blue : '#f4f3f4') : undefined}
+                      ios_backgroundColor={IOS_COLORS.fillMedium}
+                    />
                   </View>
                   <View style={entryStyles.fieldDivider} />
                   <View style={entryStyles.fieldRow}>
-                    <Text style={entryStyles.fieldLabel}>批量录入</Text>
-                    <View style={entryStyles.toggleGroup}>
-                      {([true, false] as const).map((v) => (
-                        <Pressable
-                          key={String(v)}
-                          style={[
-                            entryStyles.toggleBtn,
-                            memberBatchMode === v && entryStyles.toggleBtnActive,
-                          ]}
-                          onPress={() => setBatchMode(v)}
-                          disabled={submitting}
-                        >
-                          <Text
-                            style={[
-                              entryStyles.toggleText,
-                              memberBatchMode === v && entryStyles.toggleTextActive,
-                            ]}
-                          >
-                            {v ? '开' : '关'}
-                          </Text>
-                        </Pressable>
-                      ))}
+                    <View style={entryStyles.switchLabelCol}>
+                      <Text style={entryStyles.fieldLabel}>批量录入</Text>
+                      <Text style={entryStyles.switchHint}>
+                        开：多人，每人单独午/晚份数 · 关：只录一位，共用一套份数
+                      </Text>
                     </View>
+                    <Switch
+                      value={memberBatchMode}
+                      onValueChange={setBatchMode}
+                      disabled={submitting}
+                      trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
+                      thumbColor={Platform.OS === 'android' ? (memberBatchMode ? IOS_COLORS.blue : '#f4f3f4') : undefined}
+                      ios_backgroundColor={IOS_COLORS.fillMedium}
+                    />
                   </View>
                 </View>
                 <Text style={entryStyles.dateHint}>
                   {memberBatchMode
-                    ? '批量（默认）：搜索后点行加入列表，在每位会员下分别设午餐/晚餐份数；同一单内每人可不同。关批量后可只选一位会员。'
-                    : '单人模式：搜索并点选一位会员，再填写共用的午餐/晚餐份数。'}
+                    ? '搜索并加入多位会员；列表里每一行各自调整午餐、晚餐份数。'
+                    : '搜索并选定一位会员；页面中间只有一组午餐、晚餐份数。'}
                 </Text>
               </>
             )}
@@ -539,9 +557,13 @@ export function EntryPanel({
               memberBatchMode ? (
               /* ===== 会员餐 · 批量（每人份数独立） ===== */
               <>
-                <Text style={entryStyles.sectionLabel}>本批会员</Text>
+                <Text style={entryStyles.sectionLabel}>
+                  {memberIsGift ? '赠送餐' : '批量录入'}
+                </Text>
                 <Text style={[entryStyles.dateHint, { marginBottom: 8 }]}>
-                  每人午餐/晚餐可不同；未设份数（均为 0）的行不会提交。
+                  {memberIsGift
+                    ? '不扣会员卡次数。搜索并加入会员，在每行设午/晚份数；午+晚均为 0 不提交。'
+                    : '每位会员一行，午/晚份数用步进器单独设置；午+晚均为 0 不提交。'}
                 </Text>
                 <View style={entryStyles.searchBox}>
                   <TextInput
@@ -565,7 +587,7 @@ export function EntryPanel({
                   ) : filteredMembers.length > 0 ? (
                     <View style={entryStyles.memberList}>
                       <Text style={[entryStyles.dateHint, { paddingHorizontal: 14, paddingVertical: 8 }]}>
-                        点行加入下列列表，再为每位调整午/晚份数。
+                        点行加入列表。
                       </Text>
                       {filteredMembers.map((m, i) => (
                         <Pressable
@@ -688,6 +710,7 @@ export function EntryPanel({
                   onChange={setDeliveryChannel}
                   courierRef={courierRef}
                   onCourierRefChange={setCourierRef}
+                  disabled={submitting}
                 />
 
                 <View style={entryStyles.notesBox}>
@@ -705,7 +728,7 @@ export function EntryPanel({
             ) : (
               /* ===== 会员餐 · 单人 ===== */
               <>
-                <Text style={entryStyles.sectionLabel}>选择会员</Text>
+                <Text style={entryStyles.sectionLabel}>单人录入</Text>
                 <View style={entryStyles.searchBox}>
                   <TextInput
                     style={entryStyles.searchInput}
@@ -843,7 +866,10 @@ export function EntryPanel({
                   <View style={entryStyles.searchHintSpacer} />
                 )}
 
-                <Text style={[entryStyles.sectionLabel, { marginTop: 16 }]}>份数</Text>
+                <Text style={[entryStyles.sectionLabel, { marginTop: 16 }]}>份数（仅此一位）</Text>
+                <Text style={[entryStyles.dateHint, { marginBottom: 6 }]}>
+                  以下为该会员共用的一套午餐/晚餐，不是批量那种「每人不同」。
+                </Text>
                 <View style={entryStyles.qtySection}>
                   <QtyRow label="午餐份数" value={lunchQty} onChange={setLunchQty} />
                   <QtyRow label="晚餐份数" value={dinnerQty} onChange={setDinnerQty} />
@@ -857,6 +883,7 @@ export function EntryPanel({
                   onChange={setDeliveryChannel}
                   courierRef={courierRef}
                   onCourierRefChange={setCourierRef}
+                  disabled={submitting}
                 />
 
                 <View style={entryStyles.notesBox}>
@@ -933,38 +960,33 @@ export function EntryPanel({
                   </View>
                   <View style={entryStyles.fieldDivider} />
                   <View style={entryStyles.fieldRow}>
-                    <Text style={entryStyles.fieldLabel}>类型</Text>
-                    <View style={entryStyles.toggleGroup}>
-                      {([false, true] as const).map((v) => (
-                        <Pressable
-                          key={String(v)}
-                          style={[entryStyles.toggleBtn, adhocHospital === v && entryStyles.toggleBtnActive]}
-                          onPress={() => setAdhocHospital(v)}
-                        >
-                          <Text style={[entryStyles.toggleText, adhocHospital === v && entryStyles.toggleTextActive]}>
-                            {v ? '院内' : '院外'}
-                          </Text>
-                        </Pressable>
-                      ))}
+                    <View style={entryStyles.switchLabelCol}>
+                      <Text style={entryStyles.fieldLabel}>院内顾客</Text>
+                      <Text style={entryStyles.switchHint}>打开表示送餐地址在院区内</Text>
                     </View>
+                    <Switch
+                      value={adhocHospital}
+                      onValueChange={setAdhocHospital}
+                      disabled={submitting}
+                      trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
+                      thumbColor={Platform.OS === 'android' ? (adhocHospital ? IOS_COLORS.blue : '#f4f3f4') : undefined}
+                      ios_backgroundColor={IOS_COLORS.fillMedium}
+                    />
                   </View>
                   <View style={entryStyles.fieldDivider} />
                   <View style={entryStyles.fieldRow}>
-                    <Text style={entryStyles.fieldLabel}>赠送餐</Text>
-                    <View style={entryStyles.toggleGroup}>
-                      {([false, true] as const).map((v) => (
-                        <Pressable
-                          key={String(v)}
-                          style={[entryStyles.toggleBtn, adhocIsGift === v && entryStyles.toggleBtnActive]}
-                          onPress={() => setAdhocIsGift(v)}
-                          disabled={submitting}
-                        >
-                          <Text style={[entryStyles.toggleText, adhocIsGift === v && entryStyles.toggleTextActive]}>
-                            {v ? '是' : '否'}
-                          </Text>
-                        </Pressable>
-                      ))}
+                    <View style={entryStyles.switchLabelCol}>
+                      <Text style={entryStyles.fieldLabel}>赠送餐</Text>
+                      <Text style={entryStyles.switchHint}>打开后应收金额为 0</Text>
                     </View>
+                    <Switch
+                      value={adhocIsGift}
+                      onValueChange={setAdhocIsGift}
+                      disabled={submitting}
+                      trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
+                      thumbColor={Platform.OS === 'android' ? (adhocIsGift ? IOS_COLORS.blue : '#f4f3f4') : undefined}
+                      ios_backgroundColor={IOS_COLORS.fillMedium}
+                    />
                   </View>
                 </View>
                 <Text style={entryStyles.hintUnderCard}>
@@ -996,6 +1018,7 @@ export function EntryPanel({
                   onChange={setDeliveryChannel}
                   courierRef={courierRef}
                   onCourierRefChange={setCourierRef}
+                  disabled={submitting}
                 />
 
                 <View style={entryStyles.notesBox}>
@@ -1028,7 +1051,9 @@ export function EntryPanel({
           {mode === 'member' ? (
             memberBatchMode ? (
               <>
-                <Text style={entryStyles.submitMain}>批量录入</Text>
+                <Text style={entryStyles.submitMain}>
+                  {memberIsGift ? '赠送餐（批量）' : '批量录入'}
+                </Text>
                 <Text style={entryStyles.submitSub}>
                   {memberBatchEntries.length > 0
                     ? `将提交 ${memberBatchEntries.length} 位（列表共 ${memberBatchRows.length} 人）`
@@ -1058,7 +1083,7 @@ export function EntryPanel({
                 </Text>
               </>
             ) : (
-              <Text style={entryStyles.submitHint}>单人模式：请搜索并选择一位会员</Text>
+              <Text style={entryStyles.submitHint}>请搜索并选择一位会员</Text>
             )
           ) : mode === 'adhoc' && adhocName.trim() ? (
             <>
@@ -1118,29 +1143,30 @@ function ChannelPicker({
   onChange,
   courierRef,
   onCourierRefChange,
+  disabled = false,
 }: {
   value: 'self' | 'courier';
   onChange: (v: 'self' | 'courier') => void;
   courierRef: string;
   onCourierRefChange: (v: string) => void;
+  disabled?: boolean;
 }) {
+  const isCourier = value === 'courier';
   return (
     <View style={entryStyles.inlineCard}>
       <View style={entryStyles.fieldRow}>
-        <Text style={entryStyles.fieldLabel}>配送方式</Text>
-        <View style={entryStyles.toggleGroup}>
-          {([['self', '员工自送'], ['courier', '快递']] as const).map(([v, label]) => (
-            <Pressable
-              key={v}
-              style={[entryStyles.toggleBtn, value === v && entryStyles.toggleBtnActive]}
-              onPress={() => onChange(v)}
-            >
-              <Text style={[entryStyles.toggleText, value === v && entryStyles.toggleTextActive]}>
-                {label}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={entryStyles.switchLabelCol}>
+          <Text style={entryStyles.fieldLabel}>使用快递</Text>
+          <Text style={entryStyles.switchHint}>关闭则员工自送；打开后可填承运方</Text>
         </View>
+        <Switch
+          value={isCourier}
+          onValueChange={(on) => onChange(on ? 'courier' : 'self')}
+          disabled={disabled}
+          trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
+          thumbColor={Platform.OS === 'android' ? (isCourier ? IOS_COLORS.blue : '#f4f3f4') : undefined}
+          ios_backgroundColor={IOS_COLORS.fillMedium}
+        />
       </View>
       {value === 'courier' ? (
         <>
@@ -1154,6 +1180,7 @@ function ChannelPicker({
               value={courierRef}
               onChangeText={onCourierRefChange}
               maxLength={64}
+              editable={!disabled}
             />
           </View>
         </>

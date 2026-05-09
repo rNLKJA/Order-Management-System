@@ -23,7 +23,14 @@ export const DELIVERY_FAIL_REASON_OPTIONS = [
   '其他',
 ] as const;
 
-export type TabKey = 'entry' | 'overview' | 'prep' | 'delivery' | 'courier';
+export type TabKey =
+  | 'overview'
+  | 'entry'
+  | 'entry_batch'
+  | 'entry_gift'
+  | 'prep'
+  | 'delivery'
+  | 'courier';
 export type PrimaryTab = 'manage' | 'fulfillment';
 
 export const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
@@ -35,7 +42,9 @@ export const TABS: {
   icon: keyof typeof Ionicons.glyphMap;
 }[] = [
   { key: 'overview', label: '总览', icon: 'list-outline' },
-  { key: 'entry', label: '录入', icon: 'add-circle-outline' },
+  { key: 'entry', label: '录入', icon: 'person-outline' },
+  { key: 'entry_batch', label: '批量录入', icon: 'people-outline' },
+  { key: 'entry_gift', label: '赠送餐', icon: 'gift-outline' },
   { key: 'prep', label: '出餐', icon: 'fast-food-outline' },
   { key: 'delivery', label: '送餐', icon: 'bicycle-outline' },
   { key: 'courier', label: '快递', icon: 'cube-outline' },

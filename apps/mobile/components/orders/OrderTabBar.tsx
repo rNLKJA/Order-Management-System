@@ -15,8 +15,16 @@ export function OrderTabBar({
 }) {
   const secondTabs =
     activePrimary === 'manage'
-      ? TABS.filter((t) => t.key === 'overview' || t.key === 'entry')
+      ? TABS.filter(
+          (t) =>
+            t.key === 'overview' ||
+            t.key === 'entry' ||
+            t.key === 'entry_batch' ||
+            t.key === 'entry_gift',
+        )
       : TABS.filter((t) => t.key === 'prep' || t.key === 'delivery' || t.key === 'courier');
+
+  const denseTabs = secondTabs.length >= 4;
 
   return (
     <View style={styles.tabBar}>
@@ -26,14 +34,23 @@ export function OrderTabBar({
           <Pressable
             key={t.key}
             onPress={() => onTabChange(t.key)}
-            style={[styles.tabItem, active && styles.tabItemActive]}
+            style={[styles.tabItem, denseTabs && styles.tabItemDense, active && styles.tabItemActive]}
           >
             <Ionicons
               name={t.icon}
-              size={18}
+              size={denseTabs ? 16 : 18}
               color={active ? IOS_COLORS.blue : IOS_COLORS.labelSecondary}
             />
-            <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{t.label}</Text>
+            <Text
+              style={[
+                styles.tabLabel,
+                denseTabs && styles.tabLabelDense,
+                active && styles.tabLabelActive,
+              ]}
+              numberOfLines={2}
+            >
+              {t.label}
+            </Text>
           </Pressable>
         );
       })}

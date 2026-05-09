@@ -67,9 +67,22 @@ interface Props {
   images: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
+  /** 与日期并排：加大「添加」格、省略长说明 */
+  compact?: boolean;
+  /** 由外层写标题时设为 true，本组件不再渲染标题与提示 */
+  hideTitle?: boolean;
+  /** 与录入日期同一行双列：无图时铺满整列的添加条，避免小块贴边 */
+  pairColumn?: boolean;
 }
 
-export function OrderProofSection({ images, onChange, disabled }: Props) {
+export function OrderProofSection({
+  images,
+  onChange,
+  disabled,
+  compact,
+  hideTitle,
+  pairColumn,
+}: Props) {
   const [picking, setPicking] = useState(false);
   const webFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -113,8 +126,11 @@ export function OrderProofSection({ images, onChange, disabled }: Props) {
     onChange(images.filter((_, i) => i !== idx));
   };
 
+  const pairStripe =
+    !!pairColumn && !!compact && !!hideTitle && images.length === 0;
+
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, compact && styles.wrapCompact, hideTitle && styles.wrapNoTitle]}>
       {Platform.OS === 'web'
         ? createElement('input', {
             type: 'file',
@@ -127,57 +143,145 @@ export function OrderProofSection({ images, onChange, disabled }: Props) {
             onChange: onWebFileChange,
           })
         : null}
-      <Text variant="titleSmall" style={styles.label}>
-        订餐凭证截图（至少 1 张）<Text style={styles.req}>*</Text>
-      </Text>
-      <Text variant="bodySmall" style={styles.hint}>
-        请上传聊天/订单截图以便核对份数与审计
-      </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {images.map((uri, idx) => (
-          <View key={`${idx}-${uri.slice(0, 32)}`} style={styles.thumbWrap}>
-            <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
+      {!hideTitle ? (
+        <>
+          <Text variant="titleSmall" style={styles.label}>
+            订餐凭证截图（至少 1 张）<Text style={styles.req}>*</Text>
+          </Text>
+          {!compact ? (
+            <Text variant="bodySmall" style={styles.hint}>
+              请上传聊天/订单截图以便核对份数与审计
+            </Text>
+          ) : null}
+        </>
+      ) : null}
+      {pairStripe ? (
+        <Pressable
+          style={[styles.addStripe, disabled && styles.addTileDisabled]}
+          onPress={add}
+          disabled={disabled || picking}
+        >
+          {picking ? (
+            <ActivityIndicator size="small" color={IOS_COLORS.blue} />
+          ) : (
+            <View style={styles.addStripeInner}>
+              <Ionicons name="images-outline" size={24} color={IOS_COLORS.blue} />
+              <View>
+                <Text style={styles.addStripeText}>添加截图</Text>
+                <Text style={styles.addStripeSub}>相册可多选</Text>
+              </View>
+            </View>
+          )}
+        </Pressable>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.row,
+            compact && styles.rowCompact,
+            pairColumn && styles.rowPairWithThumbs,
+          ]}
+          style={pairColumn && images.length > 0 ? styles.scrollPair : compact ? styles.scrollCompact : undefined}
+        >
+          {images.map((uri, idx) => (
+            <View key={`${idx}-${uri.slice(0, 32)}`} style={styles.thumbWrap}>
+              <Image
+                source={{ uri }}
+                style={[styles.thumb, compact && styles.thumbCompact]}
+                resizeMode="cover"
+              />
+              <Pressable
+                style={styles.removeBtn}
+                onPress={() => removeAt(idx)}
+                disabled={disabled}
+                hitSlop={8}
+              >
+                <Ionicons name="close-circle" size={22} color={IOS_COLORS.red} />
+              </Pressable>
+            </View>
+          ))}
+          {images.length < MAX_PROOF ? (
             <Pressable
-              style={styles.removeBtn}
-              onPress={() => removeAt(idx)}
-              disabled={disabled}
-              hitSlop={8}
+              style={[
+                styles.addTile,
+                compact && !pairColumn && styles.addTileCompact,
+                compact && pairColumn && styles.addTilePairScroll,
+                disabled && styles.addTileDisabled,
+              ]}
+              onPress={add}
+              disabled={disabled || picking}
             >
-              <Ionicons name="close-circle" size={22} color={IOS_COLORS.red} />
+              {picking ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="images-outline"
+                    size={compact ? 30 : 28}
+                    color={IOS_COLORS.blue}
+                  />
+                  <Text variant="labelSmall" style={[styles.addText, compact && styles.addTextCompact]}>
+                    添加
+                  </Text>
+                </>
+              )}
             </Pressable>
-          </View>
-        ))}
-        {images.length < MAX_PROOF ? (
-          <Pressable
-            style={[styles.addTile, disabled && styles.addTileDisabled]}
-            onPress={add}
-            disabled={disabled || picking}
-          >
-            {picking ? (
-              <ActivityIndicator size="small" />
-            ) : (
-              <>
-                <Ionicons name="images-outline" size={28} color={IOS_COLORS.blue} />
-                <Text variant="labelSmall" style={styles.addText}>
-                  添加
-                </Text>
-              </>
-            )}
-          </Pressable>
-        ) : null}
-      </ScrollView>
+          ) : null}
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { marginTop: 8, marginBottom: 12 },
+  wrapCompact: {
+    marginTop: 0,
+    marginBottom: 0,
+    alignSelf: 'stretch',
+  },
+  wrapNoTitle: { marginTop: 0 },
+  addStripe: {
+    alignSelf: 'stretch',
+    minHeight: 52,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,122,255,0.22)',
+    backgroundColor: 'rgba(0,122,255,0.06)',
+    justifyContent: 'center',
+  },
+  addStripeInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  addStripeText: { fontWeight: '700', color: IOS_COLORS.blue, fontSize: 16 },
+  addStripeSub: { marginTop: 2, color: IOS_COLORS.labelSecondary, fontSize: 12 },
   label: { fontWeight: '600', marginBottom: 4 },
   req: { color: IOS_COLORS.red },
   hint: { color: IOS_COLORS.labelSecondary, marginBottom: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  rowCompact: {
+    alignItems: 'center',
+    paddingVertical: 6,
+    flexGrow: 0,
+    gap: 10,
+  },
+  rowPairWithThumbs: {
+    flexGrow: 1,
+    minHeight: 88,
+    alignItems: 'center',
+  },
+  scrollCompact: {},
+  scrollPair: { alignSelf: 'stretch' },
   thumbWrap: { position: 'relative' },
   thumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: IOS_COLORS.fillLight },
+  thumbCompact: { width: 88, height: 88, borderRadius: 12 },
   removeBtn: { position: 'absolute', top: -6, right: -6 },
   addTile: {
     width: 72,
@@ -190,6 +294,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: IOS_COLORS.fillLight,
   },
+  addTileCompact: {
+    width: 112,
+    height: 112,
+    minWidth: 112,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(0,122,255,0.28)',
+    backgroundColor: 'rgba(0,122,255,0.07)',
+  },
+  addTilePairScroll: {
+    width: 80,
+    height: 88,
+    minWidth: 80,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,122,255,0.22)',
+    backgroundColor: 'rgba(0,122,255,0.06)',
+  },
   addTileDisabled: { opacity: 0.5 },
   addText: { marginTop: 4, color: IOS_COLORS.blue },
+  addTextCompact: { marginTop: 8, fontSize: 16, fontWeight: '700' },
 });

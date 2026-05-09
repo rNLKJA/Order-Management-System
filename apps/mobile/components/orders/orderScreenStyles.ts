@@ -17,17 +17,23 @@ export const orderScreenStyles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 3,
     paddingVertical: 9,
+    paddingHorizontal: 2,
     borderRadius: 10,
+  },
+  tabItemDense: {
+    paddingVertical: 7,
+    gap: 2,
   },
   tabItemActive: {
     backgroundColor: IOS_COLORS.blueLight,
   },
-  tabLabel: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
+  tabLabel: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '600', textAlign: 'center' },
+  tabLabelDense: { fontSize: 11, lineHeight: 14, fontWeight: '600' },
   tabLabelActive: { color: IOS_COLORS.blue, fontWeight: '700' },
   pageMetaRow: {
     flexDirection: 'row',

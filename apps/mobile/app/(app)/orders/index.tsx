@@ -349,9 +349,15 @@ export default function OrdersScreen() {
       return;
     }
     setActivePrimary('manage');
-    setActiveTab(tab === 'entry' ? 'entry' : 'overview');
+    const t = Array.isArray(tab) ? tab[0] : tab;
+    if (t === 'entry') setActiveTab('entry');
+    else if (t === 'batch') setActiveTab('entry_batch');
+    else if (t === 'gift') setActiveTab('entry_gift');
+    else setActiveTab('overview');
   }, [group, tab]);
 
+  const isEntryTab =
+    activeTab === 'entry' || activeTab === 'entry_batch' || activeTab === 'entry_gift';
   const currentOrdersQuery = activeTab === 'overview' ? overviewOrdersQuery : todayOrdersQuery;
   const currentLoadError = currentOrdersQuery.error;
   const currentLoading = currentOrdersQuery.isLoading && !currentOrdersQuery.data;
@@ -372,7 +378,7 @@ export default function OrdersScreen() {
       />
       <View style={styles.pageMetaRow}>
         <Text style={styles.pageMetaText}>{`今日 ${formatDate(now)}`}</Text>
-        {activeTab !== 'entry' ? (
+        {!isEntryTab ? (
           <View style={styles.limitRowInline}>
             <Text style={styles.limitLabel}>每次加载</Text>
             {LIMIT_OPTIONS.map((n) => (
@@ -484,8 +490,12 @@ export default function OrdersScreen() {
       )}
 
       {/* —— 录入 —— */}
-      {activeTab === 'entry' && (
+      {isEntryTab && (
         <EntryPanel
+          key={activeTab}
+          memberQuickEntry={
+            activeTab === 'entry' ? 'single' : activeTab === 'entry_batch' ? 'batch' : 'gift'
+          }
           onAddMemberOrder={handleAddMemberOrder}
           onAddMemberBatchOrder={handleAddMemberBatchOrder}
           onAddWalkinOrder={handleAddWalkinOrder}

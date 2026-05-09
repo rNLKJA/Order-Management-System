@@ -37,14 +37,6 @@ import { formatDate } from '@meal/shared';
 import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 import { OrderProofSection } from '../../../components/orders/OrderProofSection';
 
-interface Member {
-  id: number;
-  name: string;
-  nickname: string;
-  phone: string;
-  is_hospital: boolean;
-}
-
 function todayDate(): string {
   return formatDate(new Date());
 }

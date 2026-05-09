@@ -18,8 +18,9 @@ type ScrollableRef = {
 
 /**
  * 进入页面时统一回到顶部，避免保留上次滚动位置导致"中段打开"。
+ * 接受任意 RN 可滚动组件 ref（ScrollView / FlatList / SectionList 等）。
  */
-export function useScrollToTopOnFocus(ref: RefObject<ScrollableRef | null>) {
+export function useScrollToTopOnFocus(ref: RefObject<any>) {
   useFocusEffect(
     useCallback(() => {
       const scrollTop = () => {
