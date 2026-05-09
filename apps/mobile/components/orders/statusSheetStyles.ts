@@ -73,6 +73,39 @@ export const statusSheetStyles = StyleSheet.create({
   curStatusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   curStatusText: { fontSize: 12, fontWeight: '600' },
 
+  proofBlock: {
+    marginHorizontal: 10,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,122,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,122,255,0.2)',
+  },
+  proofBlockTitle: { fontSize: 14, fontWeight: '700', color: IOS_COLORS.label },
+  proofBlockHint: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 4, marginBottom: 8 },
+  proofStrip: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
+  proofThumbWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: IOS_COLORS.fillLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  proofThumb: { width: '100%', height: '100%' },
+
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  lightboxImage: { width: '100%', height: '100%', maxWidth: 420 },
+
   notesRow: {
     paddingHorizontal: 14,
     paddingVertical: 10,

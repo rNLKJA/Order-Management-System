@@ -1,4 +1,5 @@
-import { Modal, View, Text, Pressable } from 'react-native';
+import { useState } from 'react';
+import { Modal, View, Text, Pressable, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../theme/paperTheme';
 import { type MockOrder } from '../../constants/mockData';
@@ -44,6 +45,8 @@ export function StatusSheet({
   onMarkDeliveryFailed: (o: MockOrder) => void;
   onOpenProfile: (o: MockOrder) => void;
 }) {
+  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  const proofUris = order.proof_images ?? [];
   const isAdhoc = order.card_type === null;
   const cur = STATUS_MAP[order.status];
   const deliveredLockedForStaff = order.status === 'delivered' && !isAdmin;
@@ -69,13 +72,14 @@ export function StatusSheet({
   });
 
   return (
-    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={sStyles.overlay} onPress={onClose} />
-      <View style={sStyles.sheet}>
-        <View style={sStyles.sheetCard}>
-          <View style={sStyles.handle} />
+    <>
+      <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+        <Pressable style={sStyles.overlay} onPress={onClose} />
+        <View style={sStyles.sheet}>
+          <View style={sStyles.sheetCard}>
+            <View style={sStyles.handle} />
 
-          <View style={sStyles.orderInfo}>
+            <View style={sStyles.orderInfo}>
             <View style={sStyles.orderInfoLeft}>
               <Pressable
                 onPress={() => {
@@ -116,6 +120,28 @@ export function StatusSheet({
               <Text style={[sStyles.curStatusText, { color: cur.color }]}>{cur.label}</Text>
             </View>
           </View>
+
+          {proofUris.length > 0 ? (
+            <View style={sStyles.proofBlock}>
+              <Text style={sStyles.proofBlockTitle}>订餐凭证 · {proofUris.length} 张</Text>
+              <Text style={sStyles.proofBlockHint}>点缩略图可放大查看</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={sStyles.proofStrip}
+              >
+                {proofUris.map((uri, i) => (
+                  <Pressable
+                    key={`${i}-${uri.slice(0, 24)}`}
+                    onPress={() => setLightboxUri(uri)}
+                    style={({ pressed }) => [sStyles.proofThumbWrap, pressed && { opacity: 0.85 }]}
+                  >
+                    <Image source={{ uri }} style={sStyles.proofThumb} resizeMode="cover" />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
 
           {order.dietary_notes || order.notes || order.cancel_reason ? (
             <View style={sStyles.notesRow}>
@@ -222,6 +248,24 @@ export function StatusSheet({
           </Pressable>
         </View>
       </View>
-    </Modal>
+      </Modal>
+
+      <Modal
+        visible={lightboxUri != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLightboxUri(null)}
+      >
+        <Pressable style={sStyles.lightboxBackdrop} onPress={() => setLightboxUri(null)}>
+          {lightboxUri ? (
+            <Image
+              source={{ uri: lightboxUri }}
+              style={sStyles.lightboxImage}
+              resizeMode="contain"
+            />
+          ) : null}
+        </Pressable>
+      </Modal>
+    </>
   );
 }

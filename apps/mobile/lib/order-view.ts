@@ -10,6 +10,17 @@
 import type { DailyOrder } from '../api/orders';
 import type { MockMember, MockOrder } from '../constants/mockData';
 
+function parseProofImagesJson(json: string): string[] {
+  if (!json || json === '[]') return [];
+  try {
+    const v = JSON.parse(json) as unknown;
+    if (!Array.isArray(v)) return [];
+    return v.filter((x): x is string => typeof x === 'string' && x.length > 0);
+  } catch {
+    return [];
+  }
+}
+
 export function dailyOrderToMockOrder(
   order: DailyOrder,
   membersById: Record<number, MockMember>,
@@ -43,6 +54,7 @@ export function dailyOrderToMockOrder(
     delivery_channel: order.delivery_channel ?? 'self',
     courier_ref: order.courier_ref || undefined,
     is_gift: order.is_gift,
+    proof_images: parseProofImagesJson(order.proof_images_json),
   };
 }
 

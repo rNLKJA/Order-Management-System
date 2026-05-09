@@ -68,6 +68,12 @@ export function OrderRow({
             </>
           )}
           <Text style={styles.orderQty}>{order.quantity} 份</Text>
+          {(order.proof_images?.length ?? 0) > 0 ? (
+            <View style={styles.proofPill} accessibilityLabel={`订餐凭证 ${order.proof_images!.length} 张`}>
+              <Ionicons name="images-outline" size={12} color={IOS_COLORS.blue} />
+              <Text style={styles.proofPillText}>{order.proof_images!.length}</Text>
+            </View>
+          ) : null}
         </View>
 
         {order.dietary_notes ? (

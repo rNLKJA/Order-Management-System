@@ -93,6 +93,9 @@ importers:
       expo-constants:
         specifier: ~16.0.2
         version: 16.0.2(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))
+      expo-file-system:
+        specifier: ~17.0.1
+        version: 17.0.1(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))
       expo-haptics:
         specifier: ^55.0.14
         version: 55.0.14(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.2(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))
