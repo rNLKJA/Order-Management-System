@@ -68,6 +68,11 @@ export const members = sqliteTable(
     address: text('address').notNull().default(''),
     dietary_notes: text('dietary_notes').notNull().default(''),
     is_hospital: integer('is_hospital', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * 内部员工/股东等待遇：订餐同赠送餐（免开卡、不扣次、金额 0、送达不写 meal_earned）。
+     * 在「会员档案」勾选，不再在单笔下单处单独 toggle。
+     */
+    is_staff: integer('is_staff', { mode: 'boolean' }).notNull().default(false),
     is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
     /**
      * 散客标记。散客是"有过订单但没开卡的人"，由 POST /api/orders 的 customer_name
@@ -214,7 +219,7 @@ export const daily_orders = sqliteTable(
     notes: text('notes').notNull().default(''),
     /** 赠送餐：不扣会员卡次数；送达时不记 meal_earned 收入 */
     is_gift: integer('is_gift', { mode: 'boolean' }).notNull().default(false),
-    /** 员工餐：仍按现有规则扣卡/记收入，仅用于报表与列表区分 */
+    /** 员工餐标记：下单时若会员 is_staff 为真会自动置 true；与赠送同口径不计收入 */
     is_staff_meal: integer('is_staff_meal', { mode: 'boolean' }).notNull().default(false),
     /** JSON 数组：订餐凭证截图 data URL 列表（审计用） */
     proof_images_json: text('proof_images_json').notNull().default('[]'),

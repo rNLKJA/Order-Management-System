@@ -63,6 +63,8 @@ interface MemberShape {
   address: string;
   dietary_notes: string;
   is_hospital: boolean;
+  is_staff: boolean;
+  is_walkin: boolean;
   is_active: boolean;
   created_by_user_id: number;
   created_at: number;
@@ -162,9 +164,21 @@ describe('members routes - MEA-10', () => {
     expect(body.member.name).toBe('张三');
     expect(body.member.nickname).toBe('');
     expect(body.member.is_hospital).toBe(false);
+    expect(body.member.is_staff).toBe(false);
+    expect(body.member.is_walkin).toBe(false);
     expect(body.member.is_active).toBe(true);
     expect(body.member.created_by_user_id).toBe(staffUserId);
     expect(body.duplicatePhone).toBeUndefined();
+  });
+
+  it('POST 创建 is_staff 会员', async () => {
+    const body = await createMember(staffToken, {
+      name: '员工档案甲',
+      phone: '13800000998',
+      is_staff: true,
+    });
+    expect(body.member.is_staff).toBe(true);
+    expect(body.member.is_walkin).toBe(false);
   });
 
   it('POST 创建成功 - uid 优先使用昵称', async () => {

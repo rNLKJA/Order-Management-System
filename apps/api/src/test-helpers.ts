@@ -168,6 +168,7 @@ export async function seedMember(
     address?: string;
     dietary_notes?: string;
     is_hospital?: boolean;
+    is_staff?: boolean;
     is_active?: boolean;
   },
 ): Promise<{ id: number }> {
@@ -183,6 +184,7 @@ export async function seedMember(
       address: opts.address ?? '',
       dietary_notes: opts.dietary_notes ?? '',
       is_hospital: opts.is_hospital ?? false,
+      is_staff: opts.is_staff ?? false,
       is_active: opts.is_active ?? true,
       created_by_user_id: opts.created_by_user_id,
     })

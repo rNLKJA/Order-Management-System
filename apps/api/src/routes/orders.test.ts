@@ -222,6 +222,35 @@ describe('Orders API /api/orders', () => {
     expect(after[0]!.used_meals).toBe(0);
   });
 
+  it('POST 档案 is_staff 会员：无卡也可录入，不扣次，订单标员工餐', async () => {
+    await deactivateDefaultCard();
+    const { id: sid } = await seedMember(db, {
+      created_by_user_id: staffId,
+      name: '档内员工',
+      phone: '13800007777',
+      is_staff: true,
+    });
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: withProof({
+          member_id: sid,
+          order_date: '2026-05-01',
+          lunch_qty: 1,
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { orders: schema.DailyOrder[] };
+    expect(body.orders[0]!.is_staff_meal).toBe(true);
+    expect(body.orders[0]!.card_id).toBeNull();
+    expect(body.orders[0]!.amount).toBe(0);
+  });
+
   it('POST /api/orders/batch 一次录入多条', async () => {
     const m2 = await seedMember(db, { created_by_user_id: staffId, name: '会员乙' });
     await seedCard(db, {

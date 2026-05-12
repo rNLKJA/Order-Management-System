@@ -38,9 +38,10 @@ export async function insertOrdersInTransaction(
   const customerName = (input.customer_name ?? '').trim();
   const isWalkin = customerName.length > 0 && !input.member_id;
   const isGift = input.is_gift ?? false;
-  const isStaffMeal = input.is_staff_meal ?? false;
-  /** 与赠送餐相同：不扣次卡次数，订单金额为 0。 */
-  const isFreeMeal = isGift || isStaffMeal;
+  const isStaffMealFromRequest = input.is_staff_meal ?? false;
+
+  let memberIsStaff = false;
+  let memberId: number;
 
   if (!isWalkin) {
     const memberRows = await tx
@@ -55,18 +56,27 @@ export async function insertOrdersInTransaction(
     if (!member.is_active) {
       throw new HTTPException(422, { message: '会员已归档，不能录入订餐' });
     }
+    memberIsStaff = member.is_staff;
+    memberId = input.member_id!;
+  } else {
+    const walkinMember = await getOrCreateWalkinMember(
+      tx,
+      customerName,
+      createdByUserId,
+      {
+        phone: input.customer_phone,
+        wechat_id: input.customer_wechat,
+        address: input.customer_address,
+        is_hospital: input.customer_is_hospital,
+      },
+    );
+    memberId = walkinMember.id;
+    memberIsStaff = walkinMember.is_staff;
   }
 
-  const memberId = isWalkin
-    ? (
-        await getOrCreateWalkinMember(tx, customerName, createdByUserId, {
-          phone: input.customer_phone,
-          wechat_id: input.customer_wechat,
-          address: input.customer_address,
-          is_hospital: input.customer_is_hospital,
-        })
-      ).id
-    : input.member_id!;
+  /** 赠送、员工档案、或历史接口显式 is_staff_meal — 均免扣次、金额 0 */
+  const isFreeMeal = isGift || isStaffMealFromRequest || memberIsStaff;
+  const isStaffMealStored = isStaffMealFromRequest || memberIsStaff;
 
   const adHocPrice =
     input.adhoc_unit_price != null && input.adhoc_unit_price >= 0
@@ -108,7 +118,7 @@ export async function insertOrdersInTransaction(
     delivery_channel: deliveryChannel,
     courier_ref: courierRef,
     is_gift: isGift,
-    is_staff_meal: isStaffMeal,
+    is_staff_meal: isStaffMealStored,
     proof_images_json: proofJson,
     proof_set_id: proofSetId,
   };

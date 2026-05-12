@@ -407,6 +407,7 @@ function toMockMemberLite(
     address: member.address ?? '',
     dietary_notes: member.dietary_notes ?? '',
     is_hospital: member.is_hospital,
+    is_staff: member.is_staff ?? false,
     is_walkin: true,
     active_card: null,
     card_history: [],

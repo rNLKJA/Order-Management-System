@@ -19,9 +19,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { memberCreateSchema } from '@meal/shared';
+import { memberCreateSchema, type MemberUpdateInput } from '@meal/shared';
 import { IOS_COLORS } from '../theme/paperTheme';
-import { type MockMember, type MemberUpdateInput } from '../constants/mockData';
+import { type MockMember } from '../constants/mockData';
 import { membersApi } from '../api/members';
 
 export interface MemberEditModalProps {
@@ -39,6 +39,7 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
   const [address, setAddress] = useState(member.address);
   const [dietaryNotes, setDietaryNotes] = useState(member.dietary_notes);
   const [isHospital, setIsHospital] = useState(member.is_hospital);
+  const [isStaff, setIsStaff] = useState(member.is_staff);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -52,6 +53,7 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
       setAddress(member.address);
       setDietaryNotes(member.dietary_notes);
       setIsHospital(member.is_hospital);
+      setIsStaff(member.is_staff);
       setErrors({});
       setSubmitError(null);
       setSubmitting(false);
@@ -67,8 +69,9 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
       address: address.trim(),
       dietary_notes: dietaryNotes.trim(),
       is_hospital: isHospital,
+      is_staff: isStaff,
     }),
-    [name, nickname, phone, wechatId, address, dietaryNotes, isHospital],
+    [name, nickname, phone, wechatId, address, dietaryNotes, isHospital, isStaff],
   );
 
   const validation = useMemo(() => memberCreateSchema.safeParse(candidate), [candidate]);
@@ -81,7 +84,8 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
     candidate.wechat_id !== member.wechat_id ||
     candidate.address !== member.address ||
     candidate.dietary_notes !== member.dietary_notes ||
-    candidate.is_hospital !== member.is_hospital;
+    candidate.is_hospital !== member.is_hospital ||
+    candidate.is_staff !== member.is_staff;
 
   const canSave = validation.success && dirty && !submitting;
 
@@ -97,8 +101,8 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
     }
     if (isWalkin) {
       const next: Record<string, string> = {};
-      if (!candidate.wechat_id.trim()) next.wechat_id = '散客微信号必填';
-      if (!candidate.address.trim()) next.address = '散客地址必填';
+      if (!(candidate.wechat_id ?? '').trim()) next.wechat_id = '散客微信号必填';
+      if (!(candidate.address ?? '').trim()) next.address = '散客地址必填';
       if (Object.keys(next).length > 0) {
         setErrors(next);
         return;
@@ -207,6 +211,20 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
               <Switch
                 value={isHospital}
                 onValueChange={setIsHospital}
+                trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blue }}
+              />
+            </View>
+            <View style={styles.innerDivider} />
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowLabel}>内部员工</Text>
+                <Text style={styles.rowHint}>
+                  订餐免开卡、不扣次（同赠送）；日常下单无需再勾员工餐。
+                </Text>
+              </View>
+              <Switch
+                value={isStaff}
+                onValueChange={setIsStaff}
                 trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blue }}
               />
             </View>
@@ -332,6 +350,11 @@ const styles = StyleSheet.create({
   toggleRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingVertical: 12,
+  },
+  innerDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: IOS_COLORS.separatorLight,
+    marginLeft: 16,
   },
   rowLabel: { fontSize: 16, color: IOS_COLORS.label },
   rowHint: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },

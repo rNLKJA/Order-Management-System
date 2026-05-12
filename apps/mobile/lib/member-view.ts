@@ -107,6 +107,7 @@ export function apiToMockMember(
     address: m.address,
     dietary_notes: m.dietary_notes,
     is_hospital: m.is_hospital,
+    is_staff: m.is_staff,
     is_walkin: m.is_walkin,
     active_card: active,
     card_history: mockCards,

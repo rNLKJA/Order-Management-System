@@ -131,7 +131,6 @@ export default function OrdersScreen() {
       courierRef?: string;
       proofImages: string[];
       isGift?: boolean;
-      isStaffMeal?: boolean;
     }) => {
       try {
         await ordersApi.create(
@@ -145,7 +144,6 @@ export default function OrdersScreen() {
             courier_ref: payload.courierRef,
             proof_images: payload.proofImages,
             is_gift: payload.isGift,
-            is_staff_meal: payload.isStaffMeal,
           },
           createIdempotencyKey(),
         );
@@ -169,7 +167,6 @@ export default function OrdersScreen() {
         dinnerQty: number;
         notes?: string;
         isGift: boolean;
-        isStaffMeal: boolean;
         deliveryChannel: 'self' | 'courier';
         courierRef?: string;
       }>;
@@ -184,7 +181,6 @@ export default function OrdersScreen() {
             dinner_qty: e.dinnerQty,
             notes: e.notes ?? '',
             is_gift: e.isGift,
-            is_staff_meal: e.isStaffMeal,
             delivery_channel: e.deliveryChannel,
             courier_ref: e.courierRef,
           })),

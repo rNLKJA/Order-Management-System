@@ -211,6 +211,7 @@ membersRouter.post('/', zValidator('json', memberCreateSchema), async (c) => {
       address: input.address ?? '',
       dietary_notes: input.dietary_notes ?? '',
       is_hospital: input.is_hospital ?? false,
+      is_staff: input.is_staff ?? false,
       is_active: true,
       created_by_user_id: user.id,
     })
@@ -270,6 +271,7 @@ membersRouter.patch(
     if (input.address !== undefined) updates.address = input.address;
     if (input.dietary_notes !== undefined) updates.dietary_notes = input.dietary_notes;
     if (input.is_hospital !== undefined) updates.is_hospital = input.is_hospital;
+    if (input.is_staff !== undefined) updates.is_staff = input.is_staff;
     if (needsUidRecompute) {
       updates.uid = recomputeUid({
         name: nextName,

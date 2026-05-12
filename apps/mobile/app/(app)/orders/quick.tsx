@@ -60,7 +60,6 @@ export default function QuickOrderScreen() {
   const [snackMsg, setSnackMsg] = useState<string | null>(null);
   const [proofImages, setProofImages] = useState<string[]>([]);
   const [isGift, setIsGift] = useState(false);
-  const [isStaffMeal, setIsStaffMeal] = useState(false);
 
   const handleSearch = async (q: string) => {
     setSearchQuery(q);
@@ -113,7 +112,6 @@ export default function QuickOrderScreen() {
           notes: notes.trim() || undefined,
           proof_images: proofImages,
           is_gift: isGift,
-          is_staff_meal: isStaffMeal,
         },
         createIdempotencyKey(),
       );
@@ -132,7 +130,6 @@ export default function QuickOrderScreen() {
       setNotes('');
       setProofImages([]);
       setIsGift(false);
-      setIsStaffMeal(false);
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string };
       if (e.code === 'INSUFFICIENT_MEAL_BALANCE') {
@@ -234,17 +231,6 @@ export default function QuickOrderScreen() {
                 </Text>
               </Pressable>
             </View>
-            <View style={[styles.giftRow, { marginTop: SPACING.sm }]}>
-              <Text style={styles.qtyLabel}>员工餐</Text>
-              <Pressable
-                onPress={() => !submitting && setIsStaffMeal(!isStaffMeal)}
-                style={[styles.giftToggle, isStaffMeal && styles.giftToggleOn]}
-              >
-                <Text style={[styles.giftToggleText, isStaffMeal && styles.giftToggleTextOn]}>
-                  {isStaffMeal ? '是' : '否'}
-                </Text>
-              </Pressable>
-            </View>
           </GlassSurface>
 
           <SectionLabel>订餐信息</SectionLabel>
@@ -272,7 +258,7 @@ export default function QuickOrderScreen() {
               style={styles.actionBtn}
             />
             <Button
-              label={submitting ? '提交中...' : `确认录入${isStaffMeal ? '（员工餐）' : ''}`}
+              label={submitting ? '提交中...' : '确认录入'}
               onPress={() => void handleSubmit()}
               disabled={
                 submitting || !selectedMember || lunchQty + dinnerQty === 0 || proofImages.length < 1

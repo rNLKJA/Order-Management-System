@@ -42,6 +42,7 @@ export function MemberForm({
   const [address, setAddress] = useState(initial?.address ?? '');
   const [dietaryNotes, setDietaryNotes] = useState(initial?.dietary_notes ?? '');
   const [isHospital, setIsHospital] = useState(initial?.is_hospital ?? false);
+  const [isStaff, setIsStaff] = useState(initial?.is_staff ?? false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const parsed = useMemo(() => {
@@ -53,8 +54,9 @@ export function MemberForm({
       address,
       dietary_notes: dietaryNotes,
       is_hospital: isHospital,
+      is_staff: isStaff,
     });
-  }, [name, nickname, phone, wechatId, address, dietaryNotes, isHospital]);
+  }, [name, nickname, phone, wechatId, address, dietaryNotes, isHospital, isStaff]);
 
   const handleSubmit = async () => {
     if (!parsed.success) {
@@ -166,6 +168,15 @@ export function MemberForm({
           <HelperText type="info" visible>
             勾选后，该会员会按院内价格订阅，默认送餐人会自动带出。
           </HelperText>
+          <View style={[styles.row, { marginTop: 12 }]}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text variant="bodyLarge">内部员工</Text>
+              <HelperText type="info" visible style={{ marginTop: 0 }}>
+                订餐免开卡、不扣次（同赠送口径）；下单页不再单独勾选员工餐。
+              </HelperText>
+            </View>
+            <Switch value={isStaff} onValueChange={setIsStaff} />
+          </View>
         </GlassSurface>
       </View>
 

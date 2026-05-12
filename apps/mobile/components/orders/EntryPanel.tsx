@@ -51,6 +51,7 @@ function memberMeetsBatchCardRules(
   isGift: boolean,
 ): boolean {
   if (isGift) return true;
+  if (m.is_staff) return true;
   const c = m.active_card;
   return !!c && c.remaining_meals >= lunch + dinner;
 }
@@ -74,7 +75,6 @@ export function EntryPanel({
     courierRef?: string;
     proofImages: string[];
     isGift?: boolean;
-    isStaffMeal?: boolean;
   }) => Promise<void>;
   onAddMemberBatchOrder?: (payload: {
     proof_images: string[];
@@ -85,7 +85,6 @@ export function EntryPanel({
       dinnerQty: number;
       notes?: string;
       isGift: boolean;
-      isStaffMeal: boolean;
       deliveryChannel: 'self' | 'courier';
       courierRef?: string;
     }>;
@@ -121,7 +120,6 @@ export function EntryPanel({
 
   const [memberBatchMode, setMemberBatchMode] = useState(quickInitial.batch);
   const [memberIsGift, setMemberIsGift] = useState(quickInitial.gift);
-  const [memberIsStaffMeal, setMemberIsStaffMeal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MockMember | null>(null);
   const [memberQuery, setMemberQuery] = useState('');
   const [lunchQty, setLunchQty] = useState(0);
@@ -204,7 +202,6 @@ export function EntryPanel({
     setMemberNotes('');
     setProofImages([]);
     setMemberIsGift(nextPreset.gift);
-    setMemberIsStaffMeal(false);
     setMemberBatchRows([]);
     setAdhocName(''); setAdhocPhone(''); setAdhocAddress('');
     setAdhocWechat('');
@@ -289,7 +286,6 @@ export function EntryPanel({
         dinnerQty: r.dinner,
         notes: memberNotes.trim() || undefined,
         isGift: memberIsGift,
-        isStaffMeal: memberIsStaffMeal,
         deliveryChannel,
         courierRef: deliveryChannel === 'courier' ? courierRef.trim() || undefined : undefined,
       }));
@@ -307,7 +303,6 @@ export function EntryPanel({
             courierRef: e.courierRef,
             proofImages,
             isGift: e.isGift,
-            isStaffMeal: e.isStaffMeal,
           });
         }
       }
@@ -328,6 +323,7 @@ export function EntryPanel({
     if (!selectedMember || lunchQty + dinnerQty === 0) return;
     if (
       !memberIsGift &&
+      !selectedMember.is_staff &&
       (!selectedMember.active_card ||
         selectedMember.active_card.remaining_meals < lunchQty + dinnerQty)
     ) {
@@ -346,7 +342,6 @@ export function EntryPanel({
         courierRef: deliveryChannel === 'courier' ? courierRef.trim() || undefined : undefined,
         proofImages,
         isGift: memberIsGift,
-        isStaffMeal: memberIsStaffMeal,
       });
       const name = selectedMember.nickname || selectedMember.name;
       reset();
@@ -440,7 +435,7 @@ export function EntryPanel({
     lunchQty + dinnerQty > 0 &&
     proofOk &&
     !submitting &&
-    (memberIsGift || (memberHasCard && memberCardEnough));
+    (memberIsGift || !!selectedMember.is_staff || (memberHasCard && memberCardEnough));
 
   const canSubmitAdhoc =
     mode === 'adhoc' &&
@@ -454,6 +449,8 @@ export function EntryPanel({
         ? canSubmitMemberBatch
         : canSubmitMemberSingle
       : canSubmitAdhoc;
+
+  const batchHasStaffMember = memberBatchEntries.some((r) => r.member.is_staff);
 
   return (
     <View style={{ flex: 1 }}>
@@ -488,7 +485,7 @@ export function EntryPanel({
           {mode === 'member'
             ? memberIsGift
               ? '赠送餐：每行一位会员，午/晚份数分开填'
-              : '从会员档案中选择，自动扣卡'
+              : '从会员档案中选择；普通会员自动扣卡，档案中「内部员工」免开卡、不扣次'
             : '无需会员账户，现金收费'}
         </Text>
       </View>
@@ -561,28 +558,6 @@ export function EntryPanel({
               </>
             )}
 
-            {mode === 'member' && (
-              <>
-                <Text style={[entryStyles.sectionLabel, { marginTop: 4 }]}>订餐标记</Text>
-                <View style={entryStyles.inlineCard}>
-                  <View style={entryStyles.fieldRow}>
-                    <View style={entryStyles.switchLabelCol}>
-                      <Text style={entryStyles.fieldLabel}>员工餐</Text>
-                      <Text style={entryStyles.switchHint}>股东/员工送餐等（仍按下方规则扣卡或赠送）</Text>
-                    </View>
-                    <Switch
-                      value={memberIsStaffMeal}
-                      onValueChange={setMemberIsStaffMeal}
-                      disabled={submitting}
-                      trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
-                      thumbColor={Platform.OS === 'android' ? (memberIsStaffMeal ? IOS_COLORS.blue : '#f4f3f4') : undefined}
-                      ios_backgroundColor={IOS_COLORS.fillMedium}
-                    />
-                  </View>
-                </View>
-              </>
-            )}
-
             {mode === 'member' ? (
               memberBatchMode ? (
               /* ===== 会员餐 · 批量（每人份数独立） ===== */
@@ -648,6 +623,10 @@ export function EntryPanel({
                             <Text style={entryStyles.memberCardBadge}>
                               {m.active_card.card_name} 剩{m.active_card.remaining_meals}份
                             </Text>
+                          ) : m.is_staff ? (
+                            <Text style={[entryStyles.memberNoCard, { color: IOS_COLORS.blue }]}>
+                              内部员工
+                            </Text>
                           ) : (
                             <Text style={entryStyles.memberNoCard}>无卡 · 需先开卡</Text>
                           )}
@@ -680,8 +659,9 @@ export function EntryPanel({
                             </Text>
                             <Text style={entryStyles.dateHint}>
                               {row.member.is_hospital ? '院内' : '院外'} ·{' '}
-                              {row.member.active_card?.card_name ?? '无有效卡'} · 剩{' '}
-                              {row.member.active_card?.remaining_meals ?? 0} 份
+                              {row.member.is_staff
+                                ? '内部员工（免扣次）'
+                                : `${row.member.active_card?.card_name ?? '无有效卡'} · 剩 ${row.member.active_card?.remaining_meals ?? 0} 份`}
                             </Text>
                           </View>
                           <Pressable onPress={() => removeMemberBatchRow(idx)} hitSlop={8} disabled={submitting}>
@@ -708,19 +688,20 @@ export function EntryPanel({
 
                 {!memberIsGift &&
                 memberBatchEntries.some(
-                  (r) => !r.member.active_card,
+                  (r) => !r.member.active_card && !r.member.is_staff,
                 ) ? (
                   <View style={[entryStyles.warnBanner, { marginTop: 10 }]}>
                     <Ionicons name="alert-circle" size={18} color={IOS_COLORS.red} />
                     <View style={{ flex: 1 }}>
                       <Text style={entryStyles.warnTitle}>列表中有会员无进行中卡，无法扣次（已填份数的行）</Text>
-                      <Text style={entryStyles.warnHint}>请改「赠送餐」、删行或去会员详情开卡。</Text>
+                      <Text style={entryStyles.warnHint}>请改「赠送餐」、删行、在档案中标记「内部员工」或去开卡。</Text>
                     </View>
                   </View>
                 ) : null}
                 {!memberIsGift &&
                 memberBatchEntries.some(
                   (r) =>
+                    !r.member.is_staff &&
                     r.member.active_card != null &&
                     r.member.active_card.remaining_meals < r.lunch + r.dinner,
                 ) ? (
@@ -792,8 +773,9 @@ export function EntryPanel({
                         </Text>
                         <Text style={entryStyles.selSub}>
                           {selectedMember.is_hospital ? '院内' : '院外'} ·{' '}
-                          {selectedMember.active_card?.card_name ?? '无有效卡'} · 剩{' '}
-                          {selectedMember.active_card?.remaining_meals ?? 0} 份
+                          {selectedMember.is_staff
+                            ? '内部员工（免扣次）'
+                            : `${selectedMember.active_card?.card_name ?? '无有效卡'} · 剩 ${selectedMember.active_card?.remaining_meals ?? 0} 份`}
                         </Text>
                         {selectedMember.dietary_notes ? (
                           <Text style={entryStyles.selDiet}>忌：{selectedMember.dietary_notes}</Text>
@@ -808,7 +790,7 @@ export function EntryPanel({
                         <Text style={entryStyles.changeBtn}>更换</Text>
                       </Pressable>
                     </View>
-                    {!memberIsGift && !memberHasCard ? (
+                    {!memberIsGift && !memberHasCard && !selectedMember.is_staff ? (
                       <View style={entryStyles.warnBanner}>
                         <Ionicons name="alert-circle" size={18} color={IOS_COLORS.red} />
                         <View style={{ flex: 1 }}>
@@ -830,6 +812,7 @@ export function EntryPanel({
                         </Pressable>
                       </View>
                     ) : !memberIsGift &&
+                      !selectedMember.is_staff &&
                       memberHasCard &&
                       lunchQty + dinnerQty > 0 &&
                       !memberCardEnough ? (
@@ -880,6 +863,10 @@ export function EntryPanel({
                           {m.active_card ? (
                             <Text style={entryStyles.memberCardBadge}>
                               {m.active_card.card_name} 剩{m.active_card.remaining_meals}份
+                            </Text>
+                          ) : m.is_staff ? (
+                            <Text style={[entryStyles.memberNoCard, { color: IOS_COLORS.blue }]}>
+                              内部员工
                             </Text>
                           ) : (
                             <Text style={entryStyles.memberNoCard}>无卡 · 需先开卡</Text>
@@ -1091,7 +1078,7 @@ export function EntryPanel({
                       ? `已为 ${memberBatchRows.length} 人设行，请至少为一行填写午/晚份数`
                       : '请搜索并点行加入会员，再分别设份数'}
                   {proofOk ? '' : ' · 请先上传凭证'}
-                  {memberIsStaffMeal ? ' · 员工餐' : ''}
+                  {batchHasStaffMember ? ' · 含内部员工' : ''}
                 </Text>
               </>
             ) : selectedMember ? (
@@ -1102,16 +1089,19 @@ export function EntryPanel({
                 <Text
                   style={[
                     entryStyles.submitSub,
-                    !memberIsGift && !memberHasCard && { color: IOS_COLORS.red, fontWeight: '600' },
+                    !memberIsGift &&
+                      !memberHasCard &&
+                      !selectedMember.is_staff && { color: IOS_COLORS.red, fontWeight: '600' },
                   ]}
                 >
                   {memberIsGift
                     ? `赠送餐 · 午 ${lunchQty} · 晚 ${dinnerQty}`
-                    : !memberHasCard
-                      ? '无有效卡'
-                      : `午 ${lunchQty} · 晚 ${dinnerQty}`}
+                    : selectedMember.is_staff
+                      ? `内部员工 · 午 ${lunchQty} · 晚 ${dinnerQty}`
+                      : !memberHasCard
+                        ? '无有效卡'
+                        : `午 ${lunchQty} · 晚 ${dinnerQty}`}
                   {proofOk ? '' : ' · 请先上传凭证'}
-                  {memberIsStaffMeal ? ' · 员工餐' : ''}
                 </Text>
               </>
             ) : (
@@ -1144,9 +1134,9 @@ export function EntryPanel({
           ) : (
             <Text style={entryStyles.submitBtnText}>
               {mode === 'member' && memberBatchMode && memberBatchEntries.length > 0
-                ? `确认录入 (${memberBatchEntries.length}人${memberIsStaffMeal ? '·员工餐' : ''})`
-                : mode === 'member' && memberIsStaffMeal && !memberBatchMode
-                  ? '确认录入（员工餐）'
+                ? `确认录入 (${memberBatchEntries.length}人${batchHasStaffMember ? '·含内部员工' : ''})`
+                : mode === 'member' && selectedMember?.is_staff && !memberBatchMode
+                  ? '确认录入（内部员工）'
                   : '确认录入'}
             </Text>
           )}

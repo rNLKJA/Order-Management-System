@@ -300,10 +300,15 @@ export default function MemberDetailScreen() {
                 UID {member.uid} · {member.phone}
               </Text>
             </View>
-            <StatusChip
-              label={member.is_hospital ? '院内会员' : '院外会员'}
-              variant={member.is_hospital ? 'hospital' : 'regular'}
-            />
+            <View style={styles.heroChips}>
+              <StatusChip
+                label={member.is_hospital ? '院内会员' : '院外会员'}
+                variant={member.is_hospital ? 'hospital' : 'regular'}
+              />
+              {member.is_staff ? (
+                <StatusChip label="内部员工" variant="neutral" />
+              ) : null}
+            </View>
           </GlassSurface>
         </View>
 
@@ -923,6 +928,7 @@ const styles = StyleSheet.create({
     paddingTop: 24, paddingBottom: 20, marginBottom: 20,
   },
   heroCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroChips: { alignItems: 'flex-end', gap: 6 },
   heroMain: { flex: 1, minWidth: 0 },
   heroMeta: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2, fontVariant: ['tabular-nums'] },
   bigAvatar: {

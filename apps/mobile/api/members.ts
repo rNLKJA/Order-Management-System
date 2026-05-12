@@ -20,6 +20,8 @@ export interface Member {
   is_active: boolean;
   /** 散客标记：true = 出现在散客目录；开卡后自动翻 false */
   is_walkin: boolean;
+  /** 内部员工（订餐同赠送口径）；来自会员档案 */
+  is_staff: boolean;
   created_by_user_id: number;
   created_at: string;
   updated_at: string;

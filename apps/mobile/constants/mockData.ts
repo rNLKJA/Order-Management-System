@@ -49,6 +49,8 @@ export interface MockMember {
   address: string;
   dietary_notes: string;
   is_hospital: boolean;
+  /** 内部员工等：订餐免扣次，在档案中维护 */
+  is_staff: boolean;
   /** 散客标记：true 时在会员档案页应该过滤掉，只在散客目录可见 */
   is_walkin?: boolean;
   active_card: MockCard | null;
@@ -101,14 +103,4 @@ export interface MockFinance {
   voided: boolean;
   /** 真实发生时间戳（ISO）；来自后端 created_at */
   created_at?: string;
-}
-
-export interface MemberUpdateInput {
-  name: string;
-  nickname: string;
-  phone: string;
-  wechat_id: string;
-  address: string;
-  dietary_notes: string;
-  is_hospital: boolean;
 }

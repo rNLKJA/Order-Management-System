@@ -59,7 +59,6 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [proofImages, setProofImages] = useState<string[]>([]);
   const [isGift, setIsGift] = useState(false);
-  const [isStaffMeal, setIsStaffMeal] = useState(false);
 
   const handleSearch = useCallback(async (q: string) => {
     setSearchQuery(q);
@@ -112,7 +111,6 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
           notes: notes.trim() || undefined,
           proof_images: proofImages,
           is_gift: isGift,
-          is_staff_meal: isStaffMeal,
         },
         createIdempotencyKey(),
       );
@@ -145,7 +143,6 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
     setNotes('');
     setProofImages([]);
     setIsGift(false);
-    setIsStaffMeal(false);
     setOrderDate(defaultDate ?? todayDate());
   };
 
@@ -315,11 +312,6 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
             <Switch value={isGift} onValueChange={setIsGift} disabled={submitting} />
           </View>
 
-          <View style={styles.giftRow}>
-            <Text variant="bodyLarge">员工餐</Text>
-            <Switch value={isStaffMeal} onValueChange={setIsStaffMeal} disabled={submitting} />
-          </View>
-
           <OrderProofSection images={proofImages} onChange={setProofImages} disabled={submitting} />
 
           <Divider style={styles.divider} />
@@ -343,7 +335,7 @@ export function OrderEntryModal({ visible, onDismiss, defaultDate, onSuccess }: 
               {submitting ? (
                 <ActivityIndicator size={16} color="white" />
               ) : (
-                `确认录入${isStaffMeal ? '（员工餐）' : ''}`
+                `确认录入`
               )}
             </Button>
           </View>
