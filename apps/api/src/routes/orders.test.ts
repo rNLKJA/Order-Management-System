@@ -185,6 +185,43 @@ describe('Orders API /api/orders', () => {
     expect(body.orders[0]!.amount).toBe(0);
   });
 
+  it('POST 员工餐：有 active 卡也不扣次，金额 0', async () => {
+    const before = await db
+      .select()
+      .from(schema.cards)
+      .where(eq(schema.cards.id, defaultCardId))
+      .limit(1);
+    expect(before[0]!.used_meals).toBe(0);
+
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: withProof({
+          member_id: memberId,
+          order_date: '2026-04-29',
+          lunch_qty: 1,
+          is_staff_meal: true,
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { orders: schema.DailyOrder[] };
+    expect(body.orders[0]!.is_staff_meal).toBe(true);
+    expect(body.orders[0]!.card_id).toBeNull();
+    expect(body.orders[0]!.amount).toBe(0);
+
+    const after = await db
+      .select()
+      .from(schema.cards)
+      .where(eq(schema.cards.id, defaultCardId))
+      .limit(1);
+    expect(after[0]!.used_meals).toBe(0);
+  });
+
   it('POST /api/orders/batch 一次录入多条', async () => {
     const m2 = await seedMember(db, { created_by_user_id: staffId, name: '会员乙' });
     await seedCard(db, {
@@ -256,6 +293,52 @@ describe('Orders API /api/orders', () => {
           order_date: '2026-04-28',
           lunch_qty: 1,
           is_gift: true,
+        }),
+      }),
+    );
+    expect(cr.status).toBe(201);
+    const ord = ((await cr.json()) as { orders: schema.DailyOrder[] }).orders[0]!;
+    const oid = ord.id;
+    await app.fetch(
+      new Request(`http://test.local/api/orders/${oid}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ status: 'fulfilled' }),
+      }),
+    );
+    await app.fetch(
+      new Request(`http://test.local/api/orders/${oid}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ status: 'delivered' }),
+      }),
+    );
+    const fin = await db
+      .select()
+      .from(schema.finance_entries)
+      .where(eq(schema.finance_entries.ref_order_id, oid));
+    expect(fin).toHaveLength(0);
+  });
+
+  it('PATCH 员工餐已送达 → 不写 meal_earned', async () => {
+    const cr = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: withProof({
+          member_id: memberId,
+          order_date: '2026-04-30',
+          lunch_qty: 1,
+          is_staff_meal: true,
         }),
       }),
     );

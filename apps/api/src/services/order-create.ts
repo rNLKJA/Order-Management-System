@@ -39,6 +39,8 @@ export async function insertOrdersInTransaction(
   const isWalkin = customerName.length > 0 && !input.member_id;
   const isGift = input.is_gift ?? false;
   const isStaffMeal = input.is_staff_meal ?? false;
+  /** 与赠送餐相同：不扣次卡次数，订单金额为 0。 */
+  const isFreeMeal = isGift || isStaffMeal;
 
   if (!isWalkin) {
     const memberRows = await tx
@@ -72,7 +74,7 @@ export async function insertOrdersInTransaction(
       : await getAdHocPrice(tx);
 
   let deductResult: Awaited<ReturnType<typeof deductMeals>> = null;
-  if (!isWalkin && !isGift) {
+  if (!isWalkin && !isFreeMeal) {
     deductResult = await deductMeals(tx, {
       memberId,
       totalQty,
@@ -116,8 +118,7 @@ export async function insertOrdersInTransaction(
       ...rowBase,
       meal_type: 'lunch',
       quantity: lunchQty,
-      amount:
-        isGift || hasDeductedCard ? 0 : adHocPrice * lunchQty,
+      amount: isFreeMeal || hasDeductedCard ? 0 : adHocPrice * lunchQty,
     });
   }
   if (dinnerQty > 0) {
@@ -125,8 +126,7 @@ export async function insertOrdersInTransaction(
       ...rowBase,
       meal_type: 'dinner',
       quantity: dinnerQty,
-      amount:
-        isGift || hasDeductedCard ? 0 : adHocPrice * dinnerQty,
+      amount: isFreeMeal || hasDeductedCard ? 0 : adHocPrice * dinnerQty,
     });
   }
 

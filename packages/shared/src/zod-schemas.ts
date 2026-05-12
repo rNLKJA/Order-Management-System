@@ -178,7 +178,7 @@ const orderCreateEntryFields = {
   created_by_user_id: z.number().int().positive().optional(),
   /** 赠送餐：不扣卡、不记 meal_earned */
   is_gift: z.boolean().optional().default(false),
-  /** 员工餐：扣卡与收入规则不变，仅作标签 */
+  /** 员工餐：同赠送餐 — 不扣卡、金额 0、送达不写 meal_earned */
   is_staff_meal: z.boolean().optional().default(false),
 } satisfies z.ZodRawShape;
 

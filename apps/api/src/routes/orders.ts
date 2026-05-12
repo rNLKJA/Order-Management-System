@@ -495,7 +495,12 @@ ordersRouter.patch(
         .set(patch)
         .where(eq(schema.daily_orders.id, id));
 
-      if (nextStatus === 'delivered' && order.status === 'fulfilled' && !order.is_gift) {
+      if (
+        nextStatus === 'delivered' &&
+        order.status === 'fulfilled' &&
+        !order.is_gift &&
+        !order.is_staff_meal
+      ) {
         await createMealEarnedIncome(tx, {
           order,
           card: cardRow,
