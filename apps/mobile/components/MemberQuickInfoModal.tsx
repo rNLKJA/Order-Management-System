@@ -128,7 +128,7 @@ export function MemberQuickInfoModal({ visible, member, onClose }: Props) {
 
           <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 8 }}>
             {/* 联系方式 */}
-            <Section title="联系方式">
+            <Section title="联系与送餐">
               <Row icon="call-outline" label="手机">
                 {member.phone ? (
                   <Pressable onPress={() => callPhone(member.phone)} hitSlop={6}>
@@ -145,9 +145,9 @@ export function MemberQuickInfoModal({ visible, member, onClose }: Props) {
                   </Text>
                 </Row>
               ) : null}
-              <Row icon="location-outline" label="地址" multiline>
+              <Row icon="location-outline" label="送餐地址" multiline>
                 <Text style={member.address ? styles.value : styles.valueMuted}>
-                  {member.address || '未填写'}
+                  {member.address || '未填写（会员详情可编辑）'}
                 </Text>
               </Row>
             </Section>

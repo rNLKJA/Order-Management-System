@@ -129,7 +129,7 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
           <Pressable onPress={onClose} disabled={submitting}>
             <Text style={[styles.cancel, submitting && styles.disabled]}>取消</Text>
           </Pressable>
-          <Text style={styles.title}>编辑会员</Text>
+          <Text style={styles.title}>编辑资料与送餐地址</Text>
           <Pressable onPress={handleSave} disabled={!canSave}>
             {submitting ? (
               <ActivityIndicator color={IOS_COLORS.blue} />
@@ -164,7 +164,7 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
             />
           </View>
 
-          <SectionLabel text="联系方式" />
+          <SectionLabel text="联系方式与送餐" />
           <View style={styles.card}>
             <Field
               label="手机号"
@@ -184,13 +184,14 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
               error={errors.wechat_id}
             />
             <Field
-              label="地址"
+              label="送餐地址"
               value={address}
               onChangeText={setAddress}
-              placeholder="送餐地址 / 科室"
+              placeholder="科室、病区、楼号或可送餐的详细位置"
               error={errors.address}
               isLast
               multiline
+              hint="配送员按此地址送餐；股东/员工院内点餐也请写明送餐点。"
             />
           </View>
 
@@ -253,7 +254,7 @@ function SectionLabel({ text }: { text: string }) {
 
 function Field({
   label, value, onChangeText, placeholder, error,
-  isLast, keyboardType, autoCapitalize, multiline, required,
+  isLast, keyboardType, autoCapitalize, multiline, required, hint,
 }: {
   label: string;
   value: string;
@@ -265,6 +266,7 @@ function Field({
   autoCapitalize?: 'none' | 'sentences';
   multiline?: boolean;
   required?: boolean;
+  hint?: string;
 }) {
   return (
     <View style={[styles.field, isLast && styles.fieldLast]}>
@@ -283,6 +285,7 @@ function Field({
         autoCorrect={false}
         multiline={multiline}
       />
+      {hint && !error ? <Text style={styles.fieldHint}>{hint}</Text> : null}
       {error ? <Text style={styles.fieldError}>{error}</Text> : null}
     </View>
   );
@@ -324,6 +327,7 @@ const styles = StyleSheet.create({
   fieldInput: { fontSize: 16, color: IOS_COLORS.label, paddingVertical: 4 },
   fieldInputMulti: { minHeight: 56, textAlignVertical: 'top' },
   fieldError: { fontSize: 12, color: IOS_COLORS.red, marginTop: 4 },
+  fieldHint: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 4, lineHeight: 16 },
 
   toggleRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

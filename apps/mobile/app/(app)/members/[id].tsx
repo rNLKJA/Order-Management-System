@@ -307,13 +307,24 @@ export default function MemberDetailScreen() {
           </GlassSurface>
         </View>
 
-        {/* 联系信息：名片信息块 */}
+        {/* 联系信息：名片信息块（地址可点进编辑） */}
         <View style={styles.sectionWrap}>
-          <SectionLabel>会员信息名片</SectionLabel>
+          <SectionLabel>联系与送餐</SectionLabel>
+          {!member.address?.trim() ? (
+            <View style={styles.addressWarnBanner}>
+              <Ionicons name="alert-circle-outline" size={18} color="#FF9500" />
+              <Text style={styles.addressWarnText}>
+                尚未填写送餐地址。请点下方一行或右上角「编辑」，写上科室/病区/楼号等，方便员工餐与日常配送。
+              </Text>
+            </View>
+          ) : null}
           <GlassSurface padding={12} style={styles.contactCard}>
             <ContactItem icon="call-outline" label="手机号" value={member.phone} />
             <ContactItem icon="logo-wechat" label="微信号" value={member.wechat_id || '未填写'} />
-            <ContactItem icon="location-outline" label="地址" value={member.address || '未填写'} />
+            <ContactAddressRow
+              value={member.address?.trim() ? member.address : '未填写 · 点此处补充'}
+              onPress={() => setShowEditModal(true)}
+            />
           </GlassSurface>
         </View>
 
@@ -647,6 +658,29 @@ function ContactItem({
   );
 }
 
+/** 送餐地址：点按打开资料编辑（与 PATCH /api/members 同一套字段） */
+function ContactAddressRow({ value, onPress }: { value: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.contactItem, styles.contactItemPressable, pressed && { opacity: 0.72 }]}
+      accessibilityRole="button"
+      accessibilityLabel="修改送餐地址"
+    >
+      <View style={styles.contactIconWrap}>
+        <Ionicons name="location-outline" size={15} color={IOS_COLORS.blue} />
+      </View>
+      <View style={styles.contactMain}>
+        <Text style={styles.contactLabel}>送餐地址</Text>
+        <Text style={styles.contactValue} numberOfLines={4}>
+          {value}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={IOS_COLORS.labelTertiary} />
+    </Pressable>
+  );
+}
+
 function MetaItem({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.metaItem}>
@@ -906,6 +940,19 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, paddingLeft: 4 },
   contactCard: { gap: 8 },
   contactItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  contactItemPressable: { paddingVertical: 10 },
+  addressWarnBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFF8EE',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,149,0,0.35)',
+  },
+  addressWarnText: { flex: 1, fontSize: 13, color: IOS_COLORS.label, lineHeight: 19 },
   contactIconWrap: {
     width: 28,
     height: 28,

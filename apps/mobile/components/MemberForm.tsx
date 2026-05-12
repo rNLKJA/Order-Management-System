@@ -130,16 +130,20 @@ export function MemberForm({
       </View>
 
       <View style={styles.block}>
-        <SectionLabel>补充信息</SectionLabel>
+        <SectionLabel>送餐与备注</SectionLabel>
         <GlassSurface padding={12} style={styles.card}>
           <TextInput
-            label="地址"
+            label="送餐地址"
             value={address}
             onChangeText={setAddress}
             mode="outlined"
             multiline
             style={styles.field}
+            placeholder="科室、病区、楼号或可送餐的详细位置"
           />
+          <HelperText type="info" visible>
+            员工股东等院内点餐也请写明送餐点，配送员与出餐页均按此显示。
+          </HelperText>
 
           <TextInput
             label="忌口（会自动带到每次订单备注）"
