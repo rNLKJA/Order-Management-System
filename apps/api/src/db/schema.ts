@@ -236,6 +236,31 @@ export const daily_orders = sqliteTable(
   }),
 );
 
+// =========== retail_products（其他零售商品目录，不绑定会员） ===========
+
+export const retail_products = sqliteTable(
+  'retail_products',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    detail: text('detail').notNull().default(''),
+    is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    sort_order: integer('sort_order').notNull().default(0),
+    created_by_user_id: integer('created_by_user_id')
+      .notNull()
+      .references(() => users.id),
+    created_at: integer('created_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('now') * 1000)`),
+    updated_at: integer('updated_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('now') * 1000)`),
+  },
+  (t) => ({
+    activeIdx: index('retail_products_active_idx').on(t.is_active),
+  }),
+);
+
 // =========== finance_entries ===========
 
 export const finance_entries = sqliteTable(
@@ -249,6 +274,8 @@ export const finance_entries = sqliteTable(
     description: text('description').notNull().default(''),
     ref_card_id: integer('ref_card_id').references(() => cards.id),
     ref_order_id: integer('ref_order_id').references(() => daily_orders.id),
+    retail_product_id: integer('retail_product_id').references(() => retail_products.id),
+    quantity: integer('quantity'),
     source: text('source', { enum: ['auto', 'manual', 'imported_legacy'] })
       .notNull()
       .default('manual'),
@@ -451,6 +478,8 @@ export type Card = typeof cards.$inferSelect;
 export type NewCard = typeof cards.$inferInsert;
 export type DailyOrder = typeof daily_orders.$inferSelect;
 export type NewDailyOrder = typeof daily_orders.$inferInsert;
+export type RetailProduct = typeof retail_products.$inferSelect;
+export type NewRetailProduct = typeof retail_products.$inferInsert;
 export type FinanceEntry = typeof finance_entries.$inferSelect;
 export type NewFinanceEntry = typeof finance_entries.$inferInsert;
 export type ImportedSummarySnapshot = typeof imported_summary_snapshots.$inferSelect;

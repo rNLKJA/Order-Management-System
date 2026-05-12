@@ -6,6 +6,7 @@
  * - POST /api/finance/expense          手动录入支出（staff + admin 都可）
  * - PATCH /api/finance/:id             编辑已有条目（含 auto 条目；不改 source）
  * - DELETE /api/finance/:id            软删除（设 voided=true）；仅 admin
+ * - GET/POST/PATCH /api/finance/retail-products（商品目录，与 /api/retail-products 等价）
  *
  * 不在本 slice 范围：
  * - 购卡 / 升级预收、送餐履约收入：由 cards / orders slice 写 finance_entries
@@ -21,18 +22,22 @@ import { z } from 'zod';
 import {
   expenseCreateSchema,
   financeUpdateSchema,
+  formatCNY,
   otherProductIncomeCreateSchema,
+  retailProductSaleCreateSchema,
   zDate,
 } from '@meal/shared';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
 import { requireAuth, requireRole, requireDataOperator, type AuthVariables } from '../middleware/jwt.js';
+import { retailProductsRouter } from './retail-products.js';
 
 const REALIZED_INCOME_CATEGORIES = new Set([
   'meal_earned_hospital',
   'meal_earned_regular',
   'meal_earned_walkin',
   'ad_hoc',
+  'misc_retail_income',
 ]);
 
 const PREPAID_INCOME_CATEGORIES = new Set([
@@ -289,6 +294,87 @@ financeRouter.post(
     return c.json({ entry });
   },
 );
+
+// ========== POST /api/finance/retail-product-sale（目录商品零售，misc_retail_income） ==========
+
+financeRouter.post(
+  '/retail-product-sale',
+  zValidator('json', retailProductSaleCreateSchema, zHook),
+  async (c) => {
+    const body = c.req.valid('json');
+    const me = c.get('authUser');
+    const db = requestDb(c);
+
+    const prodRows = await db
+      .select()
+      .from(schema.retail_products)
+      .where(eq(schema.retail_products.id, body.product_id))
+      .limit(1);
+    const product = prodRows[0];
+    if (!product || !product.is_active) {
+      throw new HTTPException(400, { message: '商品不存在或已停用' });
+    }
+
+    const collectorRows = await db
+      .select({ full_name: schema.users.full_name })
+      .from(schema.users)
+      .where(eq(schema.users.id, body.collector_user_id))
+      .limit(1);
+    const collector = collectorRows[0];
+    if (!collector) {
+      throw new HTTPException(400, { message: '收款人不存在' });
+    }
+
+    const lineParts: string[] = [
+      `「${product.name}」×${body.quantity} · 实收${formatCNY(body.amount)} · 收款人：${collector.full_name}`,
+    ];
+    if (product.detail.trim()) {
+      lineParts.push(`说明：${product.detail.trim()}`);
+    }
+    const noteTrim = body.note?.trim();
+    if (noteTrim) lineParts.push(`备注：${noteTrim}`);
+    const description = lineParts.join(' · ');
+
+    const rows = await db
+      .insert(schema.finance_entries)
+      .values({
+        entry_date: body.entry_date,
+        type: 'income',
+        category: 'misc_retail_income',
+        amount: body.amount,
+        description,
+        retail_product_id: product.id,
+        quantity: body.quantity,
+        collector_user_id: body.collector_user_id,
+        source: 'manual',
+        voided: false,
+        created_by_user_id: me.id,
+      })
+      .returning();
+    const entry = rows[0]!;
+
+    await db.insert(schema.audit_logs).values({
+      user_id: me.id,
+      action: 'create',
+      entity: 'finance_entry',
+      entity_id: entry.id,
+      diff_json: JSON.stringify({
+        after: {
+          type: entry.type,
+          category: entry.category,
+          amount: entry.amount,
+          retail_product_id: entry.retail_product_id,
+          quantity: entry.quantity,
+        },
+      }),
+    });
+
+    return c.json({ entry });
+  },
+);
+
+/** 商品目录：与独立路径 `/api/retail-products` 等价，便于与财务域同发版 */
+financeRouter.route('/retail-products', retailProductsRouter);
 
 // ========== PATCH /api/finance/:id ==========
 

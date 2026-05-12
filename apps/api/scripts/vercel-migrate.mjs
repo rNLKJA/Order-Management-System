@@ -130,6 +130,10 @@ async function repairLegacyColumnsAfterJournalSkip() {
     'ALTER TABLE `daily_orders` ADD `proof_set_id` integer REFERENCES order_proof_sets(id)',
     'CREATE INDEX IF NOT EXISTS `daily_orders_proof_set_idx` ON `daily_orders` (`proof_set_id`)',
     'CREATE INDEX IF NOT EXISTS `order_proof_sets_created_by_idx` ON `order_proof_sets` (`created_by_user_id`)',
+    'CREATE TABLE IF NOT EXISTS `retail_products` (`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL, `name` text NOT NULL, `detail` text DEFAULT \'\' NOT NULL, `is_active` integer DEFAULT true NOT NULL, `sort_order` integer DEFAULT 0 NOT NULL, `created_by_user_id` integer NOT NULL REFERENCES `users`(`id`), `created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL, `updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL)',
+    'CREATE INDEX IF NOT EXISTS `retail_products_active_idx` ON `retail_products` (`is_active`)',
+    'ALTER TABLE `finance_entries` ADD `retail_product_id` integer REFERENCES `retail_products`(`id`)',
+    'ALTER TABLE `finance_entries` ADD `quantity` integer',
   ];
 
   for (const statement of repairs) {

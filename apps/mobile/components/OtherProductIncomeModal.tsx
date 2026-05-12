@@ -86,7 +86,7 @@ export function OtherProductIncomeModal({ visible, onDismiss, onSaved }: Props) 
           其他产品收入
         </Text>
         <Text variant="bodySmall" style={styles.subtitle}>
-          洗护、日用品等零售；不关联会员档案
+          洗护、日用品等零售；不关联会员档案。有固定价目请用「每日订餐 → 零售」选品入账。
         </Text>
 
         <DatePicker

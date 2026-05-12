@@ -33,6 +33,7 @@ import { SummaryItem } from '../../../components/orders/SummaryItem';
 import { OrderRow } from '../../../components/orders/OrderRow';
 import { EntryPanel } from '../../../components/orders/EntryPanel';
 import { PrepView, DeliveryView } from '../../../components/orders/PrepDeliveryViews';
+import { RetailSalesPanel } from '../../../components/orders/RetailSalesPanel';
 import { StatusSheet } from '../../../components/orders/StatusSheet';
 import { DeliveryFailSheet } from '../../../components/orders/DeliveryFailSheet';
 import { createIdempotencyKey } from '../../../lib/idempotencyKey';
@@ -353,11 +354,13 @@ export default function OrdersScreen() {
     if (t === 'entry') setActiveTab('entry');
     else if (t === 'batch') setActiveTab('entry_batch');
     else if (t === 'gift') setActiveTab('entry_gift');
+    else if (t === 'retail') setActiveTab('retail');
     else setActiveTab('overview');
   }, [group, tab]);
 
   const isEntryTab =
     activeTab === 'entry' || activeTab === 'entry_batch' || activeTab === 'entry_gift';
+  const hideOrderLimitRow = isEntryTab || activeTab === 'retail';
   const currentOrdersQuery = activeTab === 'overview' ? overviewOrdersQuery : todayOrdersQuery;
   const currentLoadError = currentOrdersQuery.error;
   const currentLoading = currentOrdersQuery.isLoading && !currentOrdersQuery.data;
@@ -378,7 +381,7 @@ export default function OrdersScreen() {
       />
       <View style={styles.pageMetaRow}>
         <Text style={styles.pageMetaText}>{`今日 ${formatDate(now)}`}</Text>
-        {!isEntryTab ? (
+        {!hideOrderLimitRow ? (
           <View style={styles.limitRowInline}>
             <Text style={styles.limitLabel}>每次加载</Text>
             {LIMIT_OPTIONS.map((n) => (
@@ -502,6 +505,8 @@ export default function OrdersScreen() {
           onJumpToOverview={() => setActiveTab('overview')}
         />
       )}
+
+      {activeTab === 'retail' && <RetailSalesPanel />}
 
       {/* —— 出餐 —— */}
       {activeTab === 'prep' && (

@@ -22,6 +22,7 @@ import { financeRouter } from './routes/finance.js';
 import { healthRouter } from './routes/health.js';
 import { membersRouter } from './routes/members.js';
 import { ordersRouter } from './routes/orders.js';
+import { retailProductsRouter } from './routes/retail-products.js';
 import { usersRouter } from './routes/users.js';
 import { walkinsRouter } from './routes/walkins.js';
 import type { Db } from './db/client.js';
@@ -78,6 +79,7 @@ export function createApp(deps: AppDeps = {}) {
   app.route('/api/walkins', walkinsRouter);
   app.route('/api/cards', cardsRouter);
   app.route('/api/finance', financeRouter);
+  app.route('/api/retail-products', retailProductsRouter);
   app.route('/api/orders', ordersRouter);
   app.route('/api/users', usersRouter);
   app.route('/api/audit-logs', auditRouter);

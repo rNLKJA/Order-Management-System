@@ -71,6 +71,13 @@
       "when": 1777686745982,
       "tag": "0010_daily_orders_staff_meal",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1777786745982,
+      "tag": "0012_retail_products",
+      "breakpoints": true
     }
   ]
 }

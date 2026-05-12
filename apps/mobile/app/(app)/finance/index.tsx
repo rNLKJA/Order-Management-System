@@ -51,6 +51,7 @@ import { ExpenseModal } from '../../../components/ExpenseModal';
 import { OtherProductIncomeModal } from '../../../components/OtherProductIncomeModal';
 import { COLORS, SPACING, RADIUS, TYPE } from '../../../theme/paperTheme';
 import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
+import { usersApi } from '../../../api/users';
 
 type TypeFilter = 'all' | 'income' | 'expense';
 
@@ -94,6 +95,7 @@ export default function FinanceScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [otherIncomeModalVisible, setOtherIncomeModalVisible] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [collectorNameById, setCollectorNameById] = useState<Record<number, string>>({});
 
   /** 期间总览：只按日期，便于与下方列表筛选解耦 */
   const periodParams = useMemo<ListFinanceParams>(
@@ -203,6 +205,24 @@ export default function FinanceScreen() {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void usersApi
+      .list()
+      .then((res) => {
+        if (cancelled) return;
+        const m: Record<number, string> = {};
+        for (const u of res.users ?? []) {
+          m[u.id] = u.full_name;
+        }
+        setCollectorNameById(m);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleDelete = (entry: FinanceEntryDTO) => {
     confirmDestructive(
@@ -522,6 +542,7 @@ export default function FinanceScreen() {
                   key={item.id}
                   entry={item}
                   isAdmin={isAdmin}
+                  collectorNameById={collectorNameById}
                   onDelete={() => handleDelete(item)}
                 />
               ))
@@ -550,10 +571,12 @@ export default function FinanceScreen() {
 function EntryCard({
   entry,
   isAdmin,
+  collectorNameById,
   onDelete,
 }: {
   entry: FinanceEntryDTO;
   isAdmin: boolean;
+  collectorNameById: Record<number, string>;
   onDelete: () => void;
 }) {
   const isIncome = entry.type === 'income';
@@ -562,6 +585,10 @@ function EntryCard({
   const catLabel =
     FINANCE_CATEGORY_LABEL[entry.category as FinanceCategory] ?? entry.category;
   const isMock = entry.id < 0;
+  const collectorName =
+    entry.collector_user_id != null
+      ? collectorNameById[entry.collector_user_id]
+      : undefined;
 
   return (
     <GlassSurface
@@ -607,6 +634,9 @@ function EntryCard({
 
       {entry.description ? (
         <Text style={styles.description}>{entry.description}</Text>
+      ) : null}
+      {collectorName ? (
+        <Text style={styles.collectorLine}>收款：{collectorName}</Text>
       ) : null}
 
       {isAdmin && !entry.voided && !isMock && (
@@ -769,6 +799,12 @@ const styles = StyleSheet.create({
     ...TYPE.footnote,
     color: COLORS.text.secondary,
     marginTop: 8,
+  },
+  collectorLine: {
+    ...TYPE.footnote,
+    color: COLORS.text.secondary,
+    marginTop: 4,
+    fontWeight: '600',
   },
   voidBtn: {
     position: 'absolute',

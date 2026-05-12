@@ -613,4 +613,61 @@ describe('财务接口 /api/finance', () => {
     const body = (await res.json()) as { entry: schema.FinanceEntry };
     expect(body.entry.voided).toBe(true);
   });
+
+  it('POST retail-product-sale 写入 misc_retail + collector + 数量', async () => {
+    const [product] = await db
+      .insert(schema.retail_products)
+      .values({
+        name: '馒头',
+        detail: '非包子',
+        is_active: true,
+        sort_order: 1,
+        created_by_user_id: staffId,
+      })
+      .returning();
+    expect(product).toBeDefined();
+
+    const res = await app.fetch(
+      new Request('http://test.local/api/finance/retail-product-sale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader(staffToken) },
+        body: JSON.stringify({
+          entry_date: '2026-05-08',
+          product_id: product!.id,
+          quantity: 3,
+          amount: 12.5,
+          collector_user_id: adminId,
+          note: '单元测',
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { entry: schema.FinanceEntry };
+    expect(body.entry.category).toBe('misc_retail_income');
+    expect(body.entry.amount).toBe(12.5);
+    expect(body.entry.collector_user_id).toBe(adminId);
+    expect(body.entry.retail_product_id).toBe(product!.id);
+    expect(body.entry.quantity).toBe(3);
+    expect(body.entry.description).toContain('馒头');
+    expect(body.entry.description).toContain('收款人：财务管理员');
+  });
+
+  it('GET /api/finance/retail-products 与独立路径等价', async () => {
+    await db.insert(schema.retail_products).values({
+      name: '包子',
+      detail: '',
+      is_active: true,
+      sort_order: 1,
+      created_by_user_id: staffId,
+    });
+
+    const res = await app.fetch(
+      new Request('http://test.local/api/finance/retail-products', {
+        headers: authHeader(staffToken),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { products: { name: string }[] };
+    expect(body.products.some((p) => p.name === '包子')).toBe(true);
+  });
 });

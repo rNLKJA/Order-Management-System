@@ -13,6 +13,7 @@ import type {
   FinanceCategory,
   FinanceUpdateInput,
   OtherProductIncomeCreateInput,
+  RetailProductSaleCreateInput,
 } from '@meal/shared';
 import { api } from './client';
 
@@ -25,6 +26,8 @@ export interface FinanceEntryDTO {
   description: string;
   ref_card_id: number | null;
   ref_order_id: number | null;
+  retail_product_id: number | null;
+  quantity: number | null;
   source: 'auto' | 'manual' | 'imported_legacy';
   voided: boolean;
   collector_user_id: number | null;
@@ -95,6 +98,16 @@ export function createOtherProductIncome(
 ): Promise<{ entry: FinanceEntryDTO }> {
   return api.post<{ entry: FinanceEntryDTO }>(
     '/api/finance/other-product-income',
+    body,
+  );
+}
+
+/** 从目录选品入账 misc_retail_income */
+export function createRetailProductSale(
+  body: RetailProductSaleCreateInput,
+): Promise<{ entry: FinanceEntryDTO }> {
+  return api.post<{ entry: FinanceEntryDTO }>(
+    '/api/finance/retail-product-sale',
     body,
   );
 }

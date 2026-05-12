@@ -28,6 +28,7 @@ export type TabKey =
   | 'entry'
   | 'entry_batch'
   | 'entry_gift'
+  | 'retail'
   | 'prep'
   | 'delivery'
   | 'courier';
@@ -45,6 +46,7 @@ export const TABS: {
   { key: 'entry', label: '录入', icon: 'person-outline' },
   { key: 'entry_batch', label: '批量录入', icon: 'people-outline' },
   { key: 'entry_gift', label: '赠送餐', icon: 'gift-outline' },
+  { key: 'retail', label: '零售', icon: 'pricetag-outline' },
   { key: 'prep', label: '出餐', icon: 'fast-food-outline' },
   { key: 'delivery', label: '送餐', icon: 'bicycle-outline' },
   { key: 'courier', label: '快递', icon: 'cube-outline' },

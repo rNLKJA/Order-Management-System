@@ -291,6 +291,35 @@ export const otherProductIncomeCreateSchema = z.object({
 });
 export type OtherProductIncomeCreateInput = z.infer<typeof otherProductIncomeCreateSchema>;
 
+/** 零售商品目录（其他产品销售，不绑定会员） */
+export const retailProductCreateSchema = z.object({
+  name: z.string().min(1).max(128),
+  detail: z.string().max(512).optional().default(''),
+});
+export type RetailProductCreateInput = z.infer<typeof retailProductCreateSchema>;
+
+export const retailProductPatchSchema = z
+  .object({
+    name: z.string().min(1).max(128).optional(),
+    detail: z.string().max(512).optional(),
+    is_active: z.boolean().optional(),
+  })
+  .refine((v) => v.name !== undefined || v.detail !== undefined || v.is_active !== undefined, {
+    message: '至少提供一项修改',
+  });
+export type RetailProductPatchInput = z.infer<typeof retailProductPatchSchema>;
+
+/** 从目录选品入账 misc_retail_income */
+export const retailProductSaleCreateSchema = z.object({
+  entry_date: zDate,
+  product_id: z.number().int().positive(),
+  quantity: z.number().int().positive(),
+  amount: zAmount.positive(),
+  collector_user_id: z.number().int().positive(),
+  note: z.string().max(256).optional().default(''),
+});
+export type RetailProductSaleCreateInput = z.infer<typeof retailProductSaleCreateSchema>;
+
 export const financeUpdateSchema = z.object({
   entry_date: zDate.optional(),
   amount: zAmount.optional(),

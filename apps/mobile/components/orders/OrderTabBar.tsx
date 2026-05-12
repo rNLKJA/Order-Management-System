@@ -20,7 +20,8 @@ export function OrderTabBar({
             t.key === 'overview' ||
             t.key === 'entry' ||
             t.key === 'entry_batch' ||
-            t.key === 'entry_gift',
+            t.key === 'entry_gift' ||
+            t.key === 'retail',
         )
       : TABS.filter((t) => t.key === 'prep' || t.key === 'delivery' || t.key === 'courier');
 
