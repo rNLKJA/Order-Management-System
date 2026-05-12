@@ -28,8 +28,8 @@ import { useUsersMap } from '../../hooks/useMembersView';
 import { apiToMockMember } from '../../lib/member-view';
 import { isStaffMealsCardCode } from '@meal/shared';
 
-function memberHasStaffCard(m: MockMember): boolean {
-  const c = m.active_card;
+function memberHasStaffCard(m: MockMember | null | undefined): boolean {
+  const c = m?.active_card;
   return c != null && isStaffMealsCardCode(c.card_code);
 }
 
@@ -432,7 +432,7 @@ export function EntryPanel({
 
   const memberHasCard = !!selectedMember?.active_card;
   const memberCardEnough = memberHasCard
-    ? memberHasStaffCard(selectedMember!) ||
+    ? memberHasStaffCard(selectedMember) ||
       selectedMember!.active_card!.remaining_meals >= lunchQty + dinnerQty
     : false;
   const canSubmitMemberSingle =
@@ -1148,7 +1148,7 @@ export function EntryPanel({
             <Text style={entryStyles.submitBtnText}>
               {mode === 'member' && memberBatchMode && memberBatchEntries.length > 0
                 ? `确认录入 (${memberBatchEntries.length}人${batchHasStaffMember ? '·含员工' : ''})`
-                : mode === 'member' && memberHasStaffCard(selectedMember!) && !memberBatchMode
+                : mode === 'member' && !memberBatchMode && memberHasStaffCard(selectedMember)
                   ? '确认录入（员工卡）'
                   : '确认录入'}
             </Text>
