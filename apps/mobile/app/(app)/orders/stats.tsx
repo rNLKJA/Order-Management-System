@@ -59,6 +59,7 @@ interface Totals {
   meals: number;
   lunch: number;
   dinner: number;
+  staffMealMeals: number;
   pending: number;
   fulfilled: number;
   delivered: number;
@@ -83,6 +84,7 @@ function emptyTotals(): Totals {
     meals: 0,
     lunch: 0,
     dinner: 0,
+    staffMealMeals: 0,
     pending: 0,
     fulfilled: 0,
     delivered: 0,
@@ -119,7 +121,7 @@ export default function OrdersStatsScreen() {
           from: effectiveFrom,
           to: effectiveTo,
           status: 'all',
-          limit: 200,
+          limit: 500,
         });
         setOrders(res.orders);
       } catch (e) {
@@ -168,6 +170,7 @@ export default function OrdersStatsScreen() {
         t.meals += o.quantity;
         if (o.meal_type === 'lunch') t.lunch += o.quantity;
         else t.dinner += o.quantity;
+        if (o.is_staff_meal) t.staffMealMeals += o.quantity;
       }
 
       if (o.status === 'pending') t.pending += o.quantity;
@@ -362,6 +365,16 @@ export default function OrdersStatsScreen() {
                   icon="moon-outline"
                   color={COLORS.info}
                   tint="info"
+                />
+              </Bento>
+              <Bento span={6} mobileSpan={12}>
+                <StatTile
+                  label="员工餐份数"
+                  value={`${totals.staffMealMeals}`}
+                  icon="id-card-outline"
+                  color={COLORS.brand}
+                  tint="info"
+                  hint="股东/员工送餐等已标记份数"
                 />
               </Bento>
             </BentoGrid>

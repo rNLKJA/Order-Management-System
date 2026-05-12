@@ -25,6 +25,7 @@ import { zValidator } from '@hono/zod-validator';
 import { userAvatarUpdateSchema } from '@meal/shared';
 import { schema, type Db } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
+import { hydrateOrderProofs } from '../services/order-proof-hydrate.js';
 import { hashPassword } from '../services/password.js';
 import {
   DEFAULT_DATA_OPERATORS,
@@ -736,7 +737,11 @@ usersRouter.get(
       .limit(limit)
       .offset(offset);
 
-    return c.json({ orders: rows });
+    const ordersOnly = rows.map((r) => r.order);
+    const hydrated = await hydrateOrderProofs(db, ordersOnly);
+    return c.json({
+      orders: rows.map((r, i) => ({ ...r, order: hydrated[i]! })),
+    });
   },
 );
 

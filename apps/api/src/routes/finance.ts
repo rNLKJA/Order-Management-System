@@ -21,6 +21,7 @@ import { z } from 'zod';
 import {
   expenseCreateSchema,
   financeUpdateSchema,
+  otherProductIncomeCreateSchema,
   zDate,
 } from '@meal/shared';
 import { schema } from '../db/client.js';
@@ -242,6 +243,46 @@ financeRouter.post(
           amount: entry.amount,
           entry_date: entry.entry_date,
         },
+      }),
+    });
+
+    return c.json({ entry });
+  },
+);
+
+// ========== POST /api/finance/other-product-income（洗护等非餐品零售，不绑定会员） ==========
+
+financeRouter.post(
+  '/other-product-income',
+  zValidator('json', otherProductIncomeCreateSchema, zHook),
+  async (c) => {
+    const body = c.req.valid('json');
+    const me = c.get('authUser');
+    const db = requestDb(c);
+    const createdBy = body.created_by_user_id ?? me.id;
+
+    const rows = await db
+      .insert(schema.finance_entries)
+      .values({
+        entry_date: body.entry_date,
+        type: 'income',
+        category: 'misc_retail_income',
+        amount: body.amount,
+        description: body.description,
+        source: 'manual',
+        voided: false,
+        created_by_user_id: createdBy,
+      })
+      .returning();
+    const entry = rows[0]!;
+
+    await db.insert(schema.audit_logs).values({
+      user_id: me.id,
+      action: 'create',
+      entity: 'finance_entry',
+      entity_id: entry.id,
+      diff_json: JSON.stringify({
+        after: { type: entry.type, category: entry.category, amount: entry.amount },
       }),
     });
 

@@ -67,6 +67,9 @@ export function OrderRow({
               )}
             </>
           )}
+          {order.is_staff_meal ? (
+            <Text style={styles.staffMealTag}>员工餐</Text>
+          ) : null}
           <Text style={styles.orderQty}>{order.quantity} 份</Text>
           {(order.proof_images?.length ?? 0) > 0 ? (
             <View style={styles.proofPill} accessibilityLabel={`订餐凭证 ${order.proof_images!.length} 张`}>

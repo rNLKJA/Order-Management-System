@@ -12,6 +12,7 @@ import type {
   ExpenseCreateInput,
   FinanceCategory,
   FinanceUpdateInput,
+  OtherProductIncomeCreateInput,
 } from '@meal/shared';
 import { api } from './client';
 
@@ -86,6 +87,16 @@ export function createExpense(
   body: ExpenseCreateInput,
 ): Promise<{ entry: FinanceEntryDTO }> {
   return api.post<{ entry: FinanceEntryDTO }>('/api/finance/expense', body);
+}
+
+/** 洗护等非餐品零售收入，不绑定会员 */
+export function createOtherProductIncome(
+  body: OtherProductIncomeCreateInput,
+): Promise<{ entry: FinanceEntryDTO }> {
+  return api.post<{ entry: FinanceEntryDTO }>(
+    '/api/finance/other-product-income',
+    body,
+  );
 }
 
 export function updateFinance(

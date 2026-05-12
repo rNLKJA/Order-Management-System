@@ -137,6 +137,11 @@ function PrepCard({
                 <Text style={[prepStyles.tagText, { color: '#FF9500' }]}>散餐</Text>
               </View>
             ) : null}
+            {order.is_staff_meal ? (
+              <View style={[prepStyles.tag, { backgroundColor: '#E8F4FC' }]}>
+                <Text style={[prepStyles.tagText, { color: '#007AFF' }]}>员工餐</Text>
+              </View>
+            ) : null}
           </View>
           <View style={prepStyles.metaRow}>
             <View
@@ -360,6 +365,11 @@ function DeliveryCard({
                 <Text style={[prepStyles.tagText, { color: '#AF52DE' }]}>
                   快递{order.courier_ref ? ` · ${order.courier_ref}` : ''}
                 </Text>
+              </View>
+            ) : null}
+            {order.is_staff_meal ? (
+              <View style={[prepStyles.tag, { backgroundColor: '#E8F4FC' }]}>
+                <Text style={[prepStyles.tagText, { color: '#007AFF' }]}>员工餐</Text>
               </View>
             ) : null}
           </View>

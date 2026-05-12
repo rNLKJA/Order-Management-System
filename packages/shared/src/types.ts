@@ -61,7 +61,8 @@ export type FinanceCategory =
   | 'manual_expense'
   | 'salary_expense'
   | 'legacy_income'
-  | 'legacy_expense';
+  | 'legacy_expense'
+  | 'misc_retail_income';
 
 export const FINANCE_CATEGORY_LABEL: Record<FinanceCategory, string> = {
   hospital_sub: '院内办卡（旧·预收）',
@@ -76,6 +77,7 @@ export const FINANCE_CATEGORY_LABEL: Record<FinanceCategory, string> = {
   salary_expense: '工资支出',
   legacy_income: '历史收入（迁移）',
   legacy_expense: '历史支出（迁移）',
+  misc_retail_income: '其他产品销售（非会员绑定）',
 };
 
 export type FinanceSource = 'auto' | 'manual' | 'imported_legacy';

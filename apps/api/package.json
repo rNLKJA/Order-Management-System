@@ -18,7 +18,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:backfill:finance": "tsx src/scripts/backfill-finance.ts"
+    "db:backfill:finance": "tsx src/scripts/backfill-finance.ts",
+    "db:import:may2026": "tsx src/scripts/import-may2026-sheets.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

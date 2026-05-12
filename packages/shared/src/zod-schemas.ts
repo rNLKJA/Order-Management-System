@@ -178,6 +178,8 @@ const orderCreateEntryFields = {
   created_by_user_id: z.number().int().positive().optional(),
   /** 赠送餐：不扣卡、不记 meal_earned */
   is_gift: z.boolean().optional().default(false),
+  /** 员工餐：扣卡与收入规则不变，仅作标签 */
+  is_staff_meal: z.boolean().optional().default(false),
 } satisfies z.ZodRawShape;
 
 type OrderCreateRefineFields = {
@@ -279,6 +281,14 @@ export const expenseCreateSchema = z.object({
   expense_kind: z.enum(['general', 'salary']).optional().default('general'),
 });
 export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
+
+export const otherProductIncomeCreateSchema = z.object({
+  entry_date: zDate,
+  amount: zAmount.positive(),
+  description: z.string().min(1).max(512),
+  created_by_user_id: z.number().int().positive().optional(),
+});
+export type OtherProductIncomeCreateInput = z.infer<typeof otherProductIncomeCreateSchema>;
 
 export const financeUpdateSchema = z.object({
   entry_date: zDate.optional(),

@@ -1,10 +1,8 @@
 /**
- * 财务记账 — v3 毛玻璃 + Bento
+ * 财务流水 — 简版视图
  *
- * - 顶部：AppHeader 带「新增支出」按钮（替代右下 FAB）
- * - 时间范围：仅影响期间总览（履约/预收/汇总/结构/期内条数）与明细的日期窗
- * - 列表筛选：类型 / 分类 / 是否含冲销 —— **只影响下方明细列表**，不改变期间 KPI
- * - 明细：完整 from~to（最多 500 条），与顶部筛选区间一致
+ * - 选日期 → 看本区间总收入/支出/净额 → 下面就是逐条流水
+ * - 「更多筛选」内：按财务细类、是否含已冲销（默认收起，减少干扰）
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -50,15 +48,11 @@ import {
   type ListFinanceParams,
 } from '../../../api/finance';
 import { ExpenseModal } from '../../../components/ExpenseModal';
+import { OtherProductIncomeModal } from '../../../components/OtherProductIncomeModal';
 import { COLORS, SPACING, RADIUS, TYPE } from '../../../theme/paperTheme';
 import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 type TypeFilter = 'all' | 'income' | 'expense';
-
-/** 与 @meal/shared FinanceCategory 中支出类一致，用于从 byCategory 拆出支出结构 */
-function isExpenseCategory(cat: string): boolean {
-  return cat === 'manual_expense' || cat === 'salary_expense' || cat === 'legacy_expense';
-}
 
 const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
   'all',
@@ -74,30 +68,8 @@ const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
   'salary_expense',
   'legacy_income',
   'legacy_expense',
+  'misc_retail_income',
 ];
-
-function categoryDisplayLabel(category: string): string {
-  if (category === 'meal_earned_hospital') return '院内履约收入（已送达确认）';
-  if (category === 'meal_earned_regular') return '院外履约收入（已送达确认）';
-  if (category === 'meal_earned_walkin' || category === 'ad_hoc') return '散客履约收入（已送达确认）';
-  if (category === 'card_prepaid_hospital') return '院内预收（办卡/升级）';
-  if (category === 'card_prepaid_regular') return '院外预收（办卡/升级）';
-  if (category === 'hospital_sub') return '院内预收（散客订单）';
-  if (category === 'regular_sub') return '院外预收（散客订单）';
-  return FINANCE_CATEGORY_LABEL[category as FinanceCategory] ?? category;
-}
-
-function incomeCategoryColor(category: string): string {
-  if (
-    category === 'card_prepaid_hospital' ||
-    category === 'card_prepaid_regular' ||
-    category === 'hospital_sub' ||
-    category === 'regular_sub'
-  ) {
-    return COLORS.warning;
-  }
-  return COLORS.success;
-}
 
 export default function FinanceScreen() {
   const scrollRef = useRef<ScrollView>(null);
@@ -112,6 +84,7 @@ export default function FinanceScreen() {
   const [category, setCategory] = useState<FinanceCategory | 'all'>('all');
   const [includeVoided, setIncludeVoided] = useState(false);
   const [categoryMenuVisible, setCategoryMenuVisible] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const [periodData, setPeriodData] = useState<FinanceListResponse | null>(null);
   const [listData, setListData] = useState<FinanceListResponse | null>(null);
@@ -119,11 +92,10 @@ export default function FinanceScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [otherIncomeModalVisible, setOtherIncomeModalVisible] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  /** 期间 KPI：默认汇总；切换到「履约收入」看已送达拆分与预收 */
-  const [periodKpiTab, setPeriodKpiTab] = useState<'summary' | 'fulfillment'>('summary');
 
-  /** 期间总览：只按日期，便于履约/预收与下方列表筛选解耦 */
+  /** 期间总览：只按日期，便于与下方列表筛选解耦 */
   const periodParams = useMemo<ListFinanceParams>(
     () => ({
       from: from || undefined,
@@ -257,45 +229,30 @@ export default function FinanceScreen() {
   };
 
   const summary = periodData?.summary;
-  const structureGroups = useMemo(() => {
-    const byCat = summary?.byCategory ?? {};
-    const incomeMap = new Map<string, number>();
-    const expenseMap = new Map<string, number>();
-    for (const [cat, rawAmt] of Object.entries(byCat)) {
-      const amt = Number(rawAmt);
-      if (!Number.isFinite(amt) || amt === 0) continue;
-      const target = isExpenseCategory(cat) ? expenseMap : incomeMap;
-      target.set(cat, (target.get(cat) ?? 0) + amt);
-    }
-    const toSortedList = (source: Map<string, number>) =>
-      Array.from(source.entries())
-        .map(([ckey, amt]) => ({
-          key: ckey,
-          label: categoryDisplayLabel(ckey),
-          amount: amt,
-        }))
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 8);
-    return {
-      income: toSortedList(incomeMap),
-      expense: toSortedList(expenseMap),
-    };
-  }, [summary?.byCategory]);
 
   return (
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader
-          title="财务记账"
+          title="财务流水"
           right={
-            <Pressable
-              onPress={() => setModalVisible(true)}
-              style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
-            >
-              <Ionicons name="add-circle-outline" size={16} color={COLORS.brand} />
-              <Text style={styles.headerActionText}>新增支出</Text>
-            </Pressable>
+            <View style={styles.headerActionsRow}>
+              <Pressable
+                onPress={() => setOtherIncomeModalVisible(true)}
+                style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
+              >
+                <Ionicons name="pricetag-outline" size={16} color={COLORS.brand} />
+                <Text style={styles.headerActionText}>零售收入</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setModalVisible(true)}
+                style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
+              >
+                <Ionicons name="add-circle-outline" size={16} color={COLORS.brand} />
+                <Text style={styles.headerActionText}>新增支出</Text>
+              </Pressable>
+            </View>
           }
         />
 
@@ -319,12 +276,12 @@ export default function FinanceScreen() {
                 size={42}
               />
               <View style={styles.heroMain}>
-                <Text style={styles.heroTitle}>财务总览</Text>
+                <Text style={styles.heroTitle}>财务流水</Text>
                 <Text style={styles.heroRange}>{`${from} ~ ${to}`}</Text>
-                <Text style={styles.heroSub}>上方 KPI 随日期变；列表可用下方筛选收窄</Text>
+                <Text style={styles.heroSub}>上面选日期，中间是这笔钱怎么进出，再往下逐条对账</Text>
               </View>
               <StatusChip
-                label={`期内 ${periodData?.total ?? 0} 条`}
+                label={`${periodData?.total ?? 0} 笔记账`}
                 variant="neutral"
               />
             </GlassSurface>
@@ -389,159 +346,48 @@ export default function FinanceScreen() {
           </View>
 
           <View style={styles.block}>
-            <SectionLabel>{`期间总览 · ${from} ~ ${to}`}</SectionLabel>
-            <GlassSurface padding={SPACING.md} style={[styles.filterCard, { marginBottom: SPACING.md }]}>
-              <View style={styles.segmentedBar}>
-                <Pressable
-                  style={[styles.segment, periodKpiTab === 'summary' && styles.segmentActive]}
-                  onPress={() => setPeriodKpiTab('summary')}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      periodKpiTab === 'summary' && styles.segmentTextActive,
-                    ]}
-                  >
-                    汇总
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.segment, periodKpiTab === 'fulfillment' && styles.segmentActive]}
-                  onPress={() => setPeriodKpiTab('fulfillment')}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      periodKpiTab === 'fulfillment' && styles.segmentTextActive,
-                    ]}
-                  >
-                    履约收入
-                  </Text>
-                </Pressable>
-              </View>
-            </GlassSurface>
-
-            {periodKpiTab === 'summary' ? (
-              <BentoGrid gap={SPACING.md}>
-                <Bento span={4} mobileSpan={6}>
-                  <StatTile
-                    label="总收入"
-                    value={formatCNY(summary?.income ?? 0)}
-                    icon="arrow-up-circle-outline"
-                    color={COLORS.brand}
-                    tint="info"
-                  />
-                </Bento>
-                <Bento span={4} mobileSpan={6}>
-                  <StatTile
-                    label="总支出"
-                    value={formatCNY(summary?.expense ?? 0)}
-                    icon="arrow-down-circle-outline"
-                    color={COLORS.danger}
-                    tint="danger"
-                  />
-                </Bento>
-                <Bento span={4} mobileSpan={12}>
-                  <StatTile
-                    label="净额"
-                    value={formatCNY(summary?.net ?? 0)}
-                    icon={
-                      (summary?.net ?? 0) >= 0
-                        ? 'checkmark-circle-outline'
-                        : 'close-circle-outline'
-                    }
-                    color={(summary?.net ?? 0) >= 0 ? COLORS.success : COLORS.danger}
-                    tint={(summary?.net ?? 0) >= 0 ? 'ok' : 'danger'}
-                  />
-                </Bento>
-              </BentoGrid>
-            ) : (
-              <BentoGrid gap={SPACING.md}>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile
-                    label="履约合计"
-                    value={formatCNY(summary?.realized_income ?? 0)}
-                    icon="restaurant-outline"
-                    color={COLORS.success}
-                    tint="ok"
-                  />
-                </Bento>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile
-                    label="院内履约"
-                    value={formatCNY(summary?.realized_by_channel?.hospital ?? 0)}
-                    icon="medkit-outline"
-                    color={COLORS.brand}
-                    tint="info"
-                  />
-                </Bento>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile
-                    label="院外履约"
-                    value={formatCNY(summary?.realized_by_channel?.regular ?? 0)}
-                    icon="home-outline"
-                    color={COLORS.info}
-                    tint="info"
-                  />
-                </Bento>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile
-                    label="散客履约"
-                    value={formatCNY(summary?.realized_by_channel?.walkin ?? 0)}
-                    icon="walk-outline"
-                    color={COLORS.info}
-                    tint="info"
-                  />
-                </Bento>
-                <Bento span={6} mobileSpan={12}>
-                  <StatTile
-                    label="办卡预收（未履约）"
-                    value={formatCNY(summary?.prepaid_income ?? 0)}
-                    icon="time-outline"
-                    color={COLORS.warning}
-                    tint="warn"
-                    hint="先收款，后续按送达转为履约收入"
-                  />
-                </Bento>
-              </BentoGrid>
-            )}
-          </View>
-
-          <View style={styles.block}>
-            <SectionLabel>结构分布</SectionLabel>
-            <Text style={styles.filterHint}>
-              绿色=履约收入（已送达确认） · 黄色=预收（办卡/升级/散客订单，尚未履约）
-            </Text>
-            <Text style={styles.filterHint}>
-              办卡/升级=会员付费购卡；散客订单=院内/院外渠道的散客订单预收入账（不对应某张会员卡）。
-            </Text>
+            <SectionLabel>{`这段时间 · ${from} ~ ${to}`}</SectionLabel>
             <BentoGrid gap={SPACING.md}>
-              <Bento span={6} mobileSpan={12}>
-                <CategoryBars
-                  title="收入结构"
-                  items={structureGroups.income}
-                  color={COLORS.success}
-                  getColor={incomeCategoryColor}
+              <Bento span={4} mobileSpan={6}>
+                <StatTile
+                  label="入账合计"
+                  value={formatCNY(summary?.income ?? 0)}
+                  icon="arrow-up-circle-outline"
+                  color={COLORS.brand}
+                  tint="info"
                 />
               </Bento>
-              <Bento span={6} mobileSpan={12}>
-                <CategoryBars
-                  title="支出结构"
-                  items={structureGroups.expense}
+              <Bento span={4} mobileSpan={6}>
+                <StatTile
+                  label="支出合计"
+                  value={formatCNY(summary?.expense ?? 0)}
+                  icon="arrow-down-circle-outline"
                   color={COLORS.danger}
+                  tint="danger"
+                />
+              </Bento>
+              <Bento span={4} mobileSpan={12}>
+                <StatTile
+                  label="结余（入−出）"
+                  value={formatCNY(summary?.net ?? 0)}
+                  icon={
+                    (summary?.net ?? 0) >= 0
+                      ? 'checkmark-circle-outline'
+                      : 'close-circle-outline'
+                  }
+                  color={(summary?.net ?? 0) >= 0 ? COLORS.success : COLORS.danger}
+                  tint={(summary?.net ?? 0) >= 0 ? 'ok' : 'danger'}
                 />
               </Bento>
             </BentoGrid>
           </View>
 
-          {/* 明細列表筛选（不影响上方期间 KPI） */}
           <View style={styles.block}>
-            <SectionLabel>明細筛选</SectionLabel>
+            <SectionLabel>怎么查流水</SectionLabel>
             <GlassSurface padding={SPACING.md} style={styles.filterCard}>
               <Text style={styles.filterHint}>
-                以下选项仅缩小下方列表；履约、预收与汇总始终对应上面的日期区间。
+                先看「全部 / 只要收入 / 只要支出」。要按办卡、送餐分类再往下点。
               </Text>
-              {/* 类型 Segmented */}
               <View style={styles.segmentedBar}>
                 {(['all', 'income', 'expense'] as const).map((v) => {
                   const active = typeFilter === v;
@@ -554,88 +400,112 @@ export default function FinanceScreen() {
                       <Text
                         style={[styles.segmentText, active && styles.segmentTextActive]}
                       >
-                        {v === 'all' ? '全部' : v === 'income' ? '收入' : '支出'}
+                        {v === 'all' ? '全部' : v === 'income' ? '只要收入' : '只要支出'}
                       </Text>
                     </Pressable>
                   );
                 })}
               </View>
 
-              {/* 分类 + 冲销 */}
-              <View style={styles.chipRow}>
-                <Menu
-                  visible={categoryMenuVisible}
-                  onDismiss={() => setCategoryMenuVisible(false)}
-                  anchor={
-                    <Pressable
-                      onPress={() => setCategoryMenuVisible(true)}
-                      style={styles.selectBtn}
-                    >
-                      <Ionicons
-                        name="filter-outline"
-                        size={14}
-                        color={COLORS.brand}
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text style={styles.selectBtnText}>
-                        分类：
-                        {category === 'all'
-                          ? '全部'
-                          : FINANCE_CATEGORY_LABEL[category]}
-                      </Text>
-                      <Ionicons
-                        name="chevron-down"
-                        size={14}
-                        color={COLORS.brand}
-                        style={{ marginLeft: 2 }}
-                      />
-                    </Pressable>
-                  }
-                >
-                  {CATEGORY_OPTIONS.map((c) => (
-                    <Menu.Item
-                      key={c}
-                      title={c === 'all' ? '全部' : FINANCE_CATEGORY_LABEL[c]}
-                      onPress={() => {
-                        setCategory(c);
-                        setCategoryMenuVisible(false);
-                      }}
-                    />
-                  ))}
-                </Menu>
+              {!showAdvancedFilters && (category !== 'all' || includeVoided) ? (
+                <Text style={[styles.filterHint, { marginBottom: 0 }]}>
+                  列表还限在：
+                  {category !== 'all' ? FINANCE_CATEGORY_LABEL[category] : '任意细类'}
+                  {includeVoided ? ' · 含已冲销' : ''}
+                  {' · 点下方可改'}
+                </Text>
+              ) : null}
 
-                <PressableCard
-                  onPress={() => setIncludeVoided((v) => !v)}
-                  style={styles.toggle}
-                  tint={includeVoided ? 'info' : undefined}
-                  padding={SPACING.sm}
-                >
-                  <Ionicons
-                    name={includeVoided ? 'eye-outline' : 'eye-off-outline'}
-                    size={14}
-                    color={includeVoided ? COLORS.brand : COLORS.text.secondary}
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text
-                    style={[
-                      styles.toggleText,
-                      includeVoided && { color: COLORS.brand },
-                    ]}
+              <Pressable
+                onPress={() => setShowAdvancedFilters((s) => !s)}
+                style={({ pressed }) => [styles.moreFiltersBtn, pressed && styles.pressed]}
+              >
+                <Text style={styles.moreFiltersBtnText}>
+                  {showAdvancedFilters ? '收起更多筛选' : '更多筛选（财务细类、已冲销）'}
+                </Text>
+                <Ionicons
+                  name={showAdvancedFilters ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={COLORS.brand}
+                />
+              </Pressable>
+
+              {showAdvancedFilters ? (
+                <View style={styles.chipRow}>
+                  <Menu
+                    visible={categoryMenuVisible}
+                    onDismiss={() => setCategoryMenuVisible(false)}
+                    anchor={
+                      <Pressable
+                        onPress={() => setCategoryMenuVisible(true)}
+                        style={styles.selectBtn}
+                      >
+                        <Ionicons
+                          name="filter-outline"
+                          size={14}
+                          color={COLORS.brand}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={styles.selectBtnText}>
+                          细类：
+                          {category === 'all'
+                            ? '不限制'
+                            : FINANCE_CATEGORY_LABEL[category]}
+                        </Text>
+                        <Ionicons
+                          name="chevron-down"
+                          size={14}
+                          color={COLORS.brand}
+                          style={{ marginLeft: 2 }}
+                        />
+                      </Pressable>
+                    }
                   >
-                    含已冲销
-                  </Text>
-                </PressableCard>
-              </View>
+                    {CATEGORY_OPTIONS.map((c) => (
+                      <Menu.Item
+                        key={c}
+                        title={c === 'all' ? '不限制' : FINANCE_CATEGORY_LABEL[c]}
+                        onPress={() => {
+                          setCategory(c);
+                          setCategoryMenuVisible(false);
+                        }}
+                      />
+                    ))}
+                  </Menu>
+
+                  <PressableCard
+                    onPress={() => setIncludeVoided((v) => !v)}
+                    style={styles.toggle}
+                    tint={includeVoided ? 'info' : undefined}
+                    padding={SPACING.sm}
+                  >
+                    <Ionicons
+                      name={includeVoided ? 'eye-outline' : 'eye-off-outline'}
+                      size={14}
+                      color={includeVoided ? COLORS.brand : COLORS.text.secondary}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.toggleText,
+                        includeVoided && { color: COLORS.brand },
+                      ]}
+                    >
+                      含已冲销
+                    </Text>
+                  </PressableCard>
+                </View>
+              ) : null}
             </GlassSurface>
           </View>
 
-          {/* 明细 */}
+          {/* 流水列表 */}
           <View style={styles.block}>
             <View style={styles.listHeaderRow}>
               <SectionLabel>
                 {listFilterActive
-                  ? `明細（${from} ~ ${to}）· 列表 ${listData?.total ?? 0} 条`
-                  : `明細（${from} ~ ${to}）· ${listData?.total ?? 0} 条`}
+                  ? `流水明细 · ${listData?.total ?? 0} 条（已筛选）`
+                  : `流水明细 · ${listData?.total ?? 0} 条`}
               </SectionLabel>
             </View>
             {loading && !periodData ? (
@@ -664,56 +534,13 @@ export default function FinanceScreen() {
           onDismiss={() => setModalVisible(false)}
           onSaved={() => void fetchData('refresh')}
         />
+        <OtherProductIncomeModal
+          visible={otherIncomeModalVisible}
+          onDismiss={() => setOtherIncomeModalVisible(false)}
+          onSaved={() => void fetchData('refresh')}
+        />
       </SafeAreaView>
     </View>
-  );
-}
-
-function CategoryBars({
-  title,
-  items,
-  color,
-  getColor,
-}: {
-  title: string;
-  items: Array<{ key: string; label: string; amount: number }>;
-  color: string;
-  getColor?: (key: string) => string;
-}) {
-  const categoryMax = Math.max(1, ...items.map((c) => c.amount));
-  return (
-    <GlassSurface padding={SPACING.md}>
-      <Text style={styles.groupTitle}>{title}</Text>
-      {items.length === 0 ? (
-        <Text style={styles.emptyText}>所选期间暂无该类数据</Text>
-      ) : (
-        items.map((item, idx) => (
-          <View
-            key={item.key}
-            style={[
-              styles.chartRow,
-              idx === items.length - 1 && { marginBottom: 0 },
-            ]}
-          >
-            <Text style={styles.chartLabel} numberOfLines={2}>
-              {item.label}
-            </Text>
-            <View style={styles.chartTrack}>
-              <View
-                style={[
-                  styles.chartFill,
-                  {
-                    width: `${Math.max((item.amount / categoryMax) * 100, 8)}%`,
-                    backgroundColor: getColor?.(item.key) ?? color,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.chartValue}>{formatCNY(item.amount)}</Text>
-          </View>
-        ))
-      )}
-    </GlassSurface>
   );
 }
 
@@ -803,6 +630,14 @@ const styles = StyleSheet.create({
   },
   block: { marginBottom: SPACING.lg },
   pressed: { opacity: 0.65 },
+  headerActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    maxWidth: 260,
+  },
   headerAction: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -877,6 +712,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   toggleText: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '500' },
+  moreFiltersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: SPACING.xs,
+  },
+  moreFiltersBtnText: { fontSize: 14, color: COLORS.brand, fontWeight: '600' },
   quickRangeRow: { flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' },
   quickRange: {
     backgroundColor: 'rgba(0,122,255,0.08)',
@@ -892,44 +736,6 @@ const styles = StyleSheet.create({
   },
   quickRangeText: { ...TYPE.caption, color: COLORS.brand, fontWeight: '600' },
   quickRangeTextActive: { color: COLORS.brand, fontWeight: '700' },
-
-  groupTitle: {
-    ...TYPE.body,
-    color: COLORS.text.primary,
-    fontWeight: '700',
-    marginBottom: SPACING.sm,
-  },
-  chartRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  chartLabel: {
-    ...TYPE.footnote,
-    color: COLORS.text.primary,
-    width: 170,
-    lineHeight: 17,
-  },
-  chartTrack: {
-    flex: 1,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    overflow: 'hidden',
-  },
-  chartFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: COLORS.brand,
-  },
-  chartValue: {
-    ...TYPE.caption,
-    color: COLORS.text.secondary,
-    width: 92,
-    textAlign: 'right',
-    fontVariant: ['tabular-nums'],
-  },
 
   // 明细
   listHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

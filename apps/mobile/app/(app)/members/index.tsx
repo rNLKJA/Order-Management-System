@@ -2,7 +2,7 @@
  * 会员列表（正式会员）— v3 Glass + Bento。
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useDeferredValue } from 'react';
 import { View, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -26,8 +26,9 @@ import { COLORS, SPACING, TYPE } from '../../../theme/paperTheme';
 import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 type MemberFilter = 'all' | 'hospital' | 'regular' | 'expired';
-const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
-type LimitOption = (typeof LIMIT_OPTIONS)[number];
+
+/** 与 GET /api/members 上限一致；不再展示「每次加载」选择，避免小批量 + 本地筛选漏人 */
+const MEMBERS_LIST_LIMIT = 500;
 
 export default function MembersScreen() {
   const scrollRef = useRef<ScrollView>(null);
@@ -35,28 +36,39 @@ export default function MembersScreen() {
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<MemberFilter>('all');
-  const [limit, setLimit] = useState<LimitOption>(50);
 
-  const { data, isLoading, error, refetch } = useMembersViewWithLimit(limit);
+  const normalizedQuery = query.trim().normalize('NFC');
+  const deferredServerQ = useDeferredValue(normalizedQuery);
+  const qLower = normalizedQuery.toLowerCase();
+
+  const { data, isLoading, error, refetch } = useMembersViewWithLimit(MEMBERS_LIST_LIMIT, deferredServerQ);
   // 会员档案只显示正式会员，散客走 /walkins 独立目录
   const members = (data ?? []).filter((m) => !m.is_walkin);
 
-  const normalizedQuery = query.trim().normalize('NFC');
-  const qLower = normalizedQuery.toLowerCase();
+  const isSearchMode = normalizedQuery.length > 0;
 
-  const filtered = members.filter((m) => {
-    const matchQ =
-      !normalizedQuery ||
-      [m.name, m.nickname, m.phone, m.wechat_id, m.uid].some((v) =>
-        v.normalize('NFC').toLowerCase().includes(qLower),
-      );
-    const matchFilter =
-      filter === 'all' ||
-      (filter === 'hospital' && m.is_hospital) ||
-      (filter === 'regular' && !m.is_hospital) ||
-      (filter === 'expired' && !m.active_card);
-    return matchQ && matchFilter;
-  });
+  const filtered = useMemo(() => {
+    const list = members.filter((m) => {
+      const matchQ =
+        !normalizedQuery ||
+        [m.name, m.nickname, m.phone, m.wechat_id, m.uid].some((v) =>
+          v.normalize('NFC').toLowerCase().includes(qLower),
+        );
+      const matchFilter =
+        filter === 'all' ||
+        (filter === 'hospital' && m.is_hospital) ||
+        (filter === 'regular' && !m.is_hospital) ||
+        (filter === 'expired' && !m.active_card);
+      return matchQ && matchFilter;
+    });
+    list.sort((a, b) => {
+      const aNeed = !a.active_card ? 1 : 0;
+      const bNeed = !b.active_card ? 1 : 0;
+      if (bNeed !== aNeed) return bNeed - aNeed;
+      return a.id - b.id;
+    });
+    return list;
+  }, [members, normalizedQuery, qLower, filter]);
 
   const expiredCount = members.filter((m) => !m.active_card).length;
   const hospitalCount = useMemo(() => members.filter((m) => m.is_hospital).length, [members]);
@@ -87,7 +99,13 @@ export default function MembersScreen() {
               <SectionLabel>概览</SectionLabel>
               <BentoGrid gap={SPACING.md}>
                 <Bento span={3} mobileSpan={6}>
-                  <StatTile label="总会员" value={`${members.length}`} icon="people-outline" color={COLORS.brand} tint="info" />
+                  <StatTile
+                    label={isSearchMode ? '搜索结果' : '总会员'}
+                    value={`${members.length}`}
+                    icon="people-outline"
+                    color={COLORS.brand}
+                    tint="info"
+                  />
                 </Bento>
                 <Bento span={3} mobileSpan={6}>
                   <StatTile label="院内" value={`${hospitalCount}`} icon="business-outline" color={COLORS.info} tint="warn" />
@@ -129,15 +147,7 @@ export default function MembersScreen() {
                     </Pressable>
                   ) : null}
                 </View>
-                <View style={styles.limitRow}>
-                  <Text style={styles.limitLabel}>每次加载</Text>
-                  {LIMIT_OPTIONS.map((n) => (
-                    <Pressable key={n} style={[styles.limitChip, limit === n && styles.limitChipActive]} onPress={() => setLimit(n)}>
-                      <Text style={[styles.limitChipText, limit === n && styles.limitChipTextActive]}>{n}</Text>
-                    </Pressable>
-                  ))}
-                  <Text style={styles.filterCount}>{filtered.length} 位</Text>
-                </View>
+                <Text style={styles.listSortHint}>无有效餐卡的会员排在前面，便于点开续卡。</Text>
               </GlassSurface>
             </View>
 
@@ -243,18 +253,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   searchInput: { flex: 1, ...TYPE.body, color: COLORS.text.primary },
+  listSortHint: {
+    ...TYPE.caption,
+    color: COLORS.text.quaternary,
+    marginTop: 4,
+    lineHeight: 18,
+  },
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: COLORS.systemGrouped },
   filterChipActive: { backgroundColor: COLORS.brand },
   filterChipText: { ...TYPE.caption, color: COLORS.text.tertiary, fontWeight: '600' },
   filterChipTextActive: { color: '#fff' },
-  limitRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  limitLabel: { ...TYPE.caption, color: COLORS.text.tertiary, marginRight: 4 },
-  limitChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14, backgroundColor: COLORS.systemGrouped },
-  limitChipActive: { backgroundColor: COLORS.brandSoft },
-  limitChipText: { ...TYPE.caption, color: COLORS.text.tertiary, fontWeight: '600' },
-  limitChipTextActive: { color: COLORS.brand },
-  filterCount: { marginLeft: 'auto', ...TYPE.caption, color: COLORS.text.tertiary },
 
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
   rowContent: { flex: 1, gap: 4, minWidth: 0, marginLeft: SPACING.md },

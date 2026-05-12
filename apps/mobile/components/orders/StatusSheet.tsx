@@ -113,6 +113,8 @@ export function StatusSheet({
                   {' · '}
                   {isAdhoc ? `散餐 ¥${order.amount}` : order.card_type}
                   {order.is_hospital ? ' · 院内' : ''}
+                  {order.is_gift ? ' · 赠送餐' : ''}
+                  {order.is_staff_meal ? ' · 员工餐' : ''}
                 </Text>
               </View>
             </View>

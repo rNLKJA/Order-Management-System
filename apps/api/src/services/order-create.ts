@@ -5,7 +5,7 @@
 
 import { HTTPException } from 'hono/http-exception';
 import { eq } from 'drizzle-orm';
-import type { OrderCreateInput } from '@meal/shared';
+import type { OrderCreateEntryInput } from '@meal/shared';
 import { schema, type Db } from '../db/client.js';
 import { deductMeals, getAdHocPrice } from './orders.js';
 import { getOrCreateWalkinMember } from './walkin.js';
@@ -18,13 +18,19 @@ export interface OrderCreateTransactionResult {
   card_exhausted: boolean;
 }
 
+/** inline：逐行写入 proof_images_json（旧数据 / 测试）；set：仅挂 proof_set_id，正文在 order_proof_sets */
+export type OrderProofStorage =
+  | { mode: 'inline'; images: string[] }
+  | { mode: 'set'; setId: number };
+
 /**
- * @param input 已含 proof_images（单条）或与 batch 合并后的完整 OrderCreateInput
+ * @param input 不含 proof_images 的订餐字段（凭证由 proof 单独传入）
  */
 export async function insertOrdersInTransaction(
   tx: Tx,
-  input: OrderCreateInput,
+  input: OrderCreateEntryInput,
   createdByUserId: number,
+  proof: OrderProofStorage,
 ): Promise<OrderCreateTransactionResult> {
   const lunchQty = input.lunch_qty ?? 0;
   const dinnerQty = input.dinner_qty ?? 0;
@@ -32,6 +38,7 @@ export async function insertOrdersInTransaction(
   const customerName = (input.customer_name ?? '').trim();
   const isWalkin = customerName.length > 0 && !input.member_id;
   const isGift = input.is_gift ?? false;
+  const isStaffMeal = input.is_staff_meal ?? false;
 
   if (!isWalkin) {
     const memberRows = await tx
@@ -83,7 +90,8 @@ export async function insertOrdersInTransaction(
 
   const deliveryChannel = input.delivery_channel ?? 'self';
   const courierRef = (input.courier_ref ?? '').trim();
-  const proofJson = JSON.stringify(input.proof_images);
+  const proofJson = proof.mode === 'set' ? '[]' : JSON.stringify(proof.images);
+  const proofSetId = proof.mode === 'set' ? proof.setId : null;
 
   const orderValues: Array<typeof schema.daily_orders.$inferInsert> = [];
 
@@ -98,7 +106,9 @@ export async function insertOrdersInTransaction(
     delivery_channel: deliveryChannel,
     courier_ref: courierRef,
     is_gift: isGift,
+    is_staff_meal: isStaffMeal,
     proof_images_json: proofJson,
+    proof_set_id: proofSetId,
   };
 
   if (lunchQty > 0) {

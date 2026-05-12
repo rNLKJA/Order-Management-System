@@ -124,6 +124,10 @@ async function repairLegacyColumnsAfterJournalSkip() {
     'ALTER TABLE `daily_orders` ADD `is_gift` integer DEFAULT false NOT NULL',
     "ALTER TABLE `daily_orders` ADD `proof_images_json` text DEFAULT '[]' NOT NULL",
     'CREATE INDEX IF NOT EXISTS `orders_delivery_channel_idx` ON `daily_orders` (`delivery_channel`)',
+    'CREATE TABLE IF NOT EXISTS `order_proof_sets` (`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL, `proof_images_json` text NOT NULL, `created_by_user_id` integer NOT NULL REFERENCES users(id), `created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL)',
+    'ALTER TABLE `daily_orders` ADD `proof_set_id` integer REFERENCES order_proof_sets(id)',
+    'CREATE INDEX IF NOT EXISTS `daily_orders_proof_set_idx` ON `daily_orders` (`proof_set_id`)',
+    'CREATE INDEX IF NOT EXISTS `order_proof_sets_created_by_idx` ON `order_proof_sets` (`created_by_user_id`)',
   ];
 
   for (const statement of repairs) {

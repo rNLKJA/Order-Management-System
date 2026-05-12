@@ -146,6 +146,26 @@ export const cards = sqliteTable(
   }),
 );
 
+// =========== order_proof_sets ===========
+
+/** 一次录入共用的凭证 JSON；多行 daily_orders 共享同一 proof_set_id，避免重复存 data URL。 */
+export const order_proof_sets = sqliteTable(
+  'order_proof_sets',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    proof_images_json: text('proof_images_json').notNull(),
+    created_by_user_id: integer('created_by_user_id')
+      .notNull()
+      .references(() => users.id),
+    created_at: integer('created_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('now') * 1000)`),
+  },
+  (t) => ({
+    createdByIdx: index('order_proof_sets_created_by_idx').on(t.created_by_user_id),
+  }),
+);
+
 // =========== daily_orders ===========
 
 export const daily_orders = sqliteTable(
@@ -194,8 +214,12 @@ export const daily_orders = sqliteTable(
     notes: text('notes').notNull().default(''),
     /** 赠送餐：不扣会员卡次数；送达时不记 meal_earned 收入 */
     is_gift: integer('is_gift', { mode: 'boolean' }).notNull().default(false),
+    /** 员工餐：仍按现有规则扣卡/记收入，仅用于报表与列表区分 */
+    is_staff_meal: integer('is_staff_meal', { mode: 'boolean' }).notNull().default(false),
     /** JSON 数组：订餐凭证截图 data URL 列表（审计用） */
     proof_images_json: text('proof_images_json').notNull().default('[]'),
+    /** 非空时凭证正文在 order_proof_sets，本列常为 [] */
+    proof_set_id: integer('proof_set_id').references(() => order_proof_sets.id),
   },
   (t) => ({
     memberIdx: index('orders_member_idx').on(t.member_id),
@@ -203,6 +227,7 @@ export const daily_orders = sqliteTable(
     dateIdx: index('orders_date_idx').on(t.order_date),
     statusIdx: index('orders_status_idx').on(t.status),
     deliveryChannelIdx: index('orders_delivery_channel_idx').on(t.delivery_channel),
+    proofSetIdx: index('daily_orders_proof_set_idx').on(t.proof_set_id),
   }),
 );
 
@@ -340,6 +365,77 @@ export const export_logs = sqliteTable(
   }),
 );
 
+/** 汇总计算记录 sheet：按行导入的「总收入/总支出/剩余」快照（V5 xlsm） */
+export const imported_summary_snapshots = sqliteTable(
+  'imported_summary_snapshots',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    snapshot_date: text('snapshot_date').notNull(),
+    total_income: real('total_income').notNull(),
+    total_expense: real('total_expense').notNull(),
+    balance: real('balance').notNull(),
+    source_sheet: text('source_sheet').notNull().default('汇总计算记录'),
+    extra_json: text('extra_json').notNull().default('{}'),
+    created_by_user_id: integer('created_by_user_id')
+      .notNull()
+      .references(() => users.id),
+    created_at: integer('created_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('now') * 1000)`),
+  },
+  (t) => ({
+    dateIdx: index('imported_summary_snapshots_date_idx').on(t.snapshot_date),
+  }),
+);
+
+/** 每周结账 sheet 行（V5 xlsm） */
+export const imported_weekly_closings = sqliteTable(
+  'imported_weekly_closings',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    period_label: text('period_label').notNull(),
+    inferred_date: text('inferred_date'),
+    amount: real('amount').notNull(),
+    description: text('description').notNull().default(''),
+    sort_order: integer('sort_order').notNull(),
+    source_sheet: text('source_sheet').notNull().default('每周结账'),
+    extra_json: text('extra_json').notNull().default('{}'),
+    created_by_user_id: integer('created_by_user_id')
+      .notNull()
+      .references(() => users.id),
+    created_at: integer('created_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('now') * 1000)`),
+  },
+  (t) => ({
+    sortIdx: index('imported_weekly_closings_sort_idx').on(t.sort_order),
+  }),
+);
+
+/** 订餐汇总 sheet：客户宽表整行 JSON + 核心份数列（V5 xlsm） */
+export const imported_order_summaries = sqliteTable(
+  'imported_order_summaries',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    customer_id: text('customer_id').notNull(),
+    excel_row: integer('excel_row').notNull(),
+    total_meals: integer('total_meals'),
+    used_meals: integer('used_meals'),
+    remaining_meals: integer('remaining_meals'),
+    row_json: text('row_json').notNull(),
+    source_sheet: text('source_sheet').notNull().default('订餐汇总'),
+    created_by_user_id: integer('created_by_user_id')
+      .notNull()
+      .references(() => users.id),
+    created_at: integer('created_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(unixepoch('now') * 1000)`),
+  },
+  (t) => ({
+    cidIdx: index('imported_order_summaries_cid_idx').on(t.customer_id),
+  }),
+);
+
 // =========== 类型导出 ===========
 
 export type User = typeof users.$inferSelect;
@@ -352,6 +448,9 @@ export type DailyOrder = typeof daily_orders.$inferSelect;
 export type NewDailyOrder = typeof daily_orders.$inferInsert;
 export type FinanceEntry = typeof finance_entries.$inferSelect;
 export type NewFinanceEntry = typeof finance_entries.$inferInsert;
+export type ImportedSummarySnapshot = typeof imported_summary_snapshots.$inferSelect;
+export type ImportedWeeklyClosing = typeof imported_weekly_closings.$inferSelect;
+export type ImportedOrderSummary = typeof imported_order_summaries.$inferSelect;
 export type AuditLog = typeof audit_logs.$inferSelect;
 export type NewAuditLog = typeof audit_logs.$inferInsert;
 export type Setting = typeof settings.$inferSelect;

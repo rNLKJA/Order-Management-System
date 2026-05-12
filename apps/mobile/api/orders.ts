@@ -32,8 +32,11 @@ export interface DailyOrder {
   notes: string;
   /** 赠送餐：不扣次、送达不计收入 */
   is_gift: boolean;
-  /** JSON 数组字符串，客户端可 JSON.parse */
+  /** 员工餐（股东/内部送餐等标记） */
+  is_staff_meal?: boolean;
+  /** JSON 数组字符串，客户端可 JSON.parse（若 proof_set_id 有值，列表接口会展开合并进此字段） */
   proof_images_json: string;
+  proof_set_id?: number | null;
 }
 
 export interface Card {
@@ -72,6 +75,8 @@ export interface CreateOrderInput {
   created_by_user_id?: number;
   /** 赠送餐：不扣会员卡次数 */
   is_gift?: boolean;
+  /** 员工餐标记 */
+  is_staff_meal?: boolean;
   /** 订餐凭证截图 data URL，至少 1 张 */
   proof_images: string[];
 }

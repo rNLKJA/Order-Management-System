@@ -30,6 +30,7 @@ import {
 } from '../services/orders.js';
 import { createMealEarnedIncome } from '../services/finance.js';
 import { insertOrdersInTransaction } from '../services/order-create.js';
+import { hydrateOrderProofs } from '../services/order-proof-hydrate.js';
 import { orderCreateSchema, orderBatchCreateSchema, type OrderCreateInput } from '@meal/shared';
 
 export const ordersRouter = new Hono<{ Variables: AuthVariables }>();
@@ -74,7 +75,7 @@ ordersRouter.get('/today', zValidator('query', todayQuerySchema), async (c) => {
     rows = rows.filter((r) => r.member?.is_hospital === isHospital);
   }
 
-  return c.json({ orders: rows.map((r) => r.order) });
+  return c.json({ orders: await hydrateOrderProofs(db, rows.map((r) => r.order)) });
 });
 
 // ==================== GET /api/orders ====================
@@ -153,7 +154,7 @@ ordersRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
       .offset(offset);
 
     const filtered = rows.filter((r) => r.is_hospital === isHospital).map((r) => r.order);
-    return c.json({ orders: filtered });
+    return c.json({ orders: await hydrateOrderProofs(db, filtered) });
   }
 
   const rows = await db
@@ -164,7 +165,7 @@ ordersRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
     .limit(limit)
     .offset(offset);
 
-  return c.json({ orders: rows });
+  return c.json({ orders: await hydrateOrderProofs(db, rows) });
 });
 
 // ==================== GET /api/orders/:id ====================
@@ -187,7 +188,8 @@ ordersRouter.get('/:id', zValidator('param', idParamSchema), async (c) => {
     throw new HTTPException(404, { message: '订单不存在' });
   }
 
-  return c.json({ order: rows[0] });
+  const [order] = await hydrateOrderProofs(db, [rows[0]]);
+  return c.json({ order });
 });
 
 // ==================== POST /api/orders ====================
@@ -219,7 +221,18 @@ ordersRouter.post('/', zValidator('json', orderCreateSchema), async (c) => {
   let result: Awaited<ReturnType<typeof insertOrdersInTransaction>>;
   try {
     result = await db.transaction(async (tx) => {
-      return insertOrdersInTransaction(tx, input, createdByUserId);
+      const [ps] = await tx
+        .insert(schema.order_proof_sets)
+        .values({
+          proof_images_json: JSON.stringify(input.proof_images),
+          created_by_user_id: createdByUserId,
+        })
+        .returning();
+      if (!ps) {
+        throw new HTTPException(500, { message: '凭证保存失败' });
+      }
+      const { proof_images: _proof, ...entry } = input;
+      return insertOrdersInTransaction(tx, entry, createdByUserId, { mode: 'set', setId: ps.id });
     });
   } catch (err) {
     if (err instanceof InsufficientMealBalanceError) {
@@ -229,7 +242,7 @@ ordersRouter.post('/', zValidator('json', orderCreateSchema), async (c) => {
   }
 
   const responseBody = {
-    orders: result.orders,
+    orders: await hydrateOrderProofs(db, result.orders),
     ...(result.card ? { card: result.card, card_exhausted: result.card_exhausted } : {}),
   };
 
@@ -255,13 +268,23 @@ ordersRouter.post('/batch', zValidator('json', orderBatchCreateSchema), async (c
 
   try {
     const batchResult = await db.transaction(async (tx) => {
+      const [ps] = await tx
+        .insert(schema.order_proof_sets)
+        .values({
+          proof_images_json: JSON.stringify(proof_images),
+          created_by_user_id: authUser.id,
+        })
+        .returning();
+      if (!ps) {
+        throw new HTTPException(500, { message: '凭证保存失败' });
+      }
+
       const allOrders: (typeof schema.daily_orders.$inferSelect)[] = [];
       let lastCard: typeof schema.cards.$inferSelect | null = null;
       let anyExhausted = false;
       for (const entry of entries) {
         const createdBy = entry.created_by_user_id ?? authUser.id;
-        const merged: OrderCreateInput = { ...entry, proof_images };
-        const r = await insertOrdersInTransaction(tx, merged, createdBy);
+        const r = await insertOrdersInTransaction(tx, entry, createdBy, { mode: 'set', setId: ps.id });
         allOrders.push(...r.orders);
         if (r.card) {
           lastCard = r.card;
@@ -272,7 +295,7 @@ ordersRouter.post('/batch', zValidator('json', orderBatchCreateSchema), async (c
     });
 
     const responseBody = {
-      orders: batchResult.orders,
+      orders: await hydrateOrderProofs(db, batchResult.orders),
       ...(batchResult.card
         ? { card: batchResult.card, card_exhausted: batchResult.card_exhausted }
         : {}),
@@ -342,7 +365,8 @@ ordersRouter.patch('/:id', zValidator('param', idParamSchema), zValidator('json'
     .where(eq(schema.daily_orders.id, id))
     .limit(1);
 
-  return c.json({ order: updated[0] });
+  const [out] = await hydrateOrderProofs(db, [updated[0]!]);
+  return c.json({ order: out });
 });
 
 // ==================== PATCH /api/orders/:id/status ====================
@@ -395,7 +419,8 @@ ordersRouter.patch(
     }
 
     if (order.status === nextStatus) {
-      return c.json({ order });
+      const [o] = await hydrateOrderProofs(db, [order]);
+      return c.json({ order: o });
     }
 
     // 送达 / 取消 均为终态，明确拒绝
@@ -495,7 +520,8 @@ ordersRouter.patch(
       .where(eq(schema.daily_orders.id, id))
       .limit(1);
 
-    return c.json({ order: updated[0] });
+    const [o] = await hydrateOrderProofs(db, [updated[0]!]);
+    return c.json({ order: o });
   },
 );
 
@@ -534,8 +560,9 @@ ordersRouter.patch(
           });
         });
 
+        const [ho] = await hydrateOrderProofs(db, [result.order]);
         return c.json({
-          order: result.order,
+          order: ho,
           ...(result.card ? { card: result.card } : {}),
         });
       } catch (err) {
@@ -569,8 +596,9 @@ ordersRouter.patch(
           });
         });
 
+        const [ho] = await hydrateOrderProofs(db, [result.order]);
         return c.json({
-          order: result.order,
+          order: ho,
           ...(result.card ? { card: result.card } : {}),
         });
       } catch (err) {
@@ -616,8 +644,9 @@ ordersRouter.patch(
         });
       });
 
+      const [ho] = await hydrateOrderProofs(db, [result.order]);
       return c.json({
-        order: result.order,
+        order: ho,
         ...(result.card ? { card: result.card } : {}),
       });
     } catch (err) {

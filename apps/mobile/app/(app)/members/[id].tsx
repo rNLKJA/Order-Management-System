@@ -756,6 +756,11 @@ function MemberOrderRow({
               <Text style={[styles.mOrderChipText, { color: '#FF9500' }]}>散餐</Text>
             </View>
           ) : null}
+          {order.is_staff_meal ? (
+            <View style={[styles.mOrderChip, { backgroundColor: '#E8F4FC' }]}>
+              <Text style={[styles.mOrderChipText, { color: '#007AFF' }]}>员工餐</Text>
+            </View>
+          ) : null}
           {order.delivery_channel === 'courier' ? (
             <View style={[styles.mOrderChip, { backgroundColor: '#F5E9FC' }]}>
               <Text style={[styles.mOrderChipText, { color: '#AF52DE' }]}>快递</Text>

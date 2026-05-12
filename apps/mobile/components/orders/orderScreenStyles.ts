@@ -242,6 +242,7 @@ export const orderScreenStyles = StyleSheet.create({
   },
   adhocTag: { fontSize: 12, color: '#FF9500', backgroundColor: '#FFF4E5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   giftTag: { fontSize: 12, color: '#AF52DE', backgroundColor: '#F5EEFB', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, fontWeight: '600' },
+  staffMealTag: { fontSize: 12, color: '#007AFF', backgroundColor: '#E8F4FC', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, fontWeight: '600' },
   orderQty: { fontSize: 14, fontWeight: '600', color: IOS_COLORS.label },
   proofPill: {
     flexDirection: 'row',

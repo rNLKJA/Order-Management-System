@@ -54,6 +54,7 @@ export function dailyOrderToMockOrder(
     delivery_channel: order.delivery_channel ?? 'self',
     courier_ref: order.courier_ref || undefined,
     is_gift: order.is_gift,
+    is_staff_meal: order.is_staff_meal ?? false,
     proof_images: parseProofImagesJson(order.proof_images_json),
   };
 }

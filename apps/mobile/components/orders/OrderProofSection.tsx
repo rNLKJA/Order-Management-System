@@ -3,11 +3,12 @@
  *
  * Web：与 lib/avatar.ts 一致——用 document.createElement('input') 挂到 body 再 click()，
  * 不用 RN Web 里的隐藏 input（ref 与 change 在移动端浏览器/Safari 上常失灵）。
- * 原生：多选时若仅返回 uri、无 base64，则用 expo-file-system 读文件再生成 data URL。
+ * 原生：先用 expo-image-manipulator 压到长边 ≤1280、JPEG ~0.72，再上传；失败则回退 file-system/base64。
  */
 
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import { manipulateAsync, SaveFormat, type Action } from 'expo-image-manipulator';
 import { useState } from 'react';
 import {
   View,
@@ -23,6 +24,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../theme/paperTheme';
 
 const MAX_PROOF = 12;
+/** 长边上限（凭证需能辨认微信聊天记录，1280 在清晰度与体积间折中） */
+const PROOF_MAX_LONG_EDGE = 1280;
+const PROOF_JPEG_QUALITY = 0.72;
 
 async function readBrowserFilesAsDataUrls(
   files: FileList,
@@ -44,6 +48,48 @@ async function readBrowserFilesAsDataUrls(
         }),
     ),
   );
+}
+
+function downscaleProofDataUrlWeb(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined' || !dataUrl.startsWith('data:image/')) {
+      resolve(dataUrl);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w0 = img.naturalWidth;
+        const h0 = img.naturalHeight;
+        if (!w0 || !h0) {
+          resolve(dataUrl);
+          return;
+        }
+        const long = Math.max(w0, h0);
+        let w = w0;
+        let h = h0;
+        if (long > PROOF_MAX_LONG_EDGE) {
+          const s = PROOF_MAX_LONG_EDGE / long;
+          w = Math.max(1, Math.round(w0 * s));
+          h = Math.max(1, Math.round(h0 * s));
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', PROOF_JPEG_QUALITY));
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
 }
 
 /**
@@ -80,7 +126,8 @@ function pickProofImagesWeb(maxCount: number): Promise<string[]> {
       }
       try {
         const urls = await readBrowserFilesAsDataUrls(files, maxCount);
-        finalize(urls);
+        const shrunk = await Promise.all(urls.map((u) => downscaleProofDataUrlWeb(u)));
+        finalize(shrunk);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[order-proof] read failed', err);
@@ -104,15 +151,57 @@ function normalizeProofMime(mimeType: string | undefined, uri: string): string {
   return 'image/jpeg';
 }
 
+async function nativeAssetToJpegProofDataUrl(asset: ImagePicker.ImagePickerAsset): Promise<string | null> {
+  const uri = asset.uri;
+  if (!uri) return null;
+  const w = asset.width ?? 0;
+  const h = asset.height ?? 0;
+  let actions: Action[];
+  const long = Math.max(w, h);
+  if (w > 0 && h > 0 && long > PROOF_MAX_LONG_EDGE) {
+    const s = PROOF_MAX_LONG_EDGE / long;
+    actions = [
+      {
+        resize: {
+          width: Math.max(1, Math.round(w * s)),
+          height: Math.max(1, Math.round(h * s)),
+        },
+      },
+    ];
+  } else {
+    actions = [{ resize: { width: PROOF_MAX_LONG_EDGE } }];
+  }
+  try {
+    const result = await manipulateAsync(uri, actions, {
+      compress: PROOF_JPEG_QUALITY,
+      format: SaveFormat.JPEG,
+      base64: true,
+    });
+    if (result.base64) {
+      return `data:image/jpeg;base64,${result.base64}`;
+    }
+    const b64 = await FileSystem.readAsStringAsync(result.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return `data:image/jpeg;base64,${b64}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * 多选时部分机型/系统版本下 launchImageLibraryAsync 可能不填 base64，仅给 uri。
- * 此时用文件系统读入再拼 data URL，否则 onChange 收不到任何字符串，界面上就像「选了图但不显示」。
+ * 相册多选：优先压缩 JPEG；失败时再走原图 base64 / 读文件（与 Zod 允许的非 JPEG mime 一致）。
  */
 async function imagePickerAssetsToProofDataUrls(
   assets: ImagePicker.ImagePickerAsset[],
 ): Promise<string[]> {
   const out: string[] = [];
   for (const a of assets) {
+    const compressed = await nativeAssetToJpegProofDataUrl(a);
+    if (compressed) {
+      out.push(compressed);
+      continue;
+    }
     const mime = normalizeProofMime(a.mimeType, a.uri ?? '');
     let b64 = a.base64 ?? null;
     if (!b64 && a.uri) {
@@ -140,7 +229,7 @@ export async function launchProofImagePicker(): Promise<string[]> {
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     allowsMultipleSelection: true,
     selectionLimit: MAX_PROOF,
-    quality: 0.35,
+    quality: 0.55,
     base64: true,
   });
   if (res.canceled || !res.assets?.length) return [];

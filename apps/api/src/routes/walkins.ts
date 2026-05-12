@@ -13,6 +13,7 @@ import { HTTPException } from 'hono/http-exception';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { schema } from '../db/client.js';
 import { requestDb } from '../db/request-db.js';
+import { hydrateOrderProofs } from '../services/order-proof-hydrate.js';
 import { requireAuth, type AuthVariables } from '../middleware/jwt.js';
 
 export const walkinsRouter = new Hono<{ Variables: AuthVariables }>();
@@ -85,11 +86,13 @@ walkinsRouter.get('/:id{[0-9]+}', async (c) => {
     });
   }
 
-  const orders = await db
+  const orderRows = await db
     .select()
     .from(schema.daily_orders)
     .where(eq(schema.daily_orders.member_id, id))
     .orderBy(desc(schema.daily_orders.order_date), desc(schema.daily_orders.id));
+
+  const orders = await hydrateOrderProofs(db, orderRows);
 
   const activeOrders = orders.filter((o) => o.status !== 'cancelled');
   const stats = {

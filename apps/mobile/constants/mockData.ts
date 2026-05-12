@@ -84,6 +84,8 @@ export interface MockOrder {
   customer_name?: string;
   /** 赠送餐：不扣次、送达不计收入 */
   is_gift?: boolean;
+  /** 员工餐（股东/内部送餐等） */
+  is_staff_meal?: boolean;
   /** 订餐凭证截图 URL（data URL 或后续可扩展为托管地址），来自 daily_orders.proof_images_json */
   proof_images?: string[];
 }

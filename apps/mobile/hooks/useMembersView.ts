@@ -27,7 +27,8 @@ import type { MockMember } from '../constants/mockData';
 
 const KEYS = {
   users: ['users'] as const,
-  membersList: (limit: number) => ['members', 'list', limit] as const,
+  membersList: (limit: number, serverSearch: string) =>
+    ['members', 'list', limit, serverSearch] as const,
   member: (id: number) => ['members', 'detail', id] as const,
   /** 会员维度的订餐流水（GET /api/orders?member_id=） */
   memberOrders: (id: number, limit: number) => ['members', 'detail', id, 'orders', limit] as const,
@@ -59,24 +60,29 @@ export interface UseMembersViewResult {
  * 聚焦页面时自动重取。
  */
 export function useMembersView(): UseMembersViewResult {
-  return useMembersViewWithLimit(200);
+  return useMembersViewWithLimit(500, '');
 }
 
-export function useMembersViewWithLimit(limit: 10 | 50 | 100 | 200): UseMembersViewResult {
+export function useMembersViewWithLimit(
+  listLimit: number,
+  /** 非空时走服务端 `q` 搜索（避免只拉前 N 条导致搜不到老会员） */
+  serverSearch = '',
+): UseMembersViewResult {
   const usersQuery = useUsersMap();
   const queryClient = useQueryClient();
+  const browseLimit = Math.min(500, Math.max(1, Math.floor(listLimit)));
 
   const query = useQuery({
-    queryKey: KEYS.membersList(limit),
+    queryKey: KEYS.membersList(browseLimit, serverSearch.trim()),
     enabled: !!usersQuery.data,
     queryFn: async (): Promise<MockMember[]> => {
-      // 拿全量（会员 + 散客），订餐页的送餐卡片需要拿到散客的 phone/address；
-      // 纯会员列表页消费侧会自己再过滤一次 is_walkin=false。
-      const { items } = await membersApi.list({
-        limit,
-        include_archived: false,
-        type: 'all',
-      });
+      const q = serverSearch.trim();
+      const searchLimit = 500;
+      const { items } = await membersApi.list(
+        q.length > 0
+          ? { limit: searchLimit, type: 'all', include_archived: false, q }
+          : { limit: browseLimit, type: 'all', include_archived: false },
+      );
       const usersMap = usersQuery.data ?? {};
       const results = await Promise.all(
         items.map(async (m) => {

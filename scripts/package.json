@@ -8,6 +8,8 @@
     "reset-admin-password": "tsx src/reset-admin-password.ts",
     "create-user": "tsx src/create-user.ts",
     "import-excel": "tsx src/import-excel.ts",
+    "xlsm-import": "tsx src/xlsm-import.ts",
+    "patch-v5-xlsm": "tsx src/patch-v5-xlsm.ts",
     "restore": "tsx src/restore.ts",
     "sync-linear": "tsx src/sync-linear.ts",
     "typecheck": "tsc --noEmit",
@@ -19,8 +21,9 @@
     "@meal/api": "workspace:*",
     "@meal/shared": "workspace:*",
     "@node-rs/argon2": "^2.0.0",
+    "dotenv": "^16.4.0",
     "drizzle-orm": "^0.36.0",
-    "dotenv": "^16.4.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

@@ -74,6 +74,7 @@ export function EntryPanel({
     courierRef?: string;
     proofImages: string[];
     isGift?: boolean;
+    isStaffMeal?: boolean;
   }) => Promise<void>;
   onAddMemberBatchOrder?: (payload: {
     proof_images: string[];
@@ -84,6 +85,7 @@ export function EntryPanel({
       dinnerQty: number;
       notes?: string;
       isGift: boolean;
+      isStaffMeal: boolean;
       deliveryChannel: 'self' | 'courier';
       courierRef?: string;
     }>;
@@ -119,6 +121,7 @@ export function EntryPanel({
 
   const [memberBatchMode, setMemberBatchMode] = useState(quickInitial.batch);
   const [memberIsGift, setMemberIsGift] = useState(quickInitial.gift);
+  const [memberIsStaffMeal, setMemberIsStaffMeal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MockMember | null>(null);
   const [memberQuery, setMemberQuery] = useState('');
   const [lunchQty, setLunchQty] = useState(0);
@@ -201,6 +204,7 @@ export function EntryPanel({
     setMemberNotes('');
     setProofImages([]);
     setMemberIsGift(nextPreset.gift);
+    setMemberIsStaffMeal(false);
     setMemberBatchRows([]);
     setAdhocName(''); setAdhocPhone(''); setAdhocAddress('');
     setAdhocWechat('');
@@ -285,6 +289,7 @@ export function EntryPanel({
         dinnerQty: r.dinner,
         notes: memberNotes.trim() || undefined,
         isGift: memberIsGift,
+        isStaffMeal: memberIsStaffMeal,
         deliveryChannel,
         courierRef: deliveryChannel === 'courier' ? courierRef.trim() || undefined : undefined,
       }));
@@ -302,6 +307,7 @@ export function EntryPanel({
             courierRef: e.courierRef,
             proofImages,
             isGift: e.isGift,
+            isStaffMeal: e.isStaffMeal,
           });
         }
       }
@@ -340,6 +346,7 @@ export function EntryPanel({
         courierRef: deliveryChannel === 'courier' ? courierRef.trim() || undefined : undefined,
         proofImages,
         isGift: memberIsGift,
+        isStaffMeal: memberIsStaffMeal,
       });
       const name = selectedMember.nickname || selectedMember.name;
       reset();
@@ -551,6 +558,28 @@ export function EntryPanel({
                     ? '搜索并加入多位会员；列表里每一行各自调整午餐、晚餐份数。'
                     : '搜索并选定一位会员；页面中间只有一组午餐、晚餐份数。'}
                 </Text>
+              </>
+            )}
+
+            {mode === 'member' && (
+              <>
+                <Text style={[entryStyles.sectionLabel, { marginTop: 4 }]}>订餐标记</Text>
+                <View style={entryStyles.inlineCard}>
+                  <View style={entryStyles.fieldRow}>
+                    <View style={entryStyles.switchLabelCol}>
+                      <Text style={entryStyles.fieldLabel}>员工餐</Text>
+                      <Text style={entryStyles.switchHint}>股东/员工送餐等（仍按下方规则扣卡或赠送）</Text>
+                    </View>
+                    <Switch
+                      value={memberIsStaffMeal}
+                      onValueChange={setMemberIsStaffMeal}
+                      disabled={submitting}
+                      trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
+                      thumbColor={Platform.OS === 'android' ? (memberIsStaffMeal ? IOS_COLORS.blue : '#f4f3f4') : undefined}
+                      ios_backgroundColor={IOS_COLORS.fillMedium}
+                    />
+                  </View>
+                </View>
               </>
             )}
 
@@ -1062,6 +1091,7 @@ export function EntryPanel({
                       ? `已为 ${memberBatchRows.length} 人设行，请至少为一行填写午/晚份数`
                       : '请搜索并点行加入会员，再分别设份数'}
                   {proofOk ? '' : ' · 请先上传凭证'}
+                  {memberIsStaffMeal ? ' · 员工餐' : ''}
                 </Text>
               </>
             ) : selectedMember ? (
@@ -1081,6 +1111,7 @@ export function EntryPanel({
                       ? '无有效卡'
                       : `午 ${lunchQty} · 晚 ${dinnerQty}`}
                   {proofOk ? '' : ' · 请先上传凭证'}
+                  {memberIsStaffMeal ? ' · 员工餐' : ''}
                 </Text>
               </>
             ) : (
@@ -1113,8 +1144,10 @@ export function EntryPanel({
           ) : (
             <Text style={entryStyles.submitBtnText}>
               {mode === 'member' && memberBatchMode && memberBatchEntries.length > 0
-                ? `确认录入 (${memberBatchEntries.length}人)`
-                : '确认录入'}
+                ? `确认录入 (${memberBatchEntries.length}人${memberIsStaffMeal ? '·员工餐' : ''})`
+                : mode === 'member' && memberIsStaffMeal && !memberBatchMode
+                  ? '确认录入（员工餐）'
+                  : '确认录入'}
             </Text>
           )}
         </Pressable>
