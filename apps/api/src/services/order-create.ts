@@ -6,6 +6,7 @@
 import { HTTPException } from 'hono/http-exception';
 import { eq } from 'drizzle-orm';
 import type { OrderCreateEntryInput } from '@meal/shared';
+import { isStaffMealsCardCode } from '@meal/shared';
 import { schema, type Db } from '../db/client.js';
 import { deductMeals, getAdHocPrice } from './orders.js';
 import { getOrCreateWalkinMember } from './walkin.js';
@@ -38,9 +39,9 @@ export async function insertOrdersInTransaction(
   const customerName = (input.customer_name ?? '').trim();
   const isWalkin = customerName.length > 0 && !input.member_id;
   const isGift = input.is_gift ?? false;
-  const isStaffMealFromRequest = input.is_staff_meal ?? false;
+  /** 旧客户端显式「员工餐」开关：免扣次，不关联卡；新口径请用员工卡（staff）正常下单 */
+  const isStaffMealLegacyToggle = input.is_staff_meal ?? false;
 
-  let memberIsStaff = false;
   let memberId: number;
 
   if (!isWalkin) {
@@ -56,7 +57,6 @@ export async function insertOrdersInTransaction(
     if (!member.is_active) {
       throw new HTTPException(422, { message: '会员已归档，不能录入订餐' });
     }
-    memberIsStaff = member.is_staff;
     memberId = input.member_id!;
   } else {
     const walkinMember = await getOrCreateWalkinMember(
@@ -71,12 +71,9 @@ export async function insertOrdersInTransaction(
       },
     );
     memberId = walkinMember.id;
-    memberIsStaff = walkinMember.is_staff;
   }
 
-  /** 赠送、员工档案、或历史接口显式 is_staff_meal — 均免扣次、金额 0 */
-  const isFreeMeal = isGift || isStaffMealFromRequest || memberIsStaff;
-  const isStaffMealStored = isStaffMealFromRequest || memberIsStaff;
+  const isFreeMeal = isGift || isStaffMealLegacyToggle;
 
   const adHocPrice =
     input.adhoc_unit_price != null && input.adhoc_unit_price >= 0
@@ -96,6 +93,10 @@ export async function insertOrdersInTransaction(
       });
     }
   }
+
+  const isStaffMealStored =
+    isStaffMealLegacyToggle ||
+    Boolean(deductResult?.card && isStaffMealsCardCode(deductResult.card.card_code));
 
   const hasDeductedCard = deductResult !== null;
   const cardId = hasDeductedCard ? deductResult!.card.id : null;

@@ -171,13 +171,21 @@ describe('members routes - MEA-10', () => {
     expect(body.duplicatePhone).toBeUndefined();
   });
 
-  it('POST 创建 is_staff 会员', async () => {
-    const body = await createMember(staffToken, {
-      name: '员工档案甲',
-      phone: '13800000998',
-      is_staff: true,
-    });
-    expect(body.member.is_staff).toBe(true);
+  it('POST 请求体含 is_staff 时忽略（员工用餐走员工卡 staff）', async () => {
+    const res = await app.fetch(
+      new Request('http://test.local/api/members', {
+        method: 'POST',
+        headers: authHeaders(staffToken),
+        body: JSON.stringify({
+          name: '员工档案甲',
+          phone: '13800000998',
+          is_staff: true,
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as CreateResp;
+    expect(body.member.is_staff).toBe(false);
     expect(body.member.is_walkin).toBe(false);
   });
 

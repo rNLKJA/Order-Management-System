@@ -48,7 +48,10 @@ export async function createAutoSubscriptionIncome(
   type: 'income';
   source: 'auto';
   ref_card_id: number;
-}> {
+} | null> {
+  if (input.amount <= 0 || !Number.isFinite(input.amount)) {
+    return null;
+  }
   const category: CardPrepaidCategory = input.is_hospital
     ? 'card_prepaid_hospital'
     : 'card_prepaid_regular';
@@ -94,7 +97,7 @@ export interface MealEarnedInput {
 export async function createMealEarnedIncome(
   db: Inserter,
   input: MealEarnedInput,
-): Promise<{ id: number; category: MealEarnedCategory; amount: number }> {
+): Promise<{ id: number; category: MealEarnedCategory; amount: number } | null> {
   const { order, card, created_by_user_id } = input;
   const entry_date = order.order_date;
 
@@ -114,6 +117,10 @@ export async function createMealEarnedIncome(
     const who = (order.customer_name ?? '').trim();
     const meal = order.meal_type === 'lunch' ? '午餐' : '晚餐';
     description = `散客餐·已送达：${who ? `${who} · ` : ''}${meal} ${order.quantity} 份`;
+  }
+
+  if (amount <= 0 || !Number.isFinite(amount)) {
+    return null;
   }
 
   const rows = await db

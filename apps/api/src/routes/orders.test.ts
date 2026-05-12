@@ -26,10 +26,11 @@
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import type { drizzle } from 'drizzle-orm/libsql';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { createApp } from '../app.js';
 import { setupTestDb, seedUser, seedMember, seedCard } from '../test-helpers.js';
 import { signToken } from '../services/jwt.js';
+import { STAFF_CARD_POOL_MEALS } from '@meal/shared';
 import * as schema from '../db/schema.js';
 
 type TestDb = ReturnType<typeof drizzle<typeof schema>>;
@@ -222,14 +223,60 @@ describe('Orders API /api/orders', () => {
     expect(after[0]!.used_meals).toBe(0);
   });
 
-  it('POST 档案 is_staff 会员：无卡也可录入，不扣次，订单标员工餐', async () => {
+  it('POST 员工卡：扣 used、remaining 不变，订单标员工餐', async () => {
+    await deactivateDefaultCard();
+    await seedCard(db, {
+      member_id: memberId,
+      created_by_user_id: staffId,
+      collector_user_id: staffId,
+      card_code: 'staff',
+      is_hospital: false,
+      total_meals: STAFF_CARD_POOL_MEALS,
+      used_meals: 0,
+      unit_price: 0,
+      paid_amount: 0,
+      status: 'active',
+    });
+
+    const res = await app.fetch(
+      new Request('http://test.local/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: withProof({
+          member_id: memberId,
+          order_date: '2026-05-02',
+          lunch_qty: 2,
+        }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { orders: schema.DailyOrder[] };
+    expect(body.orders[0]!.is_staff_meal).toBe(true);
+    expect(body.orders[0]!.card_id).not.toBeNull();
+    expect(body.orders[0]!.amount).toBe(0);
+
+    const cardRows = await db
+      .select()
+      .from(schema.cards)
+      .where(and(eq(schema.cards.member_id, memberId), eq(schema.cards.status, 'active')))
+      .limit(1);
+    expect(cardRows[0]!.card_code).toBe('staff');
+    expect(cardRows[0]!.used_meals).toBe(2);
+    expect(cardRows[0]!.remaining_meals).toBe(STAFF_CARD_POOL_MEALS);
+  });
+
+  it('POST 仅档案 is_staff、无 active 卡：422', async () => {
     await deactivateDefaultCard();
     const { id: sid } = await seedMember(db, {
       created_by_user_id: staffId,
       name: '档内员工',
       phone: '13800007777',
-      is_staff: true,
     });
+    await db.update(schema.members).set({ is_staff: true }).where(eq(schema.members.id, sid));
+
     const res = await app.fetch(
       new Request('http://test.local/api/orders', {
         method: 'POST',
@@ -244,11 +291,7 @@ describe('Orders API /api/orders', () => {
         }),
       }),
     );
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { orders: schema.DailyOrder[] };
-    expect(body.orders[0]!.is_staff_meal).toBe(true);
-    expect(body.orders[0]!.card_id).toBeNull();
-    expect(body.orders[0]!.amount).toBe(0);
+    expect(res.status).toBe(422);
   });
 
   it('POST /api/orders/batch 一次录入多条', async () => {
@@ -1063,6 +1106,54 @@ describe('Orders API /api/orders', () => {
     expect(body.card).toBeDefined();
     expect(body.card!.used_meals).toBe(0);
     expect(body.card!.remaining_meals).toBe(40);
+  });
+
+  it('CANCEL 员工卡订单：只恢复 used，remaining 不变', async () => {
+    await deactivateDefaultCard();
+    const cardRes = await seedCard(db, {
+      member_id: memberId,
+      created_by_user_id: staffId,
+      collector_user_id: staffId,
+      card_code: 'staff',
+      is_hospital: false,
+      total_meals: 1000,
+      used_meals: 5,
+      unit_price: 0,
+      paid_amount: 0,
+      status: 'active',
+    });
+    const cardId = cardRes.id;
+
+    const inserted = await db
+      .insert(schema.daily_orders)
+      .values({
+        member_id: memberId,
+        card_id: cardId,
+        order_date: '2026-04-24',
+        meal_type: 'lunch',
+        quantity: 2,
+        amount: 0,
+        status: 'pending',
+        created_by_user_id: staffId,
+      })
+      .returning({ id: schema.daily_orders.id });
+    const orderId = inserted[0]!.id;
+
+    const res = await app.fetch(
+      new Request(`http://test.local/api/orders/${orderId}/cancel`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${staffToken}`,
+        },
+        body: JSON.stringify({ reason: '测员工卡冲销' }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { order: schema.DailyOrder; card?: schema.Card };
+    expect(body.card).toBeDefined();
+    expect(body.card!.used_meals).toBe(3);
+    expect(body.card!.remaining_meals).toBe(995);
   });
 
   it('CANCEL exhausted 卡 → 恢复后回 active', async () => {

@@ -95,6 +95,25 @@ describe('computeUpgrade 纯函数', () => {
     }
   });
 
+  it('员工卡升到月卡：旧卡已用不计入新卡；差价为全价', () => {
+    const monthHospital: CardSpec = {
+      code: 'month',
+      name: '月卡',
+      meals: 40,
+      unitPrice: 22,
+      totalPrice: 880,
+    };
+    const result = computeUpgrade({
+      oldPaidAmount: 0,
+      oldUsedMeals: 100,
+      oldCardCode: 'staff',
+      newCat: monthHospital,
+    });
+    expect(result.diff).toBe(880);
+    expect(result.newUsedMeals).toBe(0);
+    expect(result.newRemainingMeals).toBe(40);
+  });
+
   it('差价是浮点友好的（目录里都是整数，但保持 2 位小数的四舍五入行为）', () => {
     const cat: CardSpec = { code: 'month', name: '月卡', meals: 40, unitPrice: 25, totalPrice: 1000.55 };
     const result = computeUpgrade({

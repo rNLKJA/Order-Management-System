@@ -28,7 +28,7 @@ import {
   IconAvatar,
   StatusChip,
 } from '../../../components/ui';
-import { CARD_RENEWAL_THRESHOLD_MEALS, formatCNY, formatDate, type SubscriptionCardCode } from '@meal/shared';
+import { CARD_RENEWAL_THRESHOLD_MEALS, formatCNY, formatDate, isStaffMealsCardCode, type SubscriptionCardCode } from '@meal/shared';
 import { type MockCard } from '../../../constants/mockData';
 import { cardsApi } from '../../../api/cards';
 import { membersApi } from '../../../api/members';
@@ -306,7 +306,14 @@ export default function MemberDetailScreen() {
                 variant={member.is_hospital ? 'hospital' : 'regular'}
               />
               {member.is_staff ? (
-                <StatusChip label="内部员工" variant="neutral" />
+                <StatusChip
+                  label={
+                    member.active_card && isStaffMealsCardCode(member.active_card.card_code)
+                      ? '员工卡'
+                      : '员工档案'
+                  }
+                  variant="neutral"
+                />
               ) : null}
             </View>
           </GlassSurface>

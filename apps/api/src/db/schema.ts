@@ -219,7 +219,7 @@ export const daily_orders = sqliteTable(
     notes: text('notes').notNull().default(''),
     /** 赠送餐：不扣会员卡次数；送达时不记 meal_earned 收入 */
     is_gift: integer('is_gift', { mode: 'boolean' }).notNull().default(false),
-    /** 员工餐标记：下单时若会员 is_staff 为真会自动置 true；与赠送同口径不计收入 */
+    /** 员工餐标记：赠送餐 / 旧版 is_staff_meal；或扣款卡为 staff（员工卡）时为 true */
     is_staff_meal: integer('is_staff_meal', { mode: 'boolean' }).notNull().default(false),
     /** JSON 数组：订餐凭证截图 data URL 列表（审计用） */
     proof_images_json: text('proof_images_json').notNull().default('[]'),

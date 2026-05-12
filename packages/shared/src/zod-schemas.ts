@@ -50,8 +50,6 @@ export const memberCreateSchema = z.object({
   address: z.string().max(256).optional().default(''),
   dietary_notes: z.string().max(512).optional().default(''),
   is_hospital: z.boolean().default(false),
-  /** 内部员工等：订餐免开卡、不扣次，同赠送餐财务口径 */
-  is_staff: z.boolean().optional().default(false),
 });
 export type MemberCreateInput = z.infer<typeof memberCreateSchema>;
 
@@ -67,6 +65,7 @@ const zCatalogCardCode = z.enum([
   'month',
   'season',
   'year',
+  'staff',
 ]);
 
 const cardPurchaseShared = z.object({
@@ -180,7 +179,7 @@ const orderCreateEntryFields = {
   created_by_user_id: z.number().int().positive().optional(),
   /** 赠送餐：不扣卡、不记 meal_earned */
   is_gift: z.boolean().optional().default(false),
-  /** 显式员工餐（兼容旧客户端）；会员档案 is_staff 时服务端会自动等同此项 */
+  /** 兼容旧客户端：显式免扣次员工餐；新口径使用卡种 staff（员工卡）正常下单 */
   is_staff_meal: z.boolean().optional().default(false),
 } satisfies z.ZodRawShape;
 

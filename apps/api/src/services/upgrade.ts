@@ -4,8 +4,8 @@
  * 规则：
  * - 禁降级：newCat.totalPrice 必须严格 > old.paid_amount
  * - 差价 = newCat.totalPrice - old.paid_amount
- * - 新卡继承 used_meals = old.used_meals
- * - 新卡 remaining_meals = newCat.meals - old.used_meals（不可为负）
+ * - 新卡继承 used_meals = old.used_meals（从员工卡 staff 升到付费卡时视为 0）
+ * - 新卡 remaining_meals = newCat.meals - effectiveUsed（不可为负）
  *
  * 任何违规都抛 UpgradeError，由 route 层翻成 HTTP 响应。
  */
@@ -25,6 +25,8 @@ export class UpgradeError extends Error {
 export interface UpgradeInput {
   oldPaidAmount: number;
   oldUsedMeals: number;
+  /** 从员工卡升到付费卡时，已用员工餐不计入新卡剩余餐数 */
+  oldCardCode?: string;
   newCat: CardSpec;
 }
 
@@ -39,6 +41,9 @@ export interface UpgradeResult {
 
 export function computeUpgrade(input: UpgradeInput): UpgradeResult {
   const { oldPaidAmount, oldUsedMeals, newCat } = input;
+  const leavingStaff =
+    input.oldCardCode === 'staff' && newCat.code !== 'staff';
+  const effectiveUsed = leavingStaff ? 0 : oldUsedMeals;
 
   if (newCat.totalPrice <= oldPaidAmount) {
     throw new UpgradeError(
@@ -47,10 +52,10 @@ export function computeUpgrade(input: UpgradeInput): UpgradeResult {
     );
   }
 
-  if (oldUsedMeals > newCat.meals) {
+  if (effectiveUsed > newCat.meals) {
     throw new UpgradeError(
       'INVALID_UPGRADE_MEALS',
-      `旧卡已用 ${oldUsedMeals} 餐超过新卡总餐数 ${newCat.meals}，无法升级到该卡种`,
+      `旧卡已用 ${effectiveUsed} 餐超过新卡总餐数 ${newCat.meals}，无法升级到该卡种`,
     );
   }
 
@@ -59,8 +64,8 @@ export function computeUpgrade(input: UpgradeInput): UpgradeResult {
   return {
     diff,
     newTotalMeals: newCat.meals,
-    newUsedMeals: oldUsedMeals,
-    newRemainingMeals: newCat.meals - oldUsedMeals,
+    newUsedMeals: effectiveUsed,
+    newRemainingMeals: newCat.meals - effectiveUsed,
     newUnitPrice: newCat.unitPrice,
     newPaidAmount: newCat.totalPrice,
   };

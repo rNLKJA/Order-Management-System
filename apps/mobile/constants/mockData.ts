@@ -49,7 +49,7 @@ export interface MockMember {
   address: string;
   dietary_notes: string;
   is_hospital: boolean;
-  /** 内部员工等：订餐免扣次，在档案中维护 */
+  /** 展示用：持员工卡（staff）或历史档案 is_staff */
   is_staff: boolean;
   /** 散客标记：true 时在会员档案页应该过滤掉，只在散客目录可见 */
   is_walkin?: boolean;

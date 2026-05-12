@@ -498,8 +498,7 @@ ordersRouter.patch(
       if (
         nextStatus === 'delivered' &&
         order.status === 'fulfilled' &&
-        !order.is_gift &&
-        !order.is_staff_meal
+        !order.is_gift
       ) {
         await createMealEarnedIncome(tx, {
           order,

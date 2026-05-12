@@ -14,9 +14,9 @@ describe('card-catalog', () => {
       expect(AD_HOC_UNIT_PRICE).toBe(35);
     });
 
-    it('院外 4 种卡 / 院内 6 种卡', () => {
-      expect(Object.keys(CARD_CATALOG.regular)).toHaveLength(4);
-      expect(Object.keys(CARD_CATALOG.hospital)).toHaveLength(6);
+  it('院外 5 种卡 / 院内 7 种卡', () => {
+      expect(Object.keys(CARD_CATALOG.regular)).toHaveLength(5);
+      expect(Object.keys(CARD_CATALOG.hospital)).toHaveLength(7);
     });
 
     it('所有卡都满足 meals × unitPrice = totalPrice', () => {
@@ -70,14 +70,14 @@ describe('card-catalog', () => {
       }
     });
 
-    it('院内第一张是体验卡（50 元最便宜）', () => {
+    it('院内总价升序第一张为员工卡（0 元）', () => {
       const cards = listCards(true);
-      expect(cards[0]?.code).toBe('experience');
+      expect(cards[0]?.code).toBe('staff');
     });
 
-    it('院外第一张是大周卡', () => {
+    it('院外总价升序第一张为员工卡（0 元）', () => {
       const cards = listCards(false);
-      expect(cards[0]?.code).toBe('week');
+      expect(cards[0]?.code).toBe('staff');
     });
   });
 

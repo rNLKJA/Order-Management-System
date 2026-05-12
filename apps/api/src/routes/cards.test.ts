@@ -210,6 +210,31 @@ describe('POST /api/cards (新购)', () => {
     expect(body.financeEntry.category).toBe('card_prepaid_hospital');
   });
 
+  it('院外员工卡：¥0 不写预收流水', async () => {
+    const { id: memberId } = await seedMember(ctx.db, {
+      created_by_user_id: ctx.userId,
+      is_hospital: false,
+    });
+
+    const res = await authedFetch(ctx.app, ctx.token, '/api/cards', {
+      method: 'POST',
+      body: JSON.stringify({
+        member_id: memberId,
+        card_code: 'staff',
+        is_hospital: false,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      card: { card_code: string; paid_amount: number; unit_price: number; total_meals: number };
+      financeEntry: { id: number } | null;
+    };
+    expect(body.card.card_code).toBe('staff');
+    expect(body.card.paid_amount).toBe(0);
+    expect(body.card.unit_price).toBe(0);
+    expect(body.financeEntry).toBeNull();
+  });
+
   it('自定义套餐：定名定价定份数，入账预收', async () => {
     const { id: memberId } = await seedMember(ctx.db, {
       created_by_user_id: ctx.userId,

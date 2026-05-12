@@ -84,7 +84,7 @@ export const cardsApi = {
     ),
 
   purchase: (input: PurchaseInput) =>
-    api.post<{ card: Card; financeEntry: FinanceEntrySummary }>(
+    api.post<{ card: Card; financeEntry: FinanceEntrySummary | null }>(
       '/api/cards',
       input,
     ),

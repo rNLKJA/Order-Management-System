@@ -13,7 +13,11 @@
  *    这个字段会随卡的 used_meals 变化（够用于首页 / 列表的近似）。
  */
 
-import { getCardSpec, type SubscriptionCardCode } from '@meal/shared';
+import {
+  getCardSpec,
+  isStaffMealsCardCode,
+  type SubscriptionCardCode,
+} from '@meal/shared';
 import type { Card } from '../api/cards';
 import type { Member } from '../api/members';
 import type { ApiUser } from '../api/users';
@@ -87,6 +91,7 @@ export function apiToMockMember(
     .map((c) => apiCardToMockCard(c, users, cardsById));
 
   const active = mockCards.find((c) => c.status === 'active') ?? null;
+  const hasStaffCard = active != null && isStaffMealsCardCode(active.card_code);
 
   let totalPurchased = 0;
   let totalConsumed = 0;
@@ -107,7 +112,8 @@ export function apiToMockMember(
     address: m.address,
     dietary_notes: m.dietary_notes,
     is_hospital: m.is_hospital,
-    is_staff: m.is_staff,
+    /** 展示用：持员工卡或历史档案 is_staff */
+    is_staff: hasStaffCard || m.is_staff,
     is_walkin: m.is_walkin,
     active_card: active,
     card_history: mockCards,

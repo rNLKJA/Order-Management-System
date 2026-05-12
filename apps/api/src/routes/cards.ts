@@ -251,6 +251,7 @@ cardsRouter.post(
       computed = computeUpgrade({
         oldPaidAmount: oldCard.paid_amount,
         oldUsedMeals: oldCard.used_meals,
+        oldCardCode: oldCard.card_code,
         newCat: newSpec,
       });
     } catch (e) {

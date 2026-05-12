@@ -7,6 +7,7 @@
  */
 
 import { and, eq } from 'drizzle-orm';
+import { isStaffMealsCardCode } from '@meal/shared';
 import { schema } from '../db/client.js';
 import { toShanghaiDate } from './finance.js';
 
@@ -47,7 +48,9 @@ export async function deductMeals(
   const card = cardRows[0] as typeof schema.cards.$inferSelect | undefined;
   if (!card) return null;
 
-  if (input.totalQty > card.remaining_meals) {
+  const isStaffCard = isStaffMealsCardCode(card.card_code);
+
+  if (!isStaffCard && input.totalQty > card.remaining_meals) {
     // 调用方负责抛 HTTPException（service 不直接依赖 hono）
     throw new InsufficientMealBalanceError(
       card.remaining_meals,
@@ -56,8 +59,9 @@ export async function deductMeals(
   }
 
   const newUsed = card.used_meals + input.totalQty;
-  const newRemaining = card.remaining_meals - input.totalQty;
-  const newStatus: 'active' | 'exhausted' = newRemaining === 0 ? 'exhausted' : 'active';
+  const newRemaining = isStaffCard ? card.remaining_meals : card.remaining_meals - input.totalQty;
+  const newStatus: 'active' | 'exhausted' =
+    isStaffCard ? 'active' : newRemaining === 0 ? 'exhausted' : 'active';
 
   await tx
     .update(schema.cards)
@@ -159,8 +163,11 @@ export async function cancelOrder(
     const card = cardRows[0] as typeof schema.cards.$inferSelect | undefined;
 
     if (card) {
+      const isStaffCard = isStaffMealsCardCode(card.card_code);
       const newUsed = Math.max(0, card.used_meals - order.quantity);
-      const newRemaining = card.remaining_meals + order.quantity;
+      const newRemaining = isStaffCard
+        ? card.remaining_meals
+        : card.remaining_meals + order.quantity;
 
       // 若卡曾因扣到 0 变 exhausted 且未被后续卡替代 → 回 active
       let newStatus = card.status;

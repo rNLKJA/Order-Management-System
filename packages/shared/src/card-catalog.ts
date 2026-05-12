@@ -11,14 +11,23 @@
 
 export type CardZone = 'regular' | 'hospital';
 
-export type RegularCardCode = 'week' | 'month' | 'season' | 'year';
+/** 员工卡：仅此卡种扣次时不减少 remaining（仅涨 used），单价 0，履约收入为 0 */
+export const STAFF_CARD_CODE = 'staff' as const;
+
+/**
+ * 账本上的「名义总餐数」，用于非 unlimited 卡与 UI；员工卡扣次不改 remaining，仅在开卡时写入一次。
+ */
+export const STAFF_CARD_POOL_MEALS = 99_999_999;
+
+export type RegularCardCode = 'week' | 'month' | 'season' | 'year' | typeof STAFF_CARD_CODE;
 export type HospitalCardCode =
   | 'experience'
   | 'small_week'
   | 'week'
   | 'month'
   | 'season'
-  | 'year';
+  | 'year'
+  | typeof STAFF_CARD_CODE;
 /** 价目表卡种 + 自定义套餐（不入目录表） */
 export type SubscriptionCardCode = RegularCardCode | HospitalCardCode | 'custom';
 
@@ -42,6 +51,13 @@ export const CARD_CATALOG = {
     month: { code: 'month', name: '月卡', meals: 40, unitPrice: 25, totalPrice: 1000 },
     season: { code: 'season', name: '季卡', meals: 120, unitPrice: 22, totalPrice: 2640 },
     year: { code: 'year', name: '年卡', meals: 480, unitPrice: 20, totalPrice: 9600 },
+    staff: {
+      code: STAFF_CARD_CODE,
+      name: '员工卡',
+      meals: STAFF_CARD_POOL_MEALS,
+      unitPrice: 0,
+      totalPrice: 0,
+    },
   },
   /** 院内价目表 */
   hospital: {
@@ -51,6 +67,13 @@ export const CARD_CATALOG = {
     month: { code: 'month', name: '月卡', meals: 40, unitPrice: 22, totalPrice: 880 },
     season: { code: 'season', name: '季卡', meals: 120, unitPrice: 21, totalPrice: 2520 },
     year: { code: 'year', name: '年卡', meals: 480, unitPrice: 20, totalPrice: 9600 },
+    staff: {
+      code: STAFF_CARD_CODE,
+      name: '员工卡',
+      meals: STAFF_CARD_POOL_MEALS,
+      unitPrice: 0,
+      totalPrice: 0,
+    },
   },
 } as const satisfies Record<CardZone, Record<string, CardSpec>>;
 
@@ -105,4 +128,9 @@ export function listUpgradeOptions(
   currentPaidAmount: number,
 ): CardSpec[] {
   return listCards(isHospital).filter((c) => c.totalPrice > currentPaidAmount);
+}
+
+/** 员工卡：订餐扣次但不耗尽 remaining，单价 0 */
+export function isStaffMealsCardCode(code: string): boolean {
+  return code === STAFF_CARD_CODE;
 }
