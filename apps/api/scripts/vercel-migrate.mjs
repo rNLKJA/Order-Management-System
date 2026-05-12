@@ -108,7 +108,7 @@ async function runMigrate() {
 /**
  * 若曾对「已有表结构、空 journal」做过 journal backfill，会跳过 0001–0005 的真实 SQL，
  * 只留下最新一条迁移执行。这里幂等补执行历史上可能缺失的列 / 索引（与 drizzle/*.sql 对齐），
- * 避免 INSERT … RETURNING 读到 ORM 里有、库里没有的列（典型：members.is_walkin）→ 500。
+ * 避免 INSERT … RETURNING 读到 ORM 里有、库里没有的列（典型：members.is_walkin / members.is_staff）→ 500。
  */
 async function repairLegacyColumnsAfterJournalSkip() {
   const repairs = [
@@ -118,10 +118,12 @@ async function repairLegacyColumnsAfterJournalSkip() {
     'ALTER TABLE `cards` ADD `refunded_by_user_id` integer REFERENCES users(id)',
     "ALTER TABLE `daily_orders` ADD `customer_name` text DEFAULT '' NOT NULL",
     'ALTER TABLE `members` ADD `is_walkin` integer DEFAULT false NOT NULL',
+    'ALTER TABLE `members` ADD `is_staff` integer DEFAULT false NOT NULL',
     'ALTER TABLE `users` ADD `avatar_url` text',
     "ALTER TABLE `daily_orders` ADD `delivery_channel` text DEFAULT 'self' NOT NULL",
     "ALTER TABLE `daily_orders` ADD `courier_ref` text DEFAULT '' NOT NULL",
     'ALTER TABLE `daily_orders` ADD `is_gift` integer DEFAULT false NOT NULL',
+    'ALTER TABLE `daily_orders` ADD `is_staff_meal` integer DEFAULT false NOT NULL',
     "ALTER TABLE `daily_orders` ADD `proof_images_json` text DEFAULT '[]' NOT NULL",
     'CREATE INDEX IF NOT EXISTS `orders_delivery_channel_idx` ON `daily_orders` (`delivery_channel`)',
     'CREATE TABLE IF NOT EXISTS `order_proof_sets` (`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL, `proof_images_json` text NOT NULL, `created_by_user_id` integer NOT NULL REFERENCES users(id), `created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL)',
