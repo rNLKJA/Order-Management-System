@@ -11,7 +11,7 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassSurface } from './GlassSurface';
 import { COLORS, MOTION, RADIUS, SPACING, TYPE } from '../../theme/paperTheme';
@@ -85,11 +85,25 @@ export function ConfirmHost() {
       statusBarTranslucent
       onRequestClose={() => resolveTop(false)}
     >
-      {/* 蒙层 */}
-      <Pressable style={styles.backdrop} onPress={() => resolveTop(false)}>
-        {/* 阻止点击穿透 */}
-        <Pressable onPress={() => {}} style={styles.cardWrap}>
-          <GlassSurface level={1} padding={0} radius="xl" style={styles.card} elevated>
+      {/*
+        Web：全屏底层 Pressable 与卡片区重叠时，即使用 zIndex，命中仍可能落到蒙层导致按钮「点了没反应」。
+        做法：底层只负责点空白关闭；中间一层全屏 box-none 把非卡片区穿透给底层；卡片外包一层 auto 独占命中。
+      */}
+      <View
+        style={[
+          styles.backdrop,
+          Platform.OS === 'web' && ({ isolation: 'isolate' } as ViewStyle),
+        ]}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="关闭"
+          style={styles.backdropDismiss}
+          onPress={() => resolveTop(false)}
+        />
+        <View style={styles.cardAligner} pointerEvents="box-none">
+          <View style={styles.cardHitBox} pointerEvents="auto">
+            <GlassSurface level={1} padding={0} radius="xl" style={styles.card} elevated>
             <View style={styles.header}>
               <View
                 style={[
@@ -122,35 +136,42 @@ export function ConfirmHost() {
             <View style={styles.actions}>
               {!current.singleAction && (
                 <Pressable
+                  accessibilityRole="button"
                   style={({ pressed }) => [
                     styles.btn,
                     styles.btnCancel,
                     pressed && { opacity: MOTION.pressOpacity },
+                    Platform.OS === 'web' && styles.btnWeb,
                   ]}
                   onPress={() => resolveTop(false)}
                 >
-                  <Text style={styles.btnCancelText}>
-                    {current.cancelLabel ?? '取消'}
-                  </Text>
+                  <View pointerEvents="none">
+                    <Text style={styles.btnCancelText}>{current.cancelLabel ?? '取消'}</Text>
+                  </View>
                 </Pressable>
               )}
               <Pressable
+                accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.btn,
                   styles.btnConfirm,
                   { backgroundColor: primaryColor },
                   pressed && { opacity: MOTION.pressOpacity, transform: [{ scale: 0.99 }] },
+                  Platform.OS === 'web' && styles.btnWeb,
                 ]}
                 onPress={() => resolveTop(true)}
               >
-                <Text style={styles.btnConfirmText}>
-                  {current.confirmLabel ?? (current.singleAction ? '好的' : '确定')}
-                </Text>
+                <View pointerEvents="none">
+                  <Text style={styles.btnConfirmText}>
+                    {current.confirmLabel ?? (current.singleAction ? '好的' : '确定')}
+                  </Text>
+                </View>
               </Pressable>
             </View>
-          </GlassSurface>
-        </Pressable>
-      </Pressable>
+            </GlassSurface>
+          </View>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -162,8 +183,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: SPACING.lg,
+    position: 'relative',
   },
-  cardWrap: { width: '100%', maxWidth: 420 },
+  /** 全屏点击关闭（仅命中未被 cardAligner 内 auto 区域拦截的像素） */
+  backdropDismiss: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+    backgroundColor: 'transparent',
+  },
+  /** 全屏居中容器：box-none 使空白处事件落到 backdropDismiss */
+  cardAligner: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  /** 卡片命中盒：auto 保证按钮区域不会被底层蒙层抢走（RN Web） */
+  cardHitBox: {
+    width: '100%',
+    maxWidth: 420,
+    elevation: 6,
+  },
+  btnWeb: {
+    // RN Web：显式 cursor，避免被全局样式压成不可点外观；同时利于命中框
+    cursor: 'pointer' as const,
+  },
   card: { overflow: 'hidden' },
   header: {
     alignItems: 'center',

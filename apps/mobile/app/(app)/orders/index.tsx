@@ -19,13 +19,7 @@ import { AppHeader, MeshBackground } from '../../../components/ui';
 import { DatePicker } from '../../../components/ui/DatePicker';
 import { MemberQuickInfoModal } from '../../../components/MemberQuickInfoModal';
 import { confirmAction, confirmDestructive } from '../../../lib/confirm';
-import {
-  DELIVERY_FAIL_REASON_OPTIONS,
-  LIMIT_OPTIONS,
-  type TabKey,
-  type PrimaryTab,
-  type LimitOption,
-} from '../../../components/orders/constants';
+import { DELIVERY_FAIL_REASON_OPTIONS, type TabKey, type PrimaryTab } from '../../../components/orders/constants';
 import { todayStr, tomorrowStr } from '../../../components/orders/date-utils';
 import { orderScreenStyles as styles } from '../../../components/orders/orderScreenStyles';
 import { OrderTabBar } from '../../../components/orders/OrderTabBar';
@@ -49,7 +43,6 @@ export default function OrdersScreen() {
   const { group, tab } = useLocalSearchParams<{ group?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [activePrimary, setActivePrimary] = useState<PrimaryTab>('manage');
-  const [displayLimit, setDisplayLimit] = useState<LimitOption>(50);
   const [overviewDate, setOverviewDate] = useState<string>(() => todayStr());
   const [activeOrder, setActiveOrder] = useState<MockOrder | null>(null);
   const [deliveryFailOrder, setDeliveryFailOrder] = useState<MockOrder | null>(null);
@@ -81,11 +74,9 @@ export default function OrdersScreen() {
 
   const lunch = overviewOrders.filter((o) => o.meal_type === 'lunch');
   const dinner = overviewOrders.filter((o) => o.meal_type === 'dinner');
-  const lunchVisible = lunch.slice(0, displayLimit);
-  const dinnerVisible = dinner.slice(0, displayLimit);
   const allSections = [
-    ...(lunchVisible.length  > 0 ? [{ title: '午餐', data: lunchVisible  }] : []),
-    ...(dinnerVisible.length > 0 ? [{ title: '晚餐', data: dinnerVisible }] : []),
+    ...(lunch.length > 0 ? [{ title: '午餐', data: lunch }] : []),
+    ...(dinner.length > 0 ? [{ title: '晚餐', data: dinner }] : []),
   ];
 
   // 总览汇总：上行 = 当日录入（餐别，不含已取消）；下行 = 订单状态份数（随出餐/送达变化）
@@ -371,7 +362,6 @@ export default function OrdersScreen() {
 
   const isEntryTab =
     activeTab === 'entry' || activeTab === 'entry_batch' || activeTab === 'entry_gift';
-  const hideOrderLimitRow = isEntryTab || activeTab === 'retail';
   const currentOrdersQuery = activeTab === 'overview' ? overviewOrdersQuery : todayOrdersQuery;
   const currentLoadError = currentOrdersQuery.error;
   const currentLoading = currentOrdersQuery.isLoading && !currentOrdersQuery.data;
@@ -392,22 +382,6 @@ export default function OrdersScreen() {
       />
       <View style={styles.pageMetaRow}>
         <Text style={styles.pageMetaText}>{`今日 ${formatDate(now)}`}</Text>
-        {!hideOrderLimitRow ? (
-          <View style={styles.limitRowInline}>
-            <Text style={styles.limitLabel}>每次加载</Text>
-            {LIMIT_OPTIONS.map((n) => (
-              <Pressable
-                key={n}
-                style={[styles.limitChip, displayLimit === n && styles.limitChipActive]}
-                onPress={() => setDisplayLimit(n)}
-              >
-                <Text style={[styles.limitChipText, displayLimit === n && styles.limitChipTextActive]}>
-                  {n}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
       </View>
 
       {/* —— 总览 —— */}
@@ -535,7 +509,6 @@ export default function OrdersScreen() {
       {activeTab === 'prep' && (
         <PrepView
           orders={ordersToday}
-          displayLimit={displayLimit}
           onMarkFulfilled={handleMarkFulfilled}
           onOpenDetail={setActiveOrder}
           onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
@@ -546,7 +519,6 @@ export default function OrdersScreen() {
       {activeTab === 'delivery' && (
         <DeliveryView
           orders={ordersToday}
-          displayLimit={displayLimit}
           membersById={membersById}
           onMarkDelivered={handleMarkDelivered}
           onMarkDeliveryFailed={handleOpenDeliveryFailed}
@@ -560,7 +532,6 @@ export default function OrdersScreen() {
       {activeTab === 'courier' && (
         <DeliveryView
           orders={ordersToday}
-          displayLimit={displayLimit}
           membersById={membersById}
           onMarkDelivered={handleMarkDelivered}
           onMarkDeliveryFailed={handleOpenDeliveryFailed}

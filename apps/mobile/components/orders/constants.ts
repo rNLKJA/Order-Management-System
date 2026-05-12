@@ -34,9 +34,6 @@ export type TabKey =
   | 'courier';
 export type PrimaryTab = 'manage' | 'fulfillment';
 
-export const LIMIT_OPTIONS = [10, 50, 100, 200] as const;
-export type LimitOption = (typeof LIMIT_OPTIONS)[number];
-
 export const TABS: {
   key: TabKey;
   label: string;

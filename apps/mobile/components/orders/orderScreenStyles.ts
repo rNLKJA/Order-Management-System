@@ -38,7 +38,7 @@ export const orderScreenStyles = StyleSheet.create({
   pageMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     paddingHorizontal: 16,
     marginTop: -2,
     marginBottom: 8,
@@ -77,22 +77,6 @@ export const orderScreenStyles = StyleSheet.create({
   overviewDateQuickTextActive: {
     color: IOS_COLORS.blue,
   },
-  limitRowInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
-  },
-  limitLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
-  limitChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: IOS_COLORS.fillLight,
-  },
-  limitChipActive: { backgroundColor: IOS_COLORS.blueLight },
-  limitChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
-  limitChipTextActive: { color: IOS_COLORS.blue },
 
   /** 总览双行汇总容器 */
   summaryCard: {

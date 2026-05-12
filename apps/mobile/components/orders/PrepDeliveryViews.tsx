@@ -3,24 +3,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../theme/paperTheme';
 import { type MockMember, type MockOrder } from '../../constants/mockData';
 import { prepDeliveryStyles as prepStyles } from './prepDeliveryStyles';
-import type { LimitOption } from './constants';
 
 export function PrepView({
   orders,
-  displayLimit,
   onMarkFulfilled,
   onOpenDetail,
   onShowMember,
 }: {
   orders: MockOrder[];
-  displayLimit: LimitOption;
   onMarkFulfilled: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
   onShowMember: (memberId: number) => void;
 }) {
   const pendingOrders = orders.filter((o) => o.status === 'pending');
-  const lunch = pendingOrders.filter((o) => o.meal_type === 'lunch').slice(0, displayLimit);
-  const dinner = pendingOrders.filter((o) => o.meal_type === 'dinner').slice(0, displayLimit);
+  const lunch = pendingOrders.filter((o) => o.meal_type === 'lunch');
+  const dinner = pendingOrders.filter((o) => o.meal_type === 'dinner');
   const totalLunch = lunch.reduce((s, o) => s + o.quantity, 0);
   const totalDinner = dinner.reduce((s, o) => s + o.quantity, 0);
 
@@ -197,7 +194,6 @@ function PrepCard({
 
 export function DeliveryView({
   orders,
-  displayLimit,
   membersById,
   onMarkDelivered,
   onMarkDeliveryFailed,
@@ -206,7 +202,6 @@ export function DeliveryView({
   channel = 'self',
 }: {
   orders: MockOrder[];
-  displayLimit: LimitOption;
   membersById: Record<number, MockMember>;
   onMarkDelivered: (order: MockOrder) => void;
   onMarkDeliveryFailed: (order: MockOrder) => void;
@@ -217,8 +212,8 @@ export function DeliveryView({
   const fulfilled = orders.filter(
     (o) => o.status === 'fulfilled' && (o.delivery_channel ?? 'self') === channel,
   );
-  const lunch = fulfilled.filter((o) => o.meal_type === 'lunch').slice(0, displayLimit);
-  const dinner = fulfilled.filter((o) => o.meal_type === 'dinner').slice(0, displayLimit);
+  const lunch = fulfilled.filter((o) => o.meal_type === 'lunch');
+  const dinner = fulfilled.filter((o) => o.meal_type === 'dinner');
   const hospitalCount = fulfilled.filter((o) => o.is_hospital).length;
   const outsideCount = fulfilled.filter((o) => !o.is_hospital).length;
 

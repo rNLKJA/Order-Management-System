@@ -27,7 +27,7 @@ import { membersApi } from '../../api/members';
 import { cardsApi } from '../../api/cards';
 import { useUsersMap } from '../../hooks/useMembersView';
 import { apiToMockMember } from '../../lib/member-view';
-import { isStaffMealsCardCode } from '@meal/shared';
+import { isStaffMealsCardCode, formatCNY } from '@meal/shared';
 
 function memberHasStaffCard(m: MockMember | null | undefined): boolean {
   const c = m?.active_card;
@@ -718,9 +718,14 @@ export function EntryPanel({
                             name="add-circle-outline"
                             size={22}
                             color={IOS_COLORS.blue}
-                            style={{ marginRight: 4, marginTop: 3 }}
+                            style={{ marginRight: 4 }}
                           />
-                          <View style={[entryStyles.memberAvatar, { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED', marginTop: 2 }]}>
+                          <View
+                            style={[
+                              entryStyles.memberAvatar,
+                              { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' },
+                            ]}
+                          >
                             <Text style={entryStyles.memberAvatarText}>{(m.nickname || m.name)[0]}</Text>
                           </View>
                           <View style={{ flex: 1, minWidth: 0 }}>
@@ -930,7 +935,12 @@ export function EntryPanel({
                             setMemberQuery(m.nickname || m.name);
                           }}
                         >
-                          <View style={[entryStyles.memberAvatar, { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED', marginTop: 2 }]}>
+                          <View
+                            style={[
+                              entryStyles.memberAvatar,
+                              { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' },
+                            ]}
+                          >
                             <Text style={entryStyles.memberAvatarText}>{(m.nickname || m.name)[0]}</Text>
                           </View>
                           <View style={{ flex: 1, minWidth: 0 }}>
@@ -1138,7 +1148,7 @@ export function EntryPanel({
                 <View style={entryStyles.adhocTotal}>
                   <Text style={entryStyles.adhocTotalLabel}>合计应收</Text>
                   <Text style={entryStyles.adhocTotalValue}>
-                    {adhocIsGift ? '赠送 ¥0' : `¥${((parseFloat(adhocPrice) || 0) * adhocTotalQty).toFixed(0)}`}
+                    {adhocIsGift ? `赠送 ${formatCNY(0)}` : formatCNY((parseFloat(adhocPrice) || 0) * adhocTotalQty)}
                   </Text>
                 </View>
               </>
@@ -1198,7 +1208,7 @@ export function EntryPanel({
               <Text style={entryStyles.submitMain}>{adhocName.trim()}</Text>
               <Text style={entryStyles.submitSub}>
                 午 {adhocLunchQty} · 晚 {adhocDinnerQty} · 共 {adhocTotalQty} 份
-                {adhocIsGift ? ' · 赠送' : ` · ¥${((parseFloat(adhocPrice) || 0) * adhocTotalQty).toFixed(0)}`}
+                {adhocIsGift ? ' · 赠送' : ` · ${formatCNY((parseFloat(adhocPrice) || 0) * adhocTotalQty)}`}
               </Text>
             </>
           ) : (

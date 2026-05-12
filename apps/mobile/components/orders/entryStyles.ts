@@ -133,8 +133,8 @@ export const entryStyles = StyleSheet.create({
     color: IOS_COLORS.labelTertiary,
     marginTop: 2,
   },
-  /** 含多行联系方式时，行与头像顶部对齐 */
-  memberRowWithContact: { alignItems: 'flex-start' },
+  /** 含多行联系方式时，整行垂直居中（加号 / 头像 / 右侧标签与正文块对齐） */
+  memberRowWithContact: { alignItems: 'center' },
   memberCardBadge: {
     fontSize: 12,
     color: IOS_COLORS.blue,
