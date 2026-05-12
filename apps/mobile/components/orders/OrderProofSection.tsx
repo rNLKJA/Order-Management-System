@@ -12,7 +12,7 @@ import { manipulateAsync, SaveFormat, type Action } from 'expo-image-manipulator
 import { useState } from 'react';
 import {
   View,
-  Image,
+  Image as RNImage,
   Pressable,
   StyleSheet,
   ScrollView,
@@ -56,7 +56,8 @@ function downscaleProofDataUrlWeb(dataUrl: string): Promise<string> {
       resolve(dataUrl);
       return;
     }
-    const img = new Image();
+    const Img = window.Image;
+    const img = new Img();
     img.onload = () => {
       try {
         const w0 = img.naturalWidth;
@@ -336,7 +337,7 @@ export function OrderProofSection({
           <View style={styles.pairGrid}>
             {images.map((uri, idx) => (
               <View key={`${idx}-${uri.slice(0, 32)}`} style={styles.pairThumbWrap}>
-                <Image source={{ uri }} style={styles.pairThumb} resizeMode="cover" />
+                <RNImage source={{ uri }} style={styles.pairThumb} resizeMode="cover" />
                 <Pressable
                   style={styles.removeBtn}
                   onPress={() => removeAt(idx)}
@@ -376,7 +377,7 @@ export function OrderProofSection({
         >
           {images.map((uri, idx) => (
             <View key={`${idx}-${uri.slice(0, 32)}`} style={styles.thumbWrap}>
-              <Image
+              <RNImage
                 source={{ uri }}
                 style={[styles.thumb, compact && styles.thumbCompact]}
                 resizeMode="cover"
