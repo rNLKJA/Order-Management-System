@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../theme/paperTheme';
@@ -33,12 +34,22 @@ function memberHasStaffCard(m: MockMember | null | undefined): boolean {
   return c != null && isStaffMealsCardCode(c.card_code);
 }
 
+/** 列表/卡片展示：空则显示 — */
+function displayContactField(value: string | undefined | null): string {
+  const t = (value ?? '').trim();
+  return t.length > 0 ? t : '—';
+}
+
 // EntryPanel — 快速录入（会员餐 / 散餐），内嵌在「录入」Tab 中
 // ============================================================
 type EntryMode = 'member' | 'adhoc';
 
 /** 与 POST /api/orders/batch 单请求上限一致 */
 const MEMBER_BATCH_QUEUE_MAX = 30;
+
+/** 平板及以上：已加入名单三列网格 */
+const BATCH_GRID_MIN_WIDTH = 768;
+const BATCH_GRID_GAP = 8;
 
 /** 与顶部 Tab（录入 / 批量 / 赠送）对齐 */
 export type MemberQuickEntryPreset = 'single' | 'batch' | 'gift';
@@ -113,6 +124,13 @@ export function EntryPanel({
   }) => Promise<void>;
   onJumpToOverview?: () => void;
 }) {
+  const { width: windowWidth } = useWindowDimensions();
+  const batchGridWide = windowWidth >= BATCH_GRID_MIN_WIDTH;
+  /** Scroll 内容区左右各 16，列间 BATCH_GRID_GAP */
+  const batchCardColumnWidth = batchGridWide
+    ? Math.floor((windowWidth - 32 - BATCH_GRID_GAP * 2) / 3)
+    : undefined;
+
   const quickInitial = memberPresetState(memberQuickEntry);
   const lockMemberPreset = memberQuickEntry != null;
 
@@ -561,7 +579,7 @@ export function EntryPanel({
                 </View>
                 <Text style={entryStyles.dateHint}>
                   {memberBatchMode
-                    ? '搜索并加入多位会员；列表里每一行各自调整午餐、晚餐份数。'
+                    ? '打开批量后：先核对上方「已加入」名单与份数，再在下方「搜索」里加人。'
                     : '搜索并选定一位会员；页面中间只有一组午餐、晚餐份数。'}
                 </Text>
               </>
@@ -571,14 +589,96 @@ export function EntryPanel({
               memberBatchMode ? (
               /* ===== 会员餐 · 批量（每人份数独立） ===== */
               <>
-                <Text style={entryStyles.sectionLabel}>
-                  {memberIsGift ? '赠送餐' : '批量录入'}
-                </Text>
+                <View style={{ marginTop: 6, gap: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={entryStyles.sectionLabel}>已加入 {memberBatchRows.length} 人</Text>
+                    {memberBatchRows.length > 0 ? (
+                      <Pressable onPress={() => setMemberBatchRows([])} hitSlop={8}>
+                        <Text style={entryStyles.changeBtn}>清空本批</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <View
+                    style={
+                      batchGridWide
+                        ? {
+                            flexDirection: 'row',
+                            flexWrap: 'wrap',
+                            marginHorizontal: -BATCH_GRID_GAP / 2,
+                          }
+                        : { gap: 12 }
+                    }
+                  >
+                    {memberBatchRows.map((row, idx) => (
+                      <View
+                        key={`${row.member.id}-${idx}`}
+                        style={
+                          batchGridWide && batchCardColumnWidth != null
+                            ? {
+                                width: batchCardColumnWidth,
+                                paddingHorizontal: BATCH_GRID_GAP / 2,
+                                marginBottom: 12,
+                              }
+                            : { width: '100%' }
+                        }
+                      >
+                        <View style={entryStyles.inlineCard}>
+                          <View style={entryStyles.batchCardHeader}>
+                            <View style={entryStyles.batchCardBody}>
+                              <View style={entryStyles.batchCardTitleRow}>
+                                <Text
+                                  style={[entryStyles.fieldLabel, entryStyles.batchCardName]}
+                                  numberOfLines={1}
+                                  ellipsizeMode="tail"
+                                >
+                                  {row.member.name}「{row.member.nickname}」
+                                </Text>
+                                <Text style={[entryStyles.dateHint, entryStyles.batchCardMetaInline]} numberOfLines={2}>
+                                  {row.member.is_hospital ? '院内' : '院外'} ·{' '}
+                                  {memberHasStaffCard(row.member)
+                                    ? `员工卡 · ${row.member.active_card!.card_name}`
+                                    : row.member.is_staff
+                                      ? '档案员工标记（请办员工卡）'
+                                      : `${row.member.active_card?.card_name ?? '无有效卡'} · 剩 ${row.member.active_card?.remaining_meals ?? 0} 份`}
+                                </Text>
+                              </View>
+                              <Text style={[entryStyles.dateHint, entryStyles.batchCardContact]} numberOfLines={1}>
+                                手机 {displayContactField(row.member.phone)}
+                              </Text>
+                              <Text style={[entryStyles.dateHint, entryStyles.batchCardContact]} numberOfLines={1}>
+                                微信 {displayContactField(row.member.wechat_id)}
+                              </Text>
+                            </View>
+                            <Pressable
+                              onPress={() => removeMemberBatchRow(idx)}
+                              hitSlop={8}
+                              disabled={submitting}
+                              style={entryStyles.batchCardDelete}
+                            >
+                              <Ionicons name="trash-outline" size={20} color={IOS_COLORS.red} />
+                            </Pressable>
+                          </View>
+                          <View style={[entryStyles.fieldDivider, entryStyles.batchCardDivider]} />
+                          <LunchDinnerQtyPair
+                            lunch={row.lunch}
+                            dinner={row.dinner}
+                            onLunchChange={(v) => updateMemberBatchRow(idx, { lunch: v })}
+                            onDinnerChange={(v) => updateMemberBatchRow(idx, { dinner: v })}
+                            dense
+                          />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                <Text style={[entryStyles.sectionLabel, { marginTop: 18 }]}>搜索</Text>
                 <Text style={[entryStyles.dateHint, { marginBottom: 8 }]}>
                   {memberIsGift
-                    ? '不扣会员卡次数。搜索并加入会员，在每行设午/晚份数；午+晚均为 0 不提交。'
-                    : '每位会员一行，午/晚份数用步进器单独设置；午+晚均为 0 不提交。'}
+                    ? '赠送餐不扣次：在此搜索并点结果加入列表，再设午/晚份数；午+晚均为 0 不提交。'
+                    : '在此按姓名、昵称或手机号查找会员，点结果加入列表；每人午/晚用步进器设置，均为 0 不提交。'}
                 </Text>
+
                 <View style={entryStyles.searchBox}>
                   <TextInput
                     style={entryStyles.searchInput}
@@ -608,6 +708,7 @@ export function EntryPanel({
                           key={m.id}
                           style={({ pressed }) => [
                             entryStyles.memberRow,
+                            entryStyles.memberRowWithContact,
                             i === filteredMembers.length - 1 && entryStyles.memberRowLast,
                             pressed && { backgroundColor: IOS_COLORS.fillLight },
                           ]}
@@ -617,15 +718,21 @@ export function EntryPanel({
                             name="add-circle-outline"
                             size={22}
                             color={IOS_COLORS.blue}
-                            style={{ marginRight: 4 }}
+                            style={{ marginRight: 4, marginTop: 3 }}
                           />
-                          <View style={[entryStyles.memberAvatar, { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+                          <View style={[entryStyles.memberAvatar, { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED', marginTop: 2 }]}>
                             <Text style={entryStyles.memberAvatarText}>{(m.nickname || m.name)[0]}</Text>
                           </View>
-                          <View style={{ flex: 1 }}>
+                          <View style={{ flex: 1, minWidth: 0 }}>
                             <Text style={entryStyles.memberName}>{m.name}</Text>
                             <Text style={entryStyles.memberNick}>
                               「{m.nickname}」· {m.is_hospital ? '院内' : '院外'}
+                            </Text>
+                            <Text style={entryStyles.memberContact} numberOfLines={1}>
+                              手机 {displayContactField(m.phone)}
+                            </Text>
+                            <Text style={entryStyles.memberContact} numberOfLines={1}>
+                              微信 {displayContactField(m.wechat_id)}
                             </Text>
                           </View>
                           {m.active_card ? (
@@ -650,52 +757,6 @@ export function EntryPanel({
                 ) : (
                   <View style={entryStyles.searchHintSpacer} />
                 )}
-
-                {memberBatchRows.length > 0 ? (
-                  <View style={{ marginTop: 14, gap: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={entryStyles.sectionLabel}>已加入 {memberBatchRows.length} 人</Text>
-                      <Pressable onPress={() => setMemberBatchRows([])} hitSlop={8}>
-                        <Text style={entryStyles.changeBtn}>清空本批</Text>
-                      </Pressable>
-                    </View>
-                    {memberBatchRows.map((row, idx) => (
-                      <View key={`${row.member.id}-${idx}`} style={entryStyles.inlineCard}>
-                        <View style={[entryStyles.fieldRow, { alignItems: 'center' }]}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={entryStyles.fieldLabel}>
-                              {row.member.name}「{row.member.nickname}」
-                            </Text>
-                            <Text style={entryStyles.dateHint}>
-                              {row.member.is_hospital ? '院内' : '院外'} ·{' '}
-                              {memberHasStaffCard(row.member)
-                                ? `员工卡 · ${row.member.active_card!.card_name}`
-                                : row.member.is_staff
-                                  ? '档案员工标记（请办员工卡）'
-                                  : `${row.member.active_card?.card_name ?? '无有效卡'} · 剩 ${row.member.active_card?.remaining_meals ?? 0} 份`}
-                            </Text>
-                          </View>
-                          <Pressable onPress={() => removeMemberBatchRow(idx)} hitSlop={8} disabled={submitting}>
-                            <Ionicons name="trash-outline" size={22} color={IOS_COLORS.red} />
-                          </Pressable>
-                        </View>
-                        <View style={entryStyles.fieldDivider} />
-                        <View style={entryStyles.qtySection}>
-                          <QtyRow
-                            label="午餐份数"
-                            value={row.lunch}
-                            onChange={(v) => updateMemberBatchRow(idx, { lunch: v })}
-                          />
-                          <QtyRow
-                            label="晚餐份数"
-                            value={row.dinner}
-                            onChange={(v) => updateMemberBatchRow(idx, { dinner: v })}
-                          />
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
 
                 {!memberIsGift &&
                 memberBatchEntries.some((r) => !r.member.active_card) ? (
@@ -788,6 +849,12 @@ export function EntryPanel({
                               ? '档案员工标记（请办员工卡）'
                               : `${selectedMember.active_card?.card_name ?? '无有效卡'} · 剩 ${selectedMember.active_card?.remaining_meals ?? 0} 份`}
                         </Text>
+                        <Text style={[entryStyles.selSub, { marginTop: 4 }]}>
+                          手机 {displayContactField(selectedMember.phone)}
+                        </Text>
+                        <Text style={[entryStyles.selSub, { marginTop: 2 }]}>
+                          微信 {displayContactField(selectedMember.wechat_id)}
+                        </Text>
                         {selectedMember.dietary_notes ? (
                           <Text style={entryStyles.selDiet}>忌：{selectedMember.dietary_notes}</Text>
                         ) : null}
@@ -854,6 +921,7 @@ export function EntryPanel({
                           key={m.id}
                           style={({ pressed }) => [
                             entryStyles.memberRow,
+                            entryStyles.memberRowWithContact,
                             i === filteredMembers.length - 1 && entryStyles.memberRowLast,
                             pressed && { backgroundColor: IOS_COLORS.fillLight },
                           ]}
@@ -862,13 +930,19 @@ export function EntryPanel({
                             setMemberQuery(m.nickname || m.name);
                           }}
                         >
-                          <View style={[entryStyles.memberAvatar, { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' }]}>
+                          <View style={[entryStyles.memberAvatar, { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED', marginTop: 2 }]}>
                             <Text style={entryStyles.memberAvatarText}>{(m.nickname || m.name)[0]}</Text>
                           </View>
-                          <View style={{ flex: 1 }}>
+                          <View style={{ flex: 1, minWidth: 0 }}>
                             <Text style={entryStyles.memberName}>{m.name}</Text>
                             <Text style={entryStyles.memberNick}>
                               「{m.nickname}」· {m.is_hospital ? '院内' : '院外'}
+                            </Text>
+                            <Text style={entryStyles.memberContact} numberOfLines={1}>
+                              手机 {displayContactField(m.phone)}
+                            </Text>
+                            <Text style={entryStyles.memberContact} numberOfLines={1}>
+                              微信 {displayContactField(m.wechat_id)}
                             </Text>
                           </View>
                           {m.active_card ? (
@@ -898,10 +972,7 @@ export function EntryPanel({
                 <Text style={[entryStyles.dateHint, { marginBottom: 6 }]}>
                   以下为该会员共用的一套午餐/晚餐，不是批量那种「每人不同」。
                 </Text>
-                <View style={entryStyles.qtySection}>
-                  <QtyRow label="午餐份数" value={lunchQty} onChange={setLunchQty} />
-                  <QtyRow label="晚餐份数" value={dinnerQty} onChange={setDinnerQty} />
-                </View>
+                <LunchDinnerQtyPair lunch={lunchQty} dinner={dinnerQty} onLunchChange={setLunchQty} onDinnerChange={setDinnerQty} />
 
                 <View style={entryStyles.divider} />
 
@@ -1022,10 +1093,12 @@ export function EntryPanel({
                 </Text>
 
                 <Text style={[entryStyles.sectionLabel, { marginTop: 20 }]}>份数</Text>
-                <View style={entryStyles.qtySection}>
-                  <QtyRow label="午餐份数" value={adhocLunchQty}  onChange={setAdhocLunchQty} />
-                  <QtyRow label="晚餐份数" value={adhocDinnerQty} onChange={setAdhocDinnerQty} />
-                </View>
+                <LunchDinnerQtyPair
+                  lunch={adhocLunchQty}
+                  dinner={adhocDinnerQty}
+                  onLunchChange={setAdhocLunchQty}
+                  onDinnerChange={setAdhocDinnerQty}
+                />
 
                 <Text style={[entryStyles.sectionLabel, { marginTop: 20 }]}>单价</Text>
                 <View style={entryStyles.inlineCard}>
@@ -1227,27 +1300,64 @@ function ChannelPicker({
 }
 
 // ============================================================
-// QtyRow — stepper 组件
+// 午餐 / 晚餐份数：并排一行，省纵向空间
 // ============================================================
-function QtyRow({
-  label, value, onChange, min = 0,
+
+function QtyStepper({
+  value,
+  onChange,
+  min = 0,
+  compact = false,
 }: {
-  label: string; value: number; onChange: (v: number) => void; min?: number;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  compact?: boolean;
 }) {
   return (
-    <View style={entryStyles.qtyRow}>
-      <Text style={entryStyles.qtyLabel}>{label}</Text>
-      <View style={entryStyles.qtyControls}>
-        <Pressable
-          style={[entryStyles.qtyBtn, value <= min && entryStyles.qtyBtnDisabled]}
-          onPress={() => onChange(Math.max(min, value - 1))}
-        >
-          <Text style={entryStyles.qtyBtnText}>−</Text>
-        </Pressable>
-        <Text style={entryStyles.qtyValue}>{value}</Text>
-        <Pressable style={entryStyles.qtyBtn} onPress={() => onChange(value + 1)}>
-          <Text style={entryStyles.qtyBtnText}>＋</Text>
-        </Pressable>
+    <View style={compact ? entryStyles.qtyControlsCompact : entryStyles.qtyControls}>
+      <Pressable
+        style={[
+          compact ? entryStyles.qtyBtnSm : entryStyles.qtyBtn,
+          value <= min && entryStyles.qtyBtnDisabled,
+        ]}
+        onPress={() => onChange(Math.max(min, value - 1))}
+      >
+        <Text style={compact ? entryStyles.qtyBtnTextSm : entryStyles.qtyBtnText}>−</Text>
+      </Pressable>
+      <Text style={compact ? entryStyles.qtyValueSm : entryStyles.qtyValue}>{value}</Text>
+      <Pressable style={compact ? entryStyles.qtyBtnSm : entryStyles.qtyBtn} onPress={() => onChange(value + 1)}>
+        <Text style={compact ? entryStyles.qtyBtnTextSm : entryStyles.qtyBtnText}>＋</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function LunchDinnerQtyPair({
+  lunch,
+  dinner,
+  onLunchChange,
+  onDinnerChange,
+  min = 0,
+  dense = false,
+}: {
+  lunch: number;
+  dinner: number;
+  onLunchChange: (v: number) => void;
+  onDinnerChange: (v: number) => void;
+  min?: number;
+  dense?: boolean;
+}) {
+  return (
+    <View style={[entryStyles.qtyPairCard, dense && entryStyles.qtyPairCardDense]}>
+      <View style={[entryStyles.qtyPairCol, dense && entryStyles.qtyPairColDense]}>
+        <Text style={[entryStyles.qtyPairCaption, dense && entryStyles.qtyPairCaptionDense]}>午餐份数</Text>
+        <QtyStepper value={lunch} onChange={onLunchChange} min={min} compact />
+      </View>
+      <View style={[entryStyles.qtyPairVBar, dense && entryStyles.qtyPairVBarDense]} />
+      <View style={[entryStyles.qtyPairCol, dense && entryStyles.qtyPairColDense]}>
+        <Text style={[entryStyles.qtyPairCaption, dense && entryStyles.qtyPairCaptionDense]}>晚餐份数</Text>
+        <QtyStepper value={dinner} onChange={onDinnerChange} min={min} compact />
       </View>
     </View>
   );

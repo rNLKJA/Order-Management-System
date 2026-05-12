@@ -2,7 +2,7 @@
 
 本文档用 mermaid 梳理系统的关键业务流程，便于员工培训、bug 追溯和新功能对齐。每张图下方附简短说明。实施时所有代码路径必须与本图一致；若代码和流程不一致，以代码为准时请同步更新本文档。
 
-## 实现状态一览（2026-04-24）
+## 实现状态一览（2026-05-08）
 
 | 章节 | 业务能力 | 状态 |
 | --- | --- | --- |
@@ -10,9 +10,11 @@
 | 3 | 会员 CRUD + 搜索 + 归档 | 已上线 |
 | 4 | 购卡 / 升级 / 换卡（院内外价目） | 已上线 |
 | 5 | 每日订餐录入（午 + 晚拆条 + 扣卡 + 散餐 + Idempotency） | 已上线 |
+| 5.3 | 其他零售商品（目录 + 「零售」Tab 记销售 + 财务 `misc_retail_income`） | 已上线 |
+| 5.4 | 每日订餐总览（双行汇总条 + OrderRow 份数高亮） | 已上线 |
 | 6 | 出餐 / 送餐（pending → fulfilled → delivered，含 cancel 冲销 + delivery-failed） | 已上线（并入订餐页 Tab，无独立 packing 路由） |
 | 7 | 取消订单原子冲销 + 终态锁定 | 已上线 |
-| 8 | 财务（自动入账 + 手动支出 + 筛选 + 汇总） | 已上线 |
+| 8 | 财务（自动入账 + 手动支出 + 其他产品收入 / 零售目录销售 `misc_retail_income` + 筛选 + 汇总） | 已上线 |
 | 0.6 | 次日接龙汇总（D−1 22:05 Cron + 长图/PDF） | 未上线（MEA-18） |
 | 9 | R2 备份 / 恢复 | 未上线（MEA-22） |
 | 10 | 移动端 Summary（日/周/月/年 + 基准线） | 未上线（MEA-20） |
@@ -31,6 +33,8 @@
 3. [会员注册与维护](#3-会员注册与维护)
 4. [购卡 / 升级 / 换卡](#4-购卡--升级--换卡)
 5. [每日订餐（录入阶段）](#5-每日订餐录入阶段)
+    - [5.3 其他产品销售（零售 Tab）](#53-其他产品销售零售-tab)
+    - [5.4 总览汇总与列表（App）](#54-总览汇总与列表app)
 6. [出餐 / 打包工作流（手机专用）](#6-出餐--打包工作流手机专用)
 7. [取消订单（原子冲销）](#7-取消订单原子冲销)
 8. [财务记账](#8-财务记账)
@@ -159,6 +163,7 @@ sequenceDiagram
 - 原"孙梦瑶统计 → 微信发给孙漫林"→ **系统自动生成"接龙汇总"页**，所有人直接在 App 看，不用再走微信
 - 原"孙梦瑶统计晚上数据 → 微信发给高平 → 高平录入"→ 数据本身已由每次录入实时写入；"今日收工报表"是**实时视图**，谁打开谁看最新；孙梦瑶只负责录采购支出，高平不必再手工录入任何汇总，想留档就直接导出 PDF / xlsx；**不再需要双人签字也不需要微信转述**
 - 徐超和孙漫林**分别用各自账号操作**，打餐视图按"院内 / 院外"自动分组；谁送的谁标送达，审计可追溯
+- **非订餐类零售**（洗护、馒头等）：员工在 **每日订餐 → 零售** 维护 `retail_products` 目录并记销售；写入 `finance_entries.category=misc_retail_income`，**不扣会员卡**；财务流水与「其他产品收入」Modal 均可查看；有价目表时优先走零售 Tab，无价目可走财务页临时 Modal。
 
 ```mermaid
 sequenceDiagram
@@ -564,6 +569,31 @@ flowchart LR
     接龙原文 --> 批量表格 --> 提交
 ```
 
+### 5.3 其他产品销售（零售 Tab）
+
+> **与订餐会员无绑定**：不创建 `orders`、不扣 `cards`；仅写 `finance_entries`（`category=misc_retail_income`），可关联 `retail_products` 与 `quantity`。
+
+```mermaid
+flowchart TD
+    start([员工打开 每日订餐 → 零售]) --> cat{目录有 active 商品?}
+    cat -- 否 --> hint[橙色提示：去 Block C 新增商品]
+    cat -- 是 --> pick[Block A：选 entry_date ≤ 今天\n选商品 Chip + 数量 + 总价 + 收款人 + 可选备注]
+    hint --> add[Block C：Modal 新增/编辑/停用]
+    add --> pick
+    pick --> submit[POST /api/finance/retail-product-sale]
+    submit --> fe[INSERT finance_entries\nmisc_retail_income + retail_product_id + quantity\ncollector_user_id + description]
+    fe --> list[Block B：刷新本日 misc_retail_income 列表]
+```
+
+**API 摘要**：`GET/POST/PATCH /api/finance/retail-products`（目录 CRUD，停用校验「无当日销售」）；销售入账 `POST /api/finance/retail-product-sale`（body：`entry_date`、`product_id`、`quantity`、`amount`（元）、`collector_user_id`、`note?`）。移动端目录请求默认走 **`/api/finance/retail-products`**。
+
+### 5.4 总览汇总与列表（App）
+
+- **汇总白卡（两行）**  
+  - **上行（录入 / 餐别）**：`总餐数` = 当日 `status ≠ cancelled` 的订单 `quantity` 之和；`午餐` / `晚餐` 按 `meal_type` 汇总；`散餐` 为其中 `card` 为空（散客）子集。  
+  - **下行（状态 / 动态）**：`待出餐`（`pending`）、`已出餐`（`fulfilled`）、`已送达`（`delivered`）各状态份数之和，随出餐与送达操作变化。  
+- **列表行（OrderRow）**：姓名 + 状态 chip；副文为「 · 」串联的元信息，其中 **本单份数**（`quantity` +「份」）单独高亮；**个人忌口 / 订单备注** 橙色保留。
+
 ## 6. 出餐 / 打包工作流（手机专用）
 
 > **此模块仅在手机端提供**。桌面端不显示导航入口；直接访问路由会提示"出餐视图为手机专用"。电脑的定位是数据录入 / 管理 / 导出，不参与出餐。
@@ -715,6 +745,8 @@ flowchart LR
     adhoc --> adhocCat --> entry
 ```
 
+另有 **其他零售**（洗护、馒头等）：走 `misc_retail_income`，来源为 **每日订餐 → 零售**（目录选品并带 `retail_product_id` / `quantity`，见 §8.5）或财务页 **其他产品收入** Modal（无价目时的自由文本，见 §8.4）；均 `type=income`、`source=manual`；**不**创建订单、**不**扣卡。
+
 ### 8.2 支出手动录入
 
 ```mermaid
@@ -734,6 +766,27 @@ flowchart LR
     cancel[取消散餐] --> voidFin[FinanceEntry.voided=true 反向抵消]
     refund[admin 改购卡 paid_amount] --> comp[写一条 FinanceEntry 补差或冲销]
 ```
+
+### 8.4 其他产品收入（无价目 Modal）
+
+```mermaid
+flowchart TD
+    start([财务页 + 其他产品收入]) --> form[entry_date + amount + description]
+    form --> save[POST /api/finance/other-product-income]
+    save --> fe[FinanceEntry\nmisc_retail_income\n无 retail_product_id]
+```
+
+> 有价目表时 UI 引导优先使用 **每日订餐 → 零售**（§5.3），Modal 作兜底。
+
+### 8.5 目录零售销售入账
+
+```mermaid
+flowchart TD
+    start([每日订餐 → 零售 → 确认入账]) --> api[POST /api/finance/retail-product-sale]
+    api --> fe[FinanceEntry\nmisc_retail_income\nretail_product_id + quantity\ncollector_user_id + 合成 description]
+```
+
+目录维护：`GET/POST/PATCH /api/finance/retail-products`（与 `/api/retail-products` 等价）。
 
 ## 9. 数据备份 / 恢复
 
@@ -863,3 +916,5 @@ flowchart LR
 ---
 
 本文档随业务流程调整同步更新；若发现流程图与实际代码不一致，以 PR 修正。
+
+**PDF（含 Mermaid）**：根目录执行 `pnpm docs:pdf`，合并 DESIGN / PROCESS / ARCHITECTURE 等并输出 `doc/pdf/meal-design-documentation.pdf`，详见 `DESIGN.md` §20。

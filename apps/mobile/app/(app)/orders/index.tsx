@@ -88,17 +88,28 @@ export default function OrdersScreen() {
     ...(dinnerVisible.length > 0 ? [{ title: '晚餐', data: dinnerVisible }] : []),
   ];
 
-  // 统计统一按“待出餐份数”口径，避免与出餐页口径不一致导致漏餐。
-  const pendingOrders = overviewOrders.filter((o) => o.status === 'pending');
-  const totalLunch = pendingOrders
+  // 总览汇总：上行 = 当日录入（餐别，不含已取消）；下行 = 订单状态份数（随出餐/送达变化）
+  const overviewNonCancelled = overviewOrders.filter((o) => o.status !== 'cancelled');
+  const enteredLunchQty = overviewNonCancelled
     .filter((o) => o.meal_type === 'lunch')
     .reduce((s, o) => s + o.quantity, 0);
-  const totalDinner = pendingOrders
+  const enteredDinnerQty = overviewNonCancelled
     .filter((o) => o.meal_type === 'dinner')
     .reduce((s, o) => s + o.quantity, 0);
-  const pending = pendingOrders.reduce((s, o) => s + o.quantity, 0);
-  const adhocCount = pendingOrders
+  const enteredAdhocQty = overviewNonCancelled
     .filter((o) => o.card_type === null)
+    .reduce((s, o) => s + o.quantity, 0);
+  /** 当日有效订餐总份数（每条订单一行，只计一次；不含已取消） */
+  const enteredTotalQty = overviewNonCancelled.reduce((s, o) => s + o.quantity, 0);
+
+  const statusPendingQty = overviewOrders
+    .filter((o) => o.status === 'pending')
+    .reduce((s, o) => s + o.quantity, 0);
+  const statusFulfilledQty = overviewOrders
+    .filter((o) => o.status === 'fulfilled')
+    .reduce((s, o) => s + o.quantity, 0);
+  const statusDeliveredQty = overviewOrders
+    .filter((o) => o.status === 'delivered')
     .reduce((s, o) => s + o.quantity, 0);
 
   const flashToast = useCallback((msg: string) => {
@@ -445,17 +456,29 @@ export default function OrdersScreen() {
             />
           </View>
 
-          {/* 今日汇总条 */}
-          <View style={styles.summaryBar}>
-            <SummaryItem label="午餐"  value={`${totalLunch}份`}  color={IOS_COLORS.blue} />
-            <View style={styles.summaryDivider} />
-            <SummaryItem label="晚餐"  value={`${totalDinner}份`} color="#AF52DE" />
-            <View style={styles.summaryDivider} />
-            <SummaryItem label="待出餐" value={`${pending}份`}    color={IOS_COLORS.orange} />
-            <View style={styles.summaryDivider} />
-            <SummaryItem label="散餐"  value={`${adhocCount}份`}  color="#FF9500" />
+          {/* 今日汇总：录入（餐别）+ 状态（动态） */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryBarRow}>
+              <SummaryItem label="总餐数" value={`${enteredTotalQty}份`} color={IOS_COLORS.label} />
+              <View style={styles.summaryDivider} />
+              <SummaryItem label="午餐" value={`${enteredLunchQty}份`} color={IOS_COLORS.blue} />
+              <View style={styles.summaryDivider} />
+              <SummaryItem label="晚餐" value={`${enteredDinnerQty}份`} color="#AF52DE" />
+              <View style={styles.summaryDivider} />
+              <SummaryItem label="散餐" value={`${enteredAdhocQty}份`} color="#FF9500" />
+            </View>
+            <View style={styles.summaryInCardDivider} />
+            <View style={styles.summaryBarRow}>
+              <SummaryItem label="待出餐" value={`${statusPendingQty}份`} color={IOS_COLORS.orange} />
+              <View style={styles.summaryDivider} />
+              <SummaryItem label="已出餐" value={`${statusFulfilledQty}份`} color={IOS_COLORS.blue} />
+              <View style={styles.summaryDivider} />
+              <SummaryItem label="已送达" value={`${statusDeliveredQty}份`} color="#34C759" />
+            </View>
           </View>
-          <Text style={styles.summaryHint}>口径说明：以上均按待出餐份数统计</Text>
+          <Text style={styles.summaryHint}>
+            上行：总餐数为当日有效订餐合计（不含已取消）；午餐/晚餐为餐别拆分；散餐为其中的散客单。下行：待出餐、已出餐、已送达份数，随订单状态变化。
+          </Text>
 
           {/* 订单列表 — 展示当日全部订单，午晚分组 */}
           <SectionList

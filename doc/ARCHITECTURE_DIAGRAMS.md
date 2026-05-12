@@ -58,12 +58,15 @@ erDiagram
   USERS ||--o{ MEMBERS : "created_by_user_id"
   USERS ||--o{ CARDS : "collector/creator"
   USERS ||--o{ DAILY_ORDERS : "created/fulfilled/delivered/cancelled by"
-  USERS ||--o{ FINANCE_ENTRIES : "created_by_user_id"
+  USERS ||--o{ FINANCE_ENTRIES : "created_by + collector"
+  USERS ||--o{ RETAIL_PRODUCTS : "created_by_user_id"
 
   MEMBERS ||--o{ CARDS : "owns"
   MEMBERS ||--o{ DAILY_ORDERS : "places"
 
   CARDS ||--o{ DAILY_ORDERS : "consumed_by card_id"
+
+  RETAIL_PRODUCTS ||--o{ FINANCE_ENTRIES : "retail_product_id optional"
 
   USERS {
     int id PK
@@ -132,9 +135,25 @@ erDiagram
     string category
     decimal amount
     string description
+    int ref_card_id FK "nullable"
+    int ref_order_id FK "nullable"
+    int retail_product_id FK "nullable"
+    int quantity "nullable"
+    int collector_user_id FK "nullable"
     enum source "auto|manual|imported_legacy"
     boolean voided
     int created_by_user_id FK
+  }
+
+  RETAIL_PRODUCTS {
+    int id PK
+    string name
+    string detail
+    boolean is_active
+    int sort_order
+    int created_by_user_id FK
+    datetime created_at
+    datetime updated_at
   }
 
   AUDIT_LOGS {
@@ -161,6 +180,7 @@ flowchart TB
   Client --> Cards["/api/cards"]
   Client --> Orders["/api/orders"]
   Client --> Finance["/api/finance"]
+  Client --> Retail["/api/retail-products"]
   Client --> Users["/api/users"]
   Client --> Audit["/api/audit-logs"]
 
@@ -199,8 +219,15 @@ flowchart TB
   subgraph FinanceDomain["Finance Domain"]
     Finance --> FinanceList["GET /"]
     Finance --> FinanceExpense["POST /expense"]
+    Finance --> FinanceOtherProduct["POST /other-product-income"]
+    Finance --> FinanceRetailSale["POST /retail-product-sale"]
+    Finance --> FinanceRetailCatalog["GET|POST|PATCH /retail-products"]
     Finance --> FinancePatch["PATCH /:id"]
     Finance --> FinanceDelete["DELETE /:id"]
+  end
+
+  subgraph RetailDomain["Retail catalog alias"]
+    Retail --> RetailList["GET|POST|PATCH / same router as finance mount"]
   end
 
   subgraph AdminDomain["Admin / Ops Domain"]
@@ -215,6 +242,8 @@ flowchart TB
 Notes:
 
 - `PATCH /api/orders/:id/delivery-failed` is a business alias of cancellation for `fulfilled` orders, with mandatory reason and meal rollback side effects.
+- `GET|POST|PATCH /api/finance/retail-products` mounts the same router as `/api/retail-products` (mobile defaults to the finance path).
+- `POST /api/finance/retail-product-sale` writes `misc_retail_income` with `retail_product_id` and `quantity`; `POST /api/finance/other-product-income` writes the same category without a catalog row.
 
 
 

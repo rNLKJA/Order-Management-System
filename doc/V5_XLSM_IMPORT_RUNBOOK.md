@@ -22,7 +22,8 @@
 ## 3. 导入范围（全量选项 A）
 
 - **保留表**：`users`、`settings`
-- **清空后重灌**：`finance_entries`、`daily_orders`、`cards`（先解除 `upgraded_from_id`）、`members`、存在的 `order_proof_sets`，以及 `audit_logs`、`notifications`、`export_logs`、`tomorrow_summaries`、`idempotency_keys`
+- **清空后重灌**：`finance_entries`、`daily_orders`、`cards`（先解除 `upgraded_from_id`）、`members`、存在的 `order_proof_sets`，以及 `audit_logs`、`notifications`、`export_logs`、`tomorrow_summaries`、`idempotency_keys`、`imported_order_summaries`、`imported_weekly_closings`、`imported_summary_snapshots`（与 `wipeBusinessData` 一致）。
+- **`retail_products`**：`--wipe` **不会**删除该表。执行 wipe 后目录行仍保留；`finance_entries` 会先被清空，故不会出现指向已删流水的孤儿 FK，但若希望「与 Excel 全量重灌后目录一致」，需在 wipe/导入前后**手工维护** `retail_products`（例如先清空再按现价重建），以免 App 里仍显示旧商品名。
 
 ```mermaid
 flowchart LR

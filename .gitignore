@@ -69,3 +69,6 @@ eas.json.local
 # OS
 Thumbs.db
 .secret/
+
+# 文档 PDF 导出（本地生成，避免二进制入库）
+doc/pdf/*.pdf

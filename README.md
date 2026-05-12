@@ -83,6 +83,11 @@ pnpm format           # Prettier 格式化
 - Mobile Web（Vercel）：[https://meal-mobile.vercel.app](https://meal-mobile.vercel.app)
 - API（Vercel）：[https://meal-api-nu.vercel.app](https://meal-api-nu.vercel.app)
 
+## 近期更新（2026-05-08）
+
+- **其他零售**：每日订餐增加 **「零售」** Tab — 维护 `retail_products` 目录、从目录记销售入账 `misc_retail_income`（不绑会员、不扣卡）；财务流水 `EntryCard` 可显示收款人；`GET /api/finance` 的 `realized_income` 含该分类。
+- **文档**：已同步 [`doc/DESIGN.md`](./doc/DESIGN.md)（§11.4–11.5、§19）、[`doc/PROCESS.md`](./doc/PROCESS.md)（§5.3、§8.1/8.4/8.5、实现状态表）、[`doc/ARCHITECTURE_DIAGRAMS.md`](./doc/ARCHITECTURE_DIAGRAMS.md)、[`doc/V5_XLSM_IMPORT_RUNBOOK.md`](./doc/V5_XLSM_IMPORT_RUNBOOK.md)、[`doc/LINEAR.md`](./doc/LINEAR.md)（合入后文档清单）。
+
 ## 近期更新（2026-04-28）
 
 - 每日订餐新增「送餐失败并退餐」流程：仅对 `已出餐` 订单可用，支持快速失败原因并自动退回餐数。
@@ -159,7 +164,9 @@ eas build --platform ios --profile production --no-wait
 
 - [业务流程图 PROCESS.md](./doc/PROCESS.md)
 - [视觉规范 DESIGN.md](./doc/DESIGN.md)（v3：Glassmorphism + Bento + Apple/Material 融合；RN Paper 版已落地）
+- [架构图 ARCHITECTURE_DIAGRAMS.md](./doc/ARCHITECTURE_DIAGRAMS.md)（系统 / 数据库 ER / API）
 - [Linear 使用教学 LINEAR.md](./doc/LINEAR.md)
+- **合并 PDF（含 Mermaid 图）**：安装依赖后于根目录执行 `pnpm docs:pdf`，输出 `doc/pdf/meal-design-documentation.pdf`（见 `doc/DESIGN.md` §20）。
 
 ## 许可
 

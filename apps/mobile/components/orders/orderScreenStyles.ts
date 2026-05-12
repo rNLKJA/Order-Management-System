@@ -94,27 +94,38 @@ export const orderScreenStyles = StyleSheet.create({
   limitChipText: { fontSize: 12, color: IOS_COLORS.labelSecondary, fontWeight: '600' },
   limitChipTextActive: { color: IOS_COLORS.blue },
 
-  summaryBar: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 16,
+  /** 总览双行汇总容器 */
+  summaryCard: {
     marginHorizontal: 12,
     marginBottom: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(17,17,17,0.08)',
+    overflow: 'hidden',
+  },
+  summaryBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+  },
+  summaryInCardDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    marginHorizontal: 10,
   },
   summaryItem: { flex: 1, alignItems: 'center', gap: 2 },
   summaryValue: { fontSize: 18, fontWeight: '700' },
   summaryLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary },
   summaryDivider: { width: StyleSheet.hairlineWidth, backgroundColor: 'rgba(0,0,0,0.08)', marginVertical: 4 },
   summaryHint: {
-    marginTop: -4,
+    marginTop: -2,
     marginBottom: 8,
     marginHorizontal: 16,
     fontSize: 12,
     color: IOS_COLORS.labelSecondary,
+    lineHeight: 17,
   },
 
   filterSection: {
@@ -184,7 +195,7 @@ export const orderScreenStyles = StyleSheet.create({
     marginHorizontal: 12,
     marginBottom: 8,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     gap: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(17,17,17,0.08)',
@@ -199,12 +210,13 @@ export const orderScreenStyles = StyleSheet.create({
     flexShrink: 0,
   },
   orderAvatarText: { fontSize: 18, fontWeight: '600', color: IOS_COLORS.blue },
-  orderContent: { flex: 1, gap: 4 },
-  orderTop: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  orderName: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
+  orderContent: { flex: 1, gap: 3, minWidth: 0 },
+  /** 总览：姓名 + 状态，元信息单行化见 orderMetaLine */
+  orderTop: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'nowrap' },
+  orderName: { flex: 1, fontSize: 15, fontWeight: '600', color: IOS_COLORS.label, minWidth: 0 },
   hospitalBadge: { backgroundColor: IOS_COLORS.blueLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   hospitalText: { fontSize: 11, color: IOS_COLORS.blue, fontWeight: '600' },
-  statusBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  statusBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, flexShrink: 0 },
   statusText: { fontSize: 11, fontWeight: '600' },
   deliveryFailedBadge: {
     backgroundColor: '#FDECEC',
@@ -214,6 +226,19 @@ export const orderScreenStyles = StyleSheet.create({
   },
   deliveryFailedText: { fontSize: 11, color: '#D97A00', fontWeight: '700' },
   orderMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  /** 总览列表：替代多枚小 tag，用「 · 」串起同一信息 */
+  orderMetaLine: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: IOS_COLORS.labelSecondary,
+    marginTop: 1,
+  },
+  /** 本单点餐份数（高亮） */
+  orderMetaQty: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: IOS_COLORS.blue,
+  },
   cardTag: {
     fontSize: 12,
     color: IOS_COLORS.labelSecondary,

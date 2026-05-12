@@ -208,3 +208,16 @@ Closes MEA-12
 - **按 title 去重**：修标题等于新建 issue；想改标题请先在 Linear 改，再回写本地规格。
 - `state` 支持 `Backlog / Todo / InProgress / InReview / Done / Canceled`；其余值会被脚本拒绝。
 - `labels` 缺失会被脚本自动创建。
+
+## 10. 功能合入后的文档同步（建议清单）
+
+新能力上线后，除 PR 与 `linear-issues.ts` 外，请核对并更新下列文档，避免一线与后续开发「文档与代码不一致」：
+
+- [`doc/DESIGN.md`](./DESIGN.md) — 对应章节的布局、Tab、Modal 与交互说明（如每日订餐 §11.4、财务 §11.5、落地补充章节）。
+- [`doc/PROCESS.md`](./PROCESS.md) — 实现状态表、TOC、流程图（mermaid）与财务/API 小节。
+- [`doc/ARCHITECTURE_DIAGRAMS.md`](./ARCHITECTURE_DIAGRAMS.md) — ER 与 API 图是否含新表、新路由。
+- [`doc/V5_XLSM_IMPORT_RUNBOOK.md`](./V5_XLSM_IMPORT_RUNBOOK.md) — 若 `--wipe` 或导入范围涉及新表，注明是否清空。
+- **PDF 导出**：根目录 `pnpm docs:pdf` → `doc/pdf/meal-design-documentation.pdf`（Mermaid 在导出时渲染，见 `DESIGN.md` §20）。
+- 根目录 [`README.md`](../README.md) — 「近期更新」与阶段说明中可见的一行摘要。
+
+涉及 issue 列表批量调整时，仍以 [`scripts/src/linear-issues.ts`](../scripts/src/linear-issues.ts) 为本地规格源。

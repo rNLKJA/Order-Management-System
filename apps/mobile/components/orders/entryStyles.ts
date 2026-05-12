@@ -128,6 +128,13 @@ export const entryStyles = StyleSheet.create({
   memberAvatarText: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.blue },
   memberName: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
   memberNick: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 1 },
+  memberContact: {
+    fontSize: 11,
+    color: IOS_COLORS.labelTertiary,
+    marginTop: 2,
+  },
+  /** 含多行联系方式时，行与头像顶部对齐 */
+  memberRowWithContact: { alignItems: 'flex-start' },
   memberCardBadge: {
     fontSize: 12,
     color: IOS_COLORS.blue,
@@ -194,24 +201,94 @@ export const entryStyles = StyleSheet.create({
   selDiet: { fontSize: 12, color: IOS_COLORS.orange, marginTop: 2 },
   changeBtn: { fontSize: 15, color: IOS_COLORS.blue },
 
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginVertical: 16 },
-
-  qtySection: { backgroundColor: IOS_COLORS.card, borderRadius: 14, overflow: 'hidden', marginBottom: 4 },
-  qtyRow: {
+  /** 批量已加入卡片：左信息右删除，紧凑 */
+  batchCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: IOS_COLORS.separatorLight,
+    paddingVertical: 8,
+    paddingLeft: 12,
+    paddingRight: 8,
+    gap: 6,
   },
-  qtyLabel: { fontSize: 15, color: IOS_COLORS.label, fontWeight: '500' },
+  batchCardBody: { flex: 1, minWidth: 0, gap: 3 },
+  /** 姓名 + 卡信息同一行（窄屏自动换行） */
+  batchCardTitleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: 8,
+    rowGap: 2,
+  },
+  batchCardName: { fontSize: 14, lineHeight: 18, flexShrink: 1, minWidth: 56 },
+  batchCardMetaInline: {
+    textAlign: 'left',
+    marginTop: 0,
+    marginBottom: 0,
+    paddingLeft: 0,
+    fontSize: 11,
+    lineHeight: 14,
+    color: IOS_COLORS.labelSecondary,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  batchCardDelete: { padding: 4 },
+  batchCardContact: {
+    textAlign: 'left',
+    marginTop: 1,
+    marginBottom: 0,
+    paddingLeft: 0,
+    fontSize: 11,
+    lineHeight: 14,
+    color: IOS_COLORS.labelTertiary,
+  },
+  batchCardDivider: { marginLeft: 0 },
+
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginVertical: 16 },
+
+  qtyPairCard: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: IOS_COLORS.card,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  qtyPairCol: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  qtyPairCaption: {
+    fontSize: 12,
+    color: IOS_COLORS.labelSecondary,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  qtyPairVBar: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: IOS_COLORS.separatorLight,
+    marginVertical: 8,
+  },
+  /** 批量已加入卡片内午/晚更紧凑 */
+  qtyPairCardDense: { marginBottom: 0 },
+  qtyPairColDense: { paddingVertical: 5, paddingHorizontal: 2 },
+  qtyPairCaptionDense: { fontSize: 10, marginBottom: 3 },
+  qtyPairVBarDense: { marginVertical: 4 },
   qtyControls: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   qtyBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: IOS_COLORS.blue, alignItems: 'center', justifyContent: 'center' },
+  qtyBtnSm: { width: 32, height: 32, borderRadius: 16, backgroundColor: IOS_COLORS.blue, alignItems: 'center', justifyContent: 'center' },
   qtyBtnDisabled: { backgroundColor: IOS_COLORS.fillMedium },
   qtyBtnText: { fontSize: 20, color: '#fff', fontWeight: '500', lineHeight: 24 },
+  qtyBtnTextSm: { fontSize: 18, color: '#fff', fontWeight: '500', lineHeight: 22 },
   qtyValue: { fontSize: 20, fontWeight: '700', color: IOS_COLORS.label, minWidth: 32, textAlign: 'center' },
+  qtyValueSm: { fontSize: 18, fontWeight: '700', color: IOS_COLORS.label, minWidth: 28, textAlign: 'center' },
+  qtyControlsCompact: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
   notesBox: {
     backgroundColor: IOS_COLORS.card,
