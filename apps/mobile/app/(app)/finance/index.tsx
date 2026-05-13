@@ -14,7 +14,7 @@ import {
   Pressable,
 } from 'react-native';
 import { confirmDestructive, notify } from '../../../lib/confirm';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, Menu, ActivityIndicator } from 'react-native-paper';
 import {
@@ -29,6 +29,8 @@ import {
   IconAvatar,
   PressableCard,
   StatusChip,
+  FloatingBottomBar,
+  floatingBottomReserve,
 } from '../../../components/ui';
 import {
   FINANCE_CATEGORY_LABEL,
@@ -75,6 +77,13 @@ const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
 export default function FinanceScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTopOnFocus(scrollRef);
+
+  const insets = useSafeAreaInsets();
+  /** 与底部「全部 / 只要收入 / 只要支出」条实际高度对齐（含 FloatingBottomBar 胶囊内边距），避免压住流水卡片 */
+  const financeTypeBarReserve = useMemo(
+    () => floatingBottomReserve(84, insets.bottom),
+    [insets.bottom],
+  );
 
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -276,9 +285,14 @@ export default function FinanceScreen() {
           }
         />
 
+        <View style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={styles.container}
+          style={{ flex: 1 }}
+          contentContainerStyle={[
+            styles.container,
+            { paddingBottom: financeTypeBarReserve + SPACING.xxl },
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -287,13 +301,13 @@ export default function FinanceScreen() {
           }
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.block}>
-            <GlassSurface padding={SPACING.base} style={styles.heroCard}>
+          <View style={[styles.block, { marginBottom: SPACING.md }]}>
+            <GlassSurface padding={SPACING.md} style={styles.heroCard}>
               <IconAvatar
                 icon="wallet-outline"
                 color={COLORS.warning}
                 bg={COLORS.warningSoft}
-                size={42}
+                size={40}
               />
               <View style={styles.heroMain}>
                 <Text style={styles.heroTitle}>财务流水</Text>
@@ -370,6 +384,7 @@ export default function FinanceScreen() {
             <BentoGrid gap={SPACING.md}>
               <Bento span={4} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="入账合计"
                   value={formatCNY(summary?.income ?? 0)}
                   icon="arrow-up-circle-outline"
@@ -379,6 +394,7 @@ export default function FinanceScreen() {
               </Bento>
               <Bento span={4} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="支出合计"
                   value={formatCNY(summary?.expense ?? 0)}
                   icon="arrow-down-circle-outline"
@@ -386,8 +402,9 @@ export default function FinanceScreen() {
                   tint="danger"
                 />
               </Bento>
-              <Bento span={4} mobileSpan={12}>
+              <Bento span={4} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="结余（入−出）"
                   value={formatCNY(summary?.net ?? 0)}
                   icon={
@@ -406,26 +423,8 @@ export default function FinanceScreen() {
             <SectionLabel>怎么查流水</SectionLabel>
             <GlassSurface padding={SPACING.md} style={styles.filterCard}>
               <Text style={styles.filterHint}>
-                先看「全部 / 只要收入 / 只要支出」。要按办卡、送餐分类再往下点。
+                收入类型在屏幕底部切换。要按办卡、送餐分类再点「更多筛选」。
               </Text>
-              <View style={styles.segmentedBar}>
-                {(['all', 'income', 'expense'] as const).map((v) => {
-                  const active = typeFilter === v;
-                  return (
-                    <Pressable
-                      key={v}
-                      style={[styles.segment, active && styles.segmentActive]}
-                      onPress={() => setTypeFilter(v)}
-                    >
-                      <Text
-                        style={[styles.segmentText, active && styles.segmentTextActive]}
-                      >
-                        {v === 'all' ? '全部' : v === 'income' ? '只要收入' : '只要支出'}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
 
               {!showAdvancedFilters && (category !== 'all' || includeVoided) ? (
                 <Text style={[styles.filterHint, { marginBottom: 0 }]}>
@@ -549,6 +548,43 @@ export default function FinanceScreen() {
             )}
           </View>
         </ScrollView>
+
+        <FloatingBottomBar>
+          <View style={styles.segmentedBar}>
+            {(['all', 'income', 'expense'] as const).map((v) => {
+              const active = typeFilter === v;
+              const icon =
+                v === 'all'
+                  ? ('layers-outline' as const)
+                  : v === 'income'
+                    ? ('trending-up-outline' as const)
+                    : ('trending-down-outline' as const);
+              const label = v === 'all' ? '全部' : v === 'income' ? '只要收入' : '只要支出';
+              return (
+                <Pressable
+                  key={v}
+                  style={[styles.segment, active && styles.segmentActive]}
+                  onPress={() => setTypeFilter(v)}
+                >
+                  <View style={styles.segmentInner}>
+                    <Ionicons
+                      name={icon}
+                      size={16}
+                      color={active ? COLORS.brand : COLORS.text.tertiary}
+                    />
+                    <Text
+                      style={[styles.segmentText, active && styles.segmentTextActive]}
+                      numberOfLines={1}
+                    >
+                      {label}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </FloatingBottomBar>
+        </View>
 
         <ExpenseModal
           visible={modalVisible}
@@ -681,8 +717,8 @@ const styles = StyleSheet.create({
   heroCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.base },
   heroMain: { flex: 1, minWidth: 0 },
   heroTitle: { ...TYPE.headline, color: COLORS.text.primary },
-  heroRange: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 4, fontVariant: ['tabular-nums'] },
-  heroSub: { ...TYPE.footnote, color: COLORS.text.tertiary, marginTop: 2 },
+  heroRange: { ...TYPE.footnote, color: COLORS.text.secondary, marginTop: 3, fontVariant: ['tabular-nums'] },
+  heroSub: { ...TYPE.caption, color: COLORS.text.tertiary, marginTop: 4, lineHeight: 17 },
 
   errorBanner: {
     borderRadius: RADIUS.md,
@@ -703,26 +739,34 @@ const styles = StyleSheet.create({
 
   segmentedBar: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(118,118,128,0.12)',
-    borderRadius: 10,
+    gap: 4,
     padding: 2,
+    backgroundColor: 'transparent',
+  },
+  segmentInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
   },
   segment: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 7,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: 999,
+    minHeight: 40,
   },
   segmentActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 1,
+    backgroundColor: 'rgba(118,118,128,0.16)',
   },
-  segmentText: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '500' },
+  segmentText: {
+    fontSize: 12,
+    color: COLORS.text.secondary,
+    fontWeight: '500',
+    flexShrink: 1,
+    minWidth: 0,
+  },
   segmentTextActive: { color: COLORS.text.primary, fontWeight: '600' },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, alignItems: 'center' },

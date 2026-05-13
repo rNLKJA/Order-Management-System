@@ -100,6 +100,7 @@ export default function MembersScreen() {
               <BentoGrid gap={SPACING.md}>
                 <Bento span={3} mobileSpan={6}>
                   <StatTile
+                    layout="compact"
                     label={isSearchMode ? '搜索结果' : '总会员'}
                     value={`${members.length}`}
                     icon="people-outline"
@@ -108,13 +109,13 @@ export default function MembersScreen() {
                   />
                 </Bento>
                 <Bento span={3} mobileSpan={6}>
-                  <StatTile label="院内" value={`${hospitalCount}`} icon="business-outline" color={COLORS.info} tint="warn" />
+                  <StatTile layout="compact" label="院内" value={`${hospitalCount}`} icon="business-outline" color={COLORS.info} tint="warn" />
                 </Bento>
                 <Bento span={3} mobileSpan={6}>
-                  <StatTile label="院外" value={`${regularCount}`} icon="home-outline" color={COLORS.success} tint="ok" />
+                  <StatTile layout="compact" label="院外" value={`${regularCount}`} icon="home-outline" color={COLORS.success} tint="ok" />
                 </Bento>
                 <Bento span={3} mobileSpan={6}>
-                  <StatTile label="需续卡" value={`${expiredCount}`} icon="alert-circle-outline" color={COLORS.warning} tint="danger" />
+                  <StatTile layout="compact" label="需续卡" value={`${expiredCount}`} icon="alert-circle-outline" color={COLORS.warning} tint="danger" />
                 </Bento>
               </BentoGrid>
             </View>

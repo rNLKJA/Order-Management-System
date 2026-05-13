@@ -17,7 +17,8 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import {
   addCalendarDaysShanghai,
@@ -35,12 +36,27 @@ import {
   MeshBackground,
   SectionLabel,
   StatTile,
+  FloatingBottomBar,
+  floatingBottomReserve,
 } from '../../../components/ui';
 import { ordersApi, type DailyOrder } from '../../../api/orders';
 import { COLORS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
 import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 type ChartRange = 'today' | 'week' | 'month' | 'year' | 'custom';
+
+function chartRangeBarIcon(r: 'today' | 'week' | 'month' | 'year'): keyof typeof Ionicons.glyphMap {
+  switch (r) {
+    case 'today':
+      return 'sunny-outline';
+    case 'week':
+      return 'calendar-outline';
+    case 'month':
+      return 'calendar-number-outline';
+    case 'year':
+      return 'stats-chart-outline';
+  }
+}
 
 function diffDaysInclusive(from: string, to: string): number {
   return diffCalendarDaysInclusiveShanghai(from, to);
@@ -98,6 +114,12 @@ function emptyTotals(): Totals {
 export default function OrdersStatsScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTopOnFocus(scrollRef);
+
+  const insets = useSafeAreaInsets();
+  const statsBottomBarReserve = useMemo(
+    () => floatingBottomReserve(52, insets.bottom),
+    [insets.bottom],
+  );
 
   const [chartRange, setChartRange] = useState<ChartRange>('today');
   const [from, setFrom] = useState(() => formatDate(new Date()));
@@ -269,9 +291,14 @@ export default function OrdersStatsScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader title="订餐数据" />
 
+        <View style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={styles.container}
+          style={{ flex: 1 }}
+          contentContainerStyle={[
+            styles.container,
+            { paddingBottom: statsBottomBarReserve + SPACING.xl },
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -291,6 +318,7 @@ export default function OrdersStatsScreen() {
           {/* 时间范围 */}
           <View style={styles.block}>
             <SectionLabel>{`时间范围 · ${effectiveFrom} ~ ${effectiveTo}`}</SectionLabel>
+            <Text style={styles.rangeBottomHint}>「今天 / 近7天…」快捷范围在屏幕底部切换。</Text>
             <GlassSurface padding={SPACING.md}>
               <View style={styles.rangeRow}>
                 <DatePicker
@@ -309,28 +337,16 @@ export default function OrdersStatsScreen() {
                   style={styles.rangePicker}
                 />
               </View>
-              <View style={styles.chartRangeRow}>
-                {(['today', 'week', 'month', 'year'] as const).map((r) => (
-                  <Pressable
-                    key={r}
-                    style={[styles.chartRangeChip, chartRange === r && styles.chartRangeChipActive]}
-                    onPress={() => applyChartRange(r)}
-                  >
-                    <Text style={[styles.chartRangeText, chartRange === r && styles.chartRangeTextActive]}>
-                      {r === 'today' ? '今天' : r === 'week' ? '近7天' : r === 'month' ? '近30天' : '近一年'}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
             </GlassSurface>
           </View>
 
-          {/* 汇总速览（4 格） */}
+          {/* 汇总速览（5 格同宽：含员工餐） */}
           <View style={styles.block}>
             <SectionLabel>{`汇总 · ${days} 天`}</SectionLabel>
             <BentoGrid gap={SPACING.md}>
               <Bento span={3} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="订单条数"
                   value={`${totals.orders}`}
                   icon="receipt-outline"
@@ -341,6 +357,7 @@ export default function OrdersStatsScreen() {
               </Bento>
               <Bento span={3} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="有效份数"
                   value={`${totals.meals}`}
                   icon="restaurant-outline"
@@ -351,6 +368,7 @@ export default function OrdersStatsScreen() {
               </Bento>
               <Bento span={3} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="午餐份数"
                   value={`${totals.lunch}`}
                   icon="sunny-outline"
@@ -360,6 +378,7 @@ export default function OrdersStatsScreen() {
               </Bento>
               <Bento span={3} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="晚餐份数"
                   value={`${totals.dinner}`}
                   icon="moon-outline"
@@ -367,8 +386,9 @@ export default function OrdersStatsScreen() {
                   tint="info"
                 />
               </Bento>
-              <Bento span={6} mobileSpan={12}>
+              <Bento span={3} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="员工餐份数"
                   value={`${totals.staffMealMeals}`}
                   icon="id-card-outline"
@@ -407,7 +427,7 @@ export default function OrdersStatsScreen() {
                   ) : (
                     <View style={styles.trendChart}>
                       {trendBars.map((d) => {
-                        const barHeight = Math.max(6, Math.round((d.meals / trendMaxMeals) * 96));
+                        const barHeight = Math.max(6, Math.round((d.meals / trendMaxMeals) * 84));
                         return (
                           <View key={d.date} style={styles.trendCol}>
                             <View style={styles.trendBarTrack}>
@@ -492,6 +512,7 @@ export default function OrdersStatsScreen() {
             <BentoGrid gap={SPACING.md}>
               <Bento span={6} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="会员订单"
                   value={`${totals.memberOrders}`}
                   icon="people-outline"
@@ -502,6 +523,7 @@ export default function OrdersStatsScreen() {
               </Bento>
               <Bento span={6} mobileSpan={6}>
                 <StatTile
+                  layout="compact"
                   label="散客订单"
                   value={`${totals.walkinOrders}`}
                   icon="walk-outline"
@@ -514,6 +536,33 @@ export default function OrdersStatsScreen() {
           </View>
 
         </ScrollView>
+        <FloatingBottomBar>
+          <View style={[styles.chartRangeRow, styles.chartRangeRowFloating]}>
+            {(['today', 'week', 'month', 'year'] as const).map((r) => {
+              const active = chartRange === r;
+              return (
+                <Pressable
+                  key={r}
+                  style={[styles.chartRangeChip, active && styles.chartRangeChipActive]}
+                  onPress={() => applyChartRange(r)}
+                >
+                  <Ionicons
+                    name={chartRangeBarIcon(r)}
+                    size={15}
+                    color={active ? COLORS.brand : COLORS.text.tertiary}
+                  />
+                  <Text
+                    style={[styles.chartRangeText, active && styles.chartRangeTextActive]}
+                    numberOfLines={1}
+                  >
+                    {r === 'today' ? '今天' : r === 'week' ? '近7天' : r === 'month' ? '近30天' : '近一年'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </FloatingBottomBar>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -554,7 +603,15 @@ const styles = StyleSheet.create({
     maxWidth: SPACING.maxWidth,
     alignSelf: 'center',
   },
-  block: { marginBottom: SPACING.lg },
+  block: { marginBottom: SPACING.md },
+
+  rangeBottomHint: {
+    ...TYPE.caption,
+    color: COLORS.text.tertiary,
+    marginBottom: SPACING.sm,
+    lineHeight: 18,
+    paddingHorizontal: 2,
+  },
 
   errorBanner: {
     padding: SPACING.md,
@@ -565,12 +622,12 @@ const styles = StyleSheet.create({
   },
   errorBannerText: { ...TYPE.footnote, color: COLORS.danger },
 
-  chartCard: { minHeight: 172 },
+  chartCard: { minHeight: 148 },
   chartHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
     gap: SPACING.sm,
   },
   chartTitle: { ...TYPE.headline, color: COLORS.text.primary },
@@ -584,26 +641,43 @@ const styles = StyleSheet.create({
   rangePicker: { flex: 1 },
   rangeDash: { ...TYPE.caption, color: COLORS.text.tertiary, fontWeight: '600' },
   chartRangeRow: { flexDirection: 'row', gap: 8, marginBottom: SPACING.sm },
+  chartRangeRowFloating: {
+    marginBottom: 0,
+    padding: 4,
+    backgroundColor: 'transparent',
+    gap: 6,
+  },
   chartRangeChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+    borderRadius: 14,
     backgroundColor: 'rgba(118,118,128,0.12)',
   },
   chartRangeChipActive: { backgroundColor: 'rgba(0,122,255,0.16)' },
-  chartRangeText: { ...TYPE.caption, color: COLORS.text.secondary, fontWeight: '600' },
+  chartRangeText: {
+    ...TYPE.caption,
+    color: COLORS.text.secondary,
+    fontWeight: '600',
+    flexShrink: 1,
+    minWidth: 0,
+  },
   chartRangeTextActive: { color: COLORS.brand },
   trendChart: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 6,
-    minHeight: 126,
+    minHeight: 108,
   },
   trendCol: { flex: 1, alignItems: 'center', minWidth: 14 },
   trendBarTrack: {
     width: '100%',
     maxWidth: 16,
-    height: 98,
+    height: 84,
     justifyContent: 'flex-end',
     borderRadius: 8,
     backgroundColor: 'rgba(0,0,0,0.06)',

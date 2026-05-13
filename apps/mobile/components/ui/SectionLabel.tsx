@@ -6,8 +6,15 @@ import { StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
 import { COLORS, SPACING, TYPE } from '../../theme/paperTheme';
 
-export function SectionLabel({ children }: { children: string }) {
-  return <Text style={styles.label}>{children}</Text>;
+export type SectionLabelProps = {
+  children: string;
+  align?: 'left' | 'center';
+};
+
+export function SectionLabel({ children, align = 'left' }: SectionLabelProps) {
+  return (
+    <Text style={[styles.label, align === 'center' && styles.labelCenter]}>{children}</Text>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -19,5 +26,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingHorizontal: 4,
     marginBottom: SPACING.sm,
+  },
+  labelCenter: {
+    textAlign: 'center',
+    width: '100%',
+    alignSelf: 'center',
   },
 });

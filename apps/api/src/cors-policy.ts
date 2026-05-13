@@ -20,14 +20,19 @@ const PROD_WEB_ORIGINS = [
 /**
  * 本地开发时常见的 Expo / Web 起源端口。
  * - 8081: Expo SDK 50+ web 默认端口
+ * - 8082 / 8080: 端口被占用时 Metro 常见顺延
  * - 19006: 旧版 Expo Web
  * - 3000:  备用（API 端口同号但 host 不同时也允许，便于本地 mocking）
  */
 const DEV_ORIGINS = [
+  'http://localhost:8080',
   'http://localhost:8081',
+  'http://localhost:8082',
   'http://localhost:19006',
   'http://localhost:3000',
+  'http://127.0.0.1:8080',
   'http://127.0.0.1:8081',
+  'http://127.0.0.1:8082',
   'http://127.0.0.1:19006',
   'http://127.0.0.1:3000',
 ];

@@ -16,7 +16,7 @@ import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
-import { ApiError } from '../../api/client';
+import { ApiError, getApiBaseUrl } from '../../api/client';
 import { COLORS, GLASS, RADIUS, SPACING, TYPE } from '../../theme/paperTheme';
 import { Button, GlassSurface, IconAvatar, MeshBackground } from '../../components/ui';
 
@@ -55,11 +55,21 @@ export default function LoginScreen() {
           message.includes('failed to fetch') ||
           message.includes('network request failed') ||
           message.includes('networkerror');
-        setError(
-          looksLikeNetworkError
-            ? '无法连接本地服务，请先启动 API：pnpm --filter @meal/api dev'
-            : '登录失败，请稍后重试',
-        );
+        if (looksLikeNetworkError) {
+          const base = getApiBaseUrl();
+          const isLocalApi =
+            /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(base) ||
+            /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}/i.test(base);
+          setError(
+            isLocalApi
+              ? `无法连接本机 API（${base}）。请先执行：pnpm --filter @meal/api dev`
+              : typeof __DEV__ !== 'undefined' && __DEV__
+                ? `无法连接 API（${base}）。请检查网络、VPN 或防火墙后重试。`
+                : '无法连接服务器，请检查网络后重试。',
+          );
+        } else {
+          setError('登录失败，请稍后重试');
+        }
       }
     } finally {
       setLoading(false);

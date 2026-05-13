@@ -1,7 +1,7 @@
 /**
  * 录入 Tab — 会员餐 / 散餐（从 orders/index 拆分）
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   View,
@@ -474,6 +474,45 @@ export function EntryPanel({
         ? canSubmitMemberBatch
         : canSubmitMemberSingle
       : canSubmitAdhoc;
+
+  /** 单人会员餐：按钮灰掉时的可读原因（避免误以为「坏了」） */
+  const memberSingleWhyDisabled = useMemo((): string | null => {
+    if (mode !== 'member' || memberBatchMode || !selectedMember || canSubmitMemberSingle || submitting) {
+      return null;
+    }
+    if (lunchQty + dinnerQty < 1) {
+      return '请用上方步进器设置午餐或晚餐至少 1 份。';
+    }
+    if (!proofOk) {
+      return '请在上方「订餐凭证」中添加至少一张截图。';
+    }
+    if (!memberIsGift && !memberHasStaffCard(selectedMember) && !memberHasCard) {
+      return '该会员无进行中有效卡，无法扣次；请办卡、勾选「赠送餐」或使用员工卡。';
+    }
+    if (
+      !memberIsGift &&
+      memberHasCard &&
+      !memberHasStaffCard(selectedMember) &&
+      !memberCardEnough
+    ) {
+      const rem = selectedMember.active_card!.remaining_meals;
+      const need = lunchQty + dinnerQty;
+      return `剩余餐次不足：卡上剩 ${rem} 份，本单需扣 ${need} 份。`;
+    }
+    return null;
+  }, [
+    mode,
+    memberBatchMode,
+    selectedMember,
+    canSubmitMemberSingle,
+    submitting,
+    lunchQty,
+    dinnerQty,
+    proofOk,
+    memberIsGift,
+    memberHasCard,
+    memberCardEnough,
+  ]);
 
   const batchHasStaffMember = memberBatchEntries.some(
     (r) => memberHasStaffCard(r.member) || r.member.is_staff,
@@ -1199,9 +1238,15 @@ export function EntryPanel({
                           : `午 ${lunchQty} · 晚 ${dinnerQty}`}
                   {proofOk ? '' : ' · 请先上传凭证'}
                 </Text>
+                {memberSingleWhyDisabled ? (
+                  <Text style={entryStyles.submitBlockHint}>{memberSingleWhyDisabled}</Text>
+                ) : null}
               </>
             ) : (
-              <Text style={entryStyles.submitHint}>请搜索并选择一位会员</Text>
+              <Text style={entryStyles.submitHint}>
+                请搜索并选择一位会员
+                {!proofOk ? '，并上传至少一张订餐凭证' : ''}
+              </Text>
             )
           ) : mode === 'adhoc' && adhocName.trim() ? (
             <>

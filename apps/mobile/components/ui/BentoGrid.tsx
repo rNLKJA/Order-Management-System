@@ -9,7 +9,7 @@
  * </BentoGrid>
  * ```
  *
- * 小屏（<480）自动折叠：<=4 → 8，>4 → 12。
+ * 小屏（宽度 < `BREAKPOINT.sm`）时：若提供 `mobileSpan` 则优先采用，否则按旧规则折叠（span≤4 → 8，否则 12）。
  * 用 padding-half 模拟 gap，保证在 RN 和 Web 都一致。
  */
 
@@ -67,15 +67,16 @@ export function Bento({
   ...rest
 }: BentoProps) {
   const { width } = useWindowDimensions();
-  const isMobile = width < BREAKPOINT.xs;
+  /** 与 `BREAKPOINT.sm` 对齐：避免 480–768px 仍按桌面列宽排 4 枚速览格导致挤压截断 */
+  const isNarrow = width < BREAKPOINT.sm;
   const half = __gap / 2;
 
   const effective = useMemo(() => {
-    if (!isMobile) return span;
-    if (mobileSpan) return mobileSpan;
+    if (!isNarrow) return span;
+    if (mobileSpan != null) return mobileSpan;
     if (span <= 4) return 8;
     return 12;
-  }, [isMobile, span, mobileSpan]);
+  }, [isNarrow, span, mobileSpan]);
 
   const widthPct = `${(effective / 12) * 100}%`;
 

@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { IOS_COLORS } from '../../theme/paperTheme';
 
 /** 主屏：Tab / 总览列表 / Toast */
@@ -7,34 +7,38 @@ export const orderScreenStyles = StyleSheet.create({
 
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderRadius: 14,
-    padding: 5,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    padding: 2,
     gap: 4,
-    marginHorizontal: 12,
-    marginTop: 4,
-    marginBottom: 10,
   },
   tabItem: {
     flex: 1,
-    flexDirection: 'column',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: 9,
-    paddingHorizontal: 2,
-    borderRadius: 10,
+    gap: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRadius: 999,
   },
   tabItemDense: {
-    paddingVertical: 7,
-    gap: 2,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    gap: 4,
   },
   tabItemActive: {
-    backgroundColor: IOS_COLORS.blueLight,
+    backgroundColor: 'rgba(118,118,128,0.14)',
   },
-  tabLabel: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '600', textAlign: 'center' },
+  tabLabel: {
+    fontSize: 13,
+    color: IOS_COLORS.labelSecondary,
+    fontWeight: '600',
+    textAlign: 'left',
+    flexShrink: 1,
+  },
   tabLabelDense: { fontSize: 11, lineHeight: 14, fontWeight: '600' },
-  tabLabelActive: { color: IOS_COLORS.blue, fontWeight: '700' },
+  tabLabelActive: { color: IOS_COLORS.label, fontWeight: '700' },
   pageMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -119,24 +123,20 @@ export const orderScreenStyles = StyleSheet.create({
   },
   segmentedBar: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(118,118,128,0.12)',
-    borderRadius: 10,
+    gap: 4,
     padding: 2,
+    backgroundColor: 'transparent',
+    borderRadius: 999,
   },
   segment: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 7,
-    borderRadius: 8,
+    borderRadius: 999,
   },
   segmentActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 1,
+    backgroundColor: 'rgba(118,118,128,0.16)',
   },
   segmentText: { fontSize: 13, color: IOS_COLORS.labelSecondary, fontWeight: '500' },
   segmentTextActive: { color: IOS_COLORS.label, fontWeight: '600' },

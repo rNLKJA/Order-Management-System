@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View, Text, Pressable, SectionList } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { formatDate } from '@meal/shared';
@@ -15,7 +15,7 @@ import { ordersApi } from '../../../api/orders';
 import { useOrdersByDate, useOrdersToday, useInvalidateOrders } from '../../../hooks/useOrdersToday';
 import { useMembersView, useInvalidateMembersView } from '../../../hooks/useMembersView';
 import { dailyOrderToMockOrder, membersByIdFrom } from '../../../lib/order-view';
-import { AppHeader, MeshBackground } from '../../../components/ui';
+import { AppHeader, MeshBackground, FloatingBottomBar, floatingBottomReserve } from '../../../components/ui';
 import { DatePicker } from '../../../components/ui/DatePicker';
 import { MemberQuickInfoModal } from '../../../components/MemberQuickInfoModal';
 import { confirmAction, confirmDestructive } from '../../../lib/confirm';
@@ -39,6 +39,12 @@ export default function OrdersScreen() {
   useScrollToTopOnFocus(sectionRef);
 
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  /** 底部悬浮 Tab 占位（dense 五键 + 安全区） */
+  const orderTabBarReserve = useMemo(
+    () => floatingBottomReserve(90, insets.bottom),
+    [insets.bottom],
+  );
   const isAdmin = user?.role === 'admin';
   const { group, tab } = useLocalSearchParams<{ group?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
@@ -374,12 +380,8 @@ export default function OrdersScreen() {
         title={activePrimary === 'manage' ? '每日订餐' : '出餐 / 配送'}
       />
 
-      {/* 当前分组内的功能筛选 */}
-      <OrderTabBar
-        activePrimary={activePrimary}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
+      <View style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <View style={{ flex: 1, paddingBottom: orderTabBarReserve }}>
       <View style={styles.pageMetaRow}>
         <Text style={styles.pageMetaText}>{`今日 ${formatDate(now)}`}</Text>
       </View>
@@ -541,6 +543,46 @@ export default function OrdersScreen() {
         />
       )}
 
+      </View>
+
+      <FloatingBottomBar>
+        <OrderTabBar
+          activePrimary={activePrimary}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+      </FloatingBottomBar>
+
+      {/* 顶部错误 / 加载指示（订单加载失败时挂在 tab bar 下） */}
+      {currentLoadError ? (
+        <View style={[styles.errorToast, { bottom: orderTabBarReserve + 10, zIndex: 120 }]}>
+          <Ionicons name="alert-circle-outline" size={14} color="#fff" />
+          <Text style={styles.errorToastText} numberOfLines={1}>
+            订单加载失败：{currentLoadError.message}
+          </Text>
+          <Pressable
+            onPress={() => void currentOrdersQuery.refetch()}
+            hitSlop={8}
+          >
+            <Text style={styles.errorToastLink}>重试</Text>
+          </Pressable>
+        </View>
+      ) : currentLoading ? (
+        <View style={[styles.loadingToast, { bottom: orderTabBarReserve + 10, zIndex: 120 }]}>
+          <ActivityIndicator color={IOS_COLORS.blue} size="small" />
+          <Text style={styles.loadingToastText}>加载订单...</Text>
+        </View>
+      ) : null}
+
+      {/* 全局 mutation 错误提示 */}
+      {toast ? (
+        <View style={[styles.errorToast, { bottom: orderTabBarReserve + 10, zIndex: 120 }]}>
+          <Ionicons name="information-circle-outline" size={14} color="#fff" />
+          <Text style={styles.errorToastText}>{toast}</Text>
+        </View>
+      ) : null}
+      </View>
+
       {/* 会员快速资料 */}
       <MemberQuickInfoModal
         visible={!!quickInfoMember}
@@ -577,34 +619,6 @@ export default function OrdersScreen() {
         onSubmit={() => void handleSubmitDeliveryFailed()}
       />
 
-      {/* 顶部错误 / 加载指示（订单加载失败时挂在 tab bar 下） */}
-      {currentLoadError ? (
-        <View style={styles.errorToast}>
-          <Ionicons name="alert-circle-outline" size={14} color="#fff" />
-          <Text style={styles.errorToastText} numberOfLines={1}>
-            订单加载失败：{currentLoadError.message}
-          </Text>
-          <Pressable
-            onPress={() => void currentOrdersQuery.refetch()}
-            hitSlop={8}
-          >
-            <Text style={styles.errorToastLink}>重试</Text>
-          </Pressable>
-        </View>
-      ) : currentLoading ? (
-        <View style={styles.loadingToast}>
-          <ActivityIndicator color={IOS_COLORS.blue} size="small" />
-          <Text style={styles.loadingToastText}>加载订单...</Text>
-        </View>
-      ) : null}
-
-      {/* 全局 mutation 错误提示 */}
-      {toast ? (
-        <View style={styles.errorToast}>
-          <Ionicons name="information-circle-outline" size={14} color="#fff" />
-          <Text style={styles.errorToastText}>{toast}</Text>
-        </View>
-      ) : null}
       </SafeAreaView>
     </View>
   );

@@ -5,6 +5,7 @@
   "description": "订餐会员管理系统 — Expo + Hono + Turso",
   "scripts": {
     "dev": "turbo run dev",
+    "dev:local": "turbo run dev --filter=@meal/api --filter=@meal/mobile",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",

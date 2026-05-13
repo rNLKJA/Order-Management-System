@@ -122,7 +122,7 @@ function PrepCard({
               <Text style={[prepStyles.cardName, prepStyles.cardNameLink]} numberOfLines={1}>
                 {order.member_nickname || order.member_name}
               </Text>
-              <Ionicons name="information-circle-outline" size={16} color={IOS_COLORS.blue} />
+              <Ionicons name="information-circle-outline" size={14} color={IOS_COLORS.blue} />
             </Pressable>
             {order.is_hospital ? (
               <View style={prepStyles.tag}>
@@ -183,7 +183,7 @@ function PrepCard({
         style={({ pressed }) => [prepStyles.sideConfirm, pressed && { opacity: 0.85 }]}
         onPress={onConfirm}
       >
-        <Ionicons name="checkmark" size={20} color="#fff" />
+        <Ionicons name="checkmark" size={18} color="#fff" />
         <Text style={prepStyles.sideConfirmText} numberOfLines={1}>
           出餐完成
         </Text>
@@ -339,7 +339,7 @@ function DeliveryCard({
               <Text style={[prepStyles.cardName, prepStyles.cardNameLink]} numberOfLines={1}>
                 {order.member_nickname || order.member_name}
               </Text>
-              <Ionicons name="information-circle-outline" size={16} color={IOS_COLORS.blue} />
+              <Ionicons name="information-circle-outline" size={14} color={IOS_COLORS.blue} />
             </Pressable>
             {order.is_hospital ? (
               <View style={prepStyles.tag}>
@@ -370,14 +370,14 @@ function DeliveryCard({
           </View>
 
           <View style={prepStyles.infoRow}>
-            <Ionicons name="call-outline" size={14} color={IOS_COLORS.labelSecondary} />
+            <Ionicons name="call-outline" size={12} color={IOS_COLORS.labelSecondary} />
             <Text style={[prepStyles.infoText, !phone && prepStyles.infoTextMuted]} numberOfLines={1}>
               {phone || '未填手机号'}
             </Text>
           </View>
 
           <View style={prepStyles.infoRow}>
-            <Ionicons name="location-outline" size={14} color={IOS_COLORS.labelSecondary} />
+            <Ionicons name="location-outline" size={12} color={IOS_COLORS.labelSecondary} />
             <Text style={prepStyles.infoText} numberOfLines={2}>
               {address}
             </Text>
@@ -408,7 +408,7 @@ function DeliveryCard({
             style={({ pressed }) => [prepStyles.deliveryFailedBtn, pressed && { opacity: 0.8 }]}
             onPress={onMarkDeliveryFailed}
           >
-            <Ionicons name="alert-circle-outline" size={14} color={IOS_COLORS.red} />
+            <Ionicons name="alert-circle-outline" size={12} color={IOS_COLORS.red} />
             <Text style={prepStyles.deliveryFailedBtnText}>送餐失败并退餐</Text>
           </Pressable>
         </View>
@@ -421,7 +421,7 @@ function DeliveryCard({
         ]}
         onPress={onConfirm}
       >
-        <Ionicons name="checkmark-done" size={20} color="#fff" />
+        <Ionicons name="checkmark-done" size={18} color="#fff" />
         <Text style={prepStyles.sideConfirmText} numberOfLines={1}>
           确认送达
         </Text>

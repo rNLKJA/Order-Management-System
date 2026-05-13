@@ -48,7 +48,7 @@ export function OrderTabBar({
                 denseTabs && styles.tabLabelDense,
                 active && styles.tabLabelActive,
               ]}
-              numberOfLines={2}
+              numberOfLines={1}
             >
               {t.label}
             </Text>

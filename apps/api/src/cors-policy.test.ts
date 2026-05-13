@@ -21,9 +21,12 @@ describe('buildCorsOriginChecker', () => {
 
   it('本地 Expo / dev 端口放行', () => {
     const check = buildCorsOriginChecker();
+    expect(check('http://localhost:8080')).toBe('http://localhost:8080');
     expect(check('http://localhost:8081')).toBe('http://localhost:8081');
+    expect(check('http://localhost:8082')).toBe('http://localhost:8082');
     expect(check('http://localhost:19006')).toBe('http://localhost:19006');
     expect(check('http://127.0.0.1:8081')).toBe('http://127.0.0.1:8081');
+    expect(check('http://127.0.0.1:8082')).toBe('http://127.0.0.1:8082');
   });
 
   it('Vercel preview 子域名放行', () => {

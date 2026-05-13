@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.page - 4,
     paddingVertical: SPACING.sm,
     minHeight: 52,
+    backgroundColor: 'transparent',
   },
   slot: { flex: 1, minWidth: 88, flexDirection: 'row', alignItems: 'center' },
   slotRight: { justifyContent: 'flex-end' },

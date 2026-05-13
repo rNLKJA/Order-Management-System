@@ -3,7 +3,7 @@
  * 布局：欢迎卡（左图标右文案）→ 速览 4 连格 → 余餐提醒 → 快捷操作分层。
  */
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { StyleSheet, ScrollView, View, useWindowDimensions, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +34,8 @@ import {
   StatTile,
   IconAvatar,
   SectionLabel,
+  FloatingBottomBar,
+  floatingBottomReserve,
 } from '../../components/ui';
 import { useScrollToTopOnFocus } from '../../hooks/useScrollToTopOnFocus';
 
@@ -60,6 +62,11 @@ export default function HomeScreen() {
 
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  /** 含双段图标+文案与 FloatingBottomBar 胶囊内边距，避免压住快捷入口 */
+  const homeBottomNavReserve = useMemo(
+    () => floatingBottomReserve(88, insets.bottom),
+    [insets.bottom],
+  );
   const { width } = useWindowDimensions();
   const isCompactPhone = width <= 430;
   const [todayQuickTab, setTodayQuickTab] = useState<'summary' | 'fulfillment'>('summary');
@@ -220,6 +227,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
+      <View style={{ flex: 1, minHeight: 0 }}>
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
@@ -228,16 +236,16 @@ export default function HomeScreen() {
           // 手动应用顶部安全区：状态栏 / 刘海屏 / 动态岛都让开
           // 加 SPACING.sm 保证即使 insets.top = 0（如 Android 透明状态栏）也有呼吸
           { paddingTop: Math.max(insets.top, 20) + SPACING.sm },
-          { paddingBottom: 48 + insets.bottom },
+          { paddingBottom: homeBottomNavReserve + SPACING.xxl },
         ]}
       >
         <View style={styles.container}>
             {/* 欢迎卡（与登录页同语言：左图标 + 右文案） */}
             <View style={styles.greeting}>
-              <GlassSurface padding={SPACING.base} style={styles.heroCard}>
+              <GlassSurface padding={SPACING.md} style={styles.heroCard}>
                 <IconAvatar
                   icon="sparkles-outline"
-                  size={50}
+                  size={46}
                   color={COLORS.brand}
                   bg="rgba(0,122,255,0.14)"
                 />
@@ -251,44 +259,14 @@ export default function HomeScreen() {
               </GlassSurface>
             </View>
 
-            {/* 今日速览：默认账本汇总；可切换到履约口径 */}
+            {/* 汇总 / 履约速览（口径由底栏切换；无额外标题以减轻首屏噪音） */}
             <View style={styles.block}>
-              <SectionLabel>今日速览</SectionLabel>
-              <GlassSurface padding={SPACING.md} style={[styles.quickToggleCard]}>
-                <View style={styles.segmentedBar}>
-                  <Pressable
-                    style={[styles.segment, todayQuickTab === 'summary' && styles.segmentActive]}
-                    onPress={() => setTodayQuickTab('summary')}
-                  >
-                    <Text
-                      style={[
-                        styles.segmentText,
-                        todayQuickTab === 'summary' && styles.segmentTextActive,
-                      ]}
-                    >
-                      汇总
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.segment, todayQuickTab === 'fulfillment' && styles.segmentActive]}
-                    onPress={() => setTodayQuickTab('fulfillment')}
-                  >
-                    <Text
-                      style={[
-                        styles.segmentText,
-                        todayQuickTab === 'fulfillment' && styles.segmentTextActive,
-                      ]}
-                    >
-                      履约
-                    </Text>
-                  </Pressable>
-                </View>
-              </GlassSurface>
               <BentoGrid gap={SPACING.md}>
                 {todayQuickTab === 'summary' ? (
                   <>
                     <Bento span={3} mobileSpan={6}>
                       <StatTile
+                        layout="compact"
                         label="今日总收入"
                         value={formatCNY(fin.income)}
                         icon="arrow-up-circle-outline"
@@ -299,6 +277,7 @@ export default function HomeScreen() {
                     </Bento>
                     <Bento span={3} mobileSpan={6}>
                       <StatTile
+                        layout="compact"
                         label="今日支出"
                         value={formatCNY(fin.expense)}
                         icon="arrow-down-circle-outline"
@@ -308,6 +287,7 @@ export default function HomeScreen() {
                     </Bento>
                     <Bento span={3} mobileSpan={6}>
                       <StatTile
+                        layout="compact"
                         label="今日净额"
                         value={formatCNY(fin.net)}
                         icon={fin.net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
@@ -318,6 +298,7 @@ export default function HomeScreen() {
                     </Bento>
                     <Bento span={3} mobileSpan={6}>
                       <StatTile
+                        layout="compact"
                         label="待出餐"
                         value={`${pendingCount} 份`}
                         icon="time-outline"
@@ -330,6 +311,7 @@ export default function HomeScreen() {
                   <>
                     <Bento span={3} mobileSpan={6}>
                       <StatTile
+                        layout="compact"
                         label="今日履约收入"
                         value={formatCNY(fin.realized_income)}
                         icon="restaurant-outline"
@@ -340,6 +322,7 @@ export default function HomeScreen() {
                     </Bento>
                     <Bento span={3} mobileSpan={6}>
                       <StatTile
+                        layout="compact"
                         label="今日支出"
                         value={formatCNY(fin.expense)}
                         icon="arrow-down-circle-outline"
@@ -349,6 +332,7 @@ export default function HomeScreen() {
                     </Bento>
                     <Bento span={3} mobileSpan={6}>
                       <StatTile
+                        layout="compact"
                         label="今日净额"
                         value={formatCNY(fin.realized_net)}
                         icon={fin.realized_net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
@@ -359,6 +343,7 @@ export default function HomeScreen() {
                     </Bento>
                     <Bento span={3} mobileSpan={6}>
                       <StatTile
+                        layout="compact"
                         label="待出餐"
                         value={`${pendingCount} 份`}
                         icon="time-outline"
@@ -380,23 +365,27 @@ export default function HomeScreen() {
                   onPress={() => router.push('/(app)/reminders' as never)}
                   style={styles.reminderRow}
                 >
-                  <IconAvatar
-                    icon="alert-circle-outline"
-                    color={COLORS.warning}
-                    bg="rgba(255,149,0,0.18)"
-                    size={38}
-                  />
+                  <View style={styles.reminderIconSlot}>
+                    <IconAvatar
+                      icon="alert-circle-outline"
+                      color={COLORS.warning}
+                      bg="rgba(255,149,0,0.18)"
+                      size={38}
+                    />
+                  </View>
                   <View style={styles.reminderTextWrap}>
                     <Text style={styles.reminderTitle}>
                       {renewalCount} 位会员余餐不足
                     </Text>
                     <Text style={styles.reminderSub}>点击查看续卡跟进列表</Text>
                   </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={COLORS.warning}
-                  />
+                  <View style={styles.reminderChevronSlot}>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={18}
+                      color={COLORS.warning}
+                    />
+                  </View>
                 </PressableCard>
               </View>
             ) : null}
@@ -429,6 +418,53 @@ export default function HomeScreen() {
             </View>
           </View>
       </ScrollView>
+      <FloatingBottomBar>
+        <View style={styles.segmentedBar}>
+          <Pressable
+            style={[styles.segment, todayQuickTab === 'summary' && styles.segmentActive]}
+            onPress={() => setTodayQuickTab('summary')}
+          >
+            <View style={styles.segmentInner}>
+              <Ionicons
+                name="pie-chart-outline"
+                size={18}
+                color={todayQuickTab === 'summary' ? COLORS.brand : COLORS.text.tertiary}
+              />
+              <Text
+                style={[
+                  styles.segmentText,
+                  todayQuickTab === 'summary' && styles.segmentTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                汇总
+              </Text>
+            </View>
+          </Pressable>
+          <Pressable
+            style={[styles.segment, todayQuickTab === 'fulfillment' && styles.segmentActive]}
+            onPress={() => setTodayQuickTab('fulfillment')}
+          >
+            <View style={styles.segmentInner}>
+              <Ionicons
+                name="ribbon-outline"
+                size={18}
+                color={todayQuickTab === 'fulfillment' ? COLORS.brand : COLORS.text.tertiary}
+              />
+              <Text
+                style={[
+                  styles.segmentText,
+                  todayQuickTab === 'fulfillment' && styles.segmentTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                履约
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+      </FloatingBottomBar>
+      </View>
     </View>
   );
 }
@@ -470,7 +506,10 @@ function QuickEntryCard({
       </View>
       <View style={styles.entryText}>
         <Text style={styles.entryTitle}>{entry.title}</Text>
-        <Text style={styles.entrySubtitle} numberOfLines={compact ? 1 : 2}>
+        <Text
+          style={[styles.entrySubtitle, (compact || compactPhone) && styles.entrySubtitleCompact]}
+          numberOfLines={2}
+        >
           {entry.subtitle}
         </Text>
       </View>
@@ -497,8 +536,8 @@ const styles = StyleSheet.create({
 
   // greeting
   greeting: {
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.lg,
+    paddingTop: SPACING.xs,
+    paddingBottom: SPACING.sm,
   },
   heroCard: {
     flexDirection: 'row',
@@ -513,7 +552,7 @@ const styles = StyleSheet.create({
     ...TYPE.footnote,
     color: COLORS.text.tertiary,
     letterSpacing: 0.3,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   greetingRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap' },
   greetingHello: { ...TYPE.title1, color: COLORS.text.tertiary, fontWeight: '500' },
@@ -521,38 +560,70 @@ const styles = StyleSheet.create({
 
   block: { marginBottom: SPACING.lg },
 
-  quickToggleCard: {
-    marginBottom: SPACING.md,
-    borderRadius: 14,
-  },
   segmentedBar: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(118,118,128,0.12)',
-    borderRadius: 10,
+    gap: 4,
     padding: 2,
+    backgroundColor: 'transparent',
   },
   segment: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 999,
+  },
+  segmentInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   segmentActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 1,
+    backgroundColor: 'rgba(118,118,128,0.16)',
   },
-  segmentText: { fontSize: 13, color: COLORS.text.secondary, fontWeight: '500' },
+  segmentText: {
+    fontSize: 13,
+    color: COLORS.text.secondary,
+    fontWeight: '500',
+    flexShrink: 1,
+    minWidth: 0,
+  },
   segmentTextActive: { color: COLORS.text.primary, fontWeight: '600' },
 
-  reminderRow: { flexDirection: 'row', alignItems: 'center' },
-  reminderTextWrap: { flex: 1, marginLeft: SPACING.md },
-  reminderTitle: { ...TYPE.headline, color: COLORS.text.primary },
-  reminderSub: { ...TYPE.footnote, color: COLORS.text.tertiary, marginTop: 2 },
+  /** 纵向：子项 stretch 到同一行高，各槽内 justifyContent:center 实现图标/文案/箭头垂直居中 */
+  reminderRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: SPACING.sm,
+  },
+  reminderIconSlot: {
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reminderTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  reminderTitle: {
+    ...TYPE.headline,
+    color: COLORS.text.primary,
+    width: '100%',
+  },
+  reminderSub: {
+    ...TYPE.footnote,
+    color: COLORS.text.tertiary,
+    marginTop: 2,
+    width: '100%',
+  },
+  reminderChevronSlot: {
+    width: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // entries
   primaryColumn: { gap: SPACING.md },
@@ -580,4 +651,5 @@ const styles = StyleSheet.create({
   },
   entryTitle: { ...TYPE.title3, color: COLORS.text.primary, marginBottom: 4 },
   entrySubtitle: { ...TYPE.footnote, color: COLORS.text.secondary },
+  entrySubtitleCompact: { fontSize: 12, lineHeight: 16 },
 });

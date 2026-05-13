@@ -378,6 +378,13 @@ export const entryStyles = StyleSheet.create({
   submitMain: { fontSize: 15, fontWeight: '700', color: IOS_COLORS.label },
   submitSub: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
   submitHint: { fontSize: 13, color: IOS_COLORS.labelTertiary },
+  submitBlockHint: {
+    fontSize: 12,
+    color: IOS_COLORS.red,
+    marginTop: 6,
+    lineHeight: 17,
+    fontWeight: '500',
+  },
   submitBtn: {
     paddingHorizontal: 20,
     paddingVertical: 12,

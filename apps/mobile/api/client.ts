@@ -9,9 +9,12 @@
  *        c) apps/mobile/eas.json 的 build.<profile>.env.EXPO_PUBLIC_API_BASE_URL
  *           （本项目当前 development / preview / production 三个 profile 都显式写死，
  *            发版走的就是这条）
- *   2. app.json 的 extra.apiBaseUrl —— 随 native 二进制一起发布的兜底，
- *      仅当 1 缺失时生效。Expo Go 里没法读 EAS env，靠的就是这条。
- *   3. DEFAULT_BASE_URL = http://localhost:3000 —— 最终兜底。
+ *   2. app.json 的 extra.apiBaseUrl —— 随 native 二进制一起发布的兜底；
+ *      Expo Go 里没法读 EAS env，靠的就是这条。
+ *   3. DEFAULT_BASE_URL —— 最终兜底（与生产 API 一致）。
+ *
+ * 本机调试 API：在根目录 .env 设置 EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:3000
+ * （勿提交密钥；仅开发机使用。）
  *
  * 配置守则：
  *   • 改正式 API 域名时三处一起改，避免漂移：
@@ -26,10 +29,10 @@ import Constants from 'expo-constants';
 import { clearCredentials, getToken } from '../lib/authStorage';
 import { emitAuthSessionReset } from '../lib/authSession';
 
-// Web 本地预览在部分环境拿不到 expoConfig.extra，兜底统一走生产 API。
 const DEFAULT_BASE_URL = 'https://api.anshun-healthy-food.com';
 
-function getBaseUrl(): string {
+/** 当前请求使用的 API 根地址（与登录页错误提示等共用）。 */
+export function getApiBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_BASE_URL;
   if (fromEnv && fromEnv.length > 0) return fromEnv;
   const fromExtra = (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)
@@ -85,7 +88,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const url = getBaseUrl() + path;
+  const url = getApiBaseUrl() + path;
   const res = await fetch(url, { ...init, headers });
 
   const text = await res.text();
