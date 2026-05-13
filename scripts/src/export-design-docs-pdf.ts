@@ -4,6 +4,7 @@
  * 用法（仓库根目录）：
  *   pnpm docs:pdf
  *
+ * 需本机已安装 Chrome/Chromium；或设置 PUPPETEER_EXECUTABLE_PATH（或 CHROME_PATH）。
  * 产物：doc/pdf/meal-design-documentation.pdf（默认不提交，见根目录 .gitignore）
  */
 
@@ -11,7 +12,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { marked } from 'marked';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '../..');
@@ -26,6 +27,27 @@ const DOC_FILES = [
 
 const OUT_DIR = join(REPO_ROOT, 'doc/pdf');
 const OUT_PDF = join(OUT_DIR, 'meal-design-documentation.pdf');
+
+/** puppeteer-core 不自带 Chromium；本地用系统 Chrome，CI 请设 PUPPETEER_EXECUTABLE_PATH */
+function resolveChromeExecutable(): string {
+  const fromEnv =
+    process.env.PUPPETEER_EXECUTABLE_PATH?.trim() ||
+    process.env.CHROME_PATH?.trim() ||
+    process.env.GOOGLE_CHROME_BIN?.trim();
+  if (fromEnv) return fromEnv;
+  if (process.platform === 'darwin') {
+    return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  }
+  if (process.platform === 'linux') {
+    return '/usr/bin/google-chrome-stable';
+  }
+  if (process.platform === 'win32') {
+    return 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+  }
+  throw new Error(
+    '[docs:pdf] 未找到 Chrome：请设置环境变量 PUPPETEER_EXECUTABLE_PATH 指向本机 chrome/chromium 可执行文件',
+  );
+}
 
 function mermaidBlocksToDivs(md: string): string {
   return md.replace(/```mermaid\n([\s\S]*?)```/g, (_full, code: string) => {
@@ -108,6 +130,7 @@ async function main(): Promise<void> {
 
   const browser = await puppeteer.launch({
     headless: true,
+    executablePath: resolveChromeExecutable(),
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--font-render-hinting=none'],
   });
   try {
