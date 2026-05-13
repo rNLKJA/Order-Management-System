@@ -40,9 +40,9 @@ export default function OrdersScreen() {
 
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  /** 底部悬浮 Tab 占位（dense 五键 + 安全区） */
+  /** 底部悬浮 Tab 占位（dense 五键 + 胶囊内边距；略小于旧 90 以减少录入区与底栏间空隙） */
   const orderTabBarReserve = useMemo(
-    () => floatingBottomReserve(90, insets.bottom),
+    () => floatingBottomReserve(62, insets.bottom),
     [insets.bottom],
   );
   const isAdmin = user?.role === 'admin';
