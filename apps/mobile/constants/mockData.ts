@@ -96,6 +96,8 @@ export interface MockOrder {
   created_by_full_name?: string;
   /** 录入人登录名（API hydrate） */
   created_by_username?: string;
+  /** 录入操作员用户 ID（API 必有；无姓名时用于兜底展示） */
+  created_by_user_id?: number;
 }
 
 export interface MockFinance {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, View, Text, Pressable, Image, ScrollView } from 'react-native';
+import { Modal, View, Text, Pressable, Image, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDateTimeWithSeconds } from '@meal/shared';
 import { IOS_COLORS } from '../../theme/paperTheme';
@@ -7,11 +7,25 @@ import { type MockOrder } from '../../constants/mockData';
 import { STATUS_MAP } from './constants';
 import { statusSheetStyles as sStyles } from './statusSheetStyles';
 
-function coerceCreatedAtInput(v: string | number | undefined): string | null {
+function coerceCreatedAtInput(v: string | number | bigint | undefined): string | null {
   if (v === undefined || v === null) return null;
-  if (typeof v === 'number' && Number.isFinite(v)) return new Date(v).toISOString();
+  if (typeof v === 'bigint') {
+    const ms = Number(v);
+    return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+  }
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    const ms = v > 0 && v < 1e12 ? v * 1000 : v;
+    return new Date(ms).toISOString();
+  }
   const s = String(v).trim();
-  return s.length > 0 ? s : null;
+  if (!s) return null;
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    if (!Number.isFinite(n)) return s;
+    const ms = n < 1e12 ? n * 1000 : n;
+    return new Date(ms).toISOString();
+  }
+  return s;
 }
 
 function formatRecordedAt(order: MockOrder): string | null {
@@ -30,6 +44,8 @@ function formatRecorderLabel(order: MockOrder): string | null {
   if (fn && un) return `${fn}（${un}）`;
   if (fn) return fn;
   if (un) return un;
+  const uid = order.created_by_user_id;
+  if (uid != null && uid > 0) return `用户 #${uid}`;
   return null;
 }
 
@@ -77,7 +93,10 @@ export function StatusSheet({
   const isAdhoc = order.card_type === null;
   const recorderLine = formatRecorderLabel(order);
   const recordedAtLine = formatRecordedAt(order);
-  const showEntryMeta = Boolean(recorderLine || recordedAtLine);
+  const showEntryMeta = Boolean(
+    recorderLine || recordedAtLine || (order.created_by_user_id != null && order.created_by_user_id > 0),
+  );
+  const sheetScrollMaxH = Math.round(Dimensions.get('window').height * 0.7);
   const cur = STATUS_MAP[order.status];
   const deliveredLockedForStaff = order.status === 'delivered' && !isAdmin;
   const showDeliveredAdminCorrect = order.status === 'delivered' && isAdmin;
@@ -109,6 +128,13 @@ export function StatusSheet({
           <View style={sStyles.sheetCard}>
             <View style={sStyles.handle} />
 
+            <ScrollView
+              style={{ maxHeight: sheetScrollMaxH }}
+              contentContainerStyle={{ paddingBottom: 6 }}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
             <View style={sStyles.orderInfo}>
             <View style={sStyles.orderInfoLeft}>
               <Pressable
@@ -198,6 +224,21 @@ export function StatusSheet({
             </View>
           ) : null}
 
+          {showEntryMeta ? (
+            <View style={sStyles.metaBlock}>
+              <Text style={sStyles.metaTitle}>录入信息</Text>
+              <Text style={sStyles.metaWho}>
+                录入人：
+                {recorderLine ?? '—'}
+              </Text>
+              {recordedAtLine ? (
+                <Text style={sStyles.metaWhen}>录入时间：{recordedAtLine}</Text>
+              ) : (
+                <Text style={sStyles.metaWhen}>录入时间：—</Text>
+              )}
+            </View>
+          ) : null}
+
           <Text style={sStyles.sectionLabel}>
             {order.status === 'cancelled'
               ? '订单已取消，状态不可变更'
@@ -275,15 +316,7 @@ export function StatusSheet({
             })}
           </View>
 
-          {showEntryMeta ? (
-            <View style={sStyles.metaBlock}>
-              <Text style={sStyles.metaTitle}>录入信息</Text>
-              {recorderLine ? <Text style={sStyles.metaWho}>录入人：{recorderLine}</Text> : null}
-              {recordedAtLine ? (
-                <Text style={sStyles.metaWhen}>录入时间：{recordedAtLine}</Text>
-              ) : null}
-            </View>
-          ) : null}
+            </ScrollView>
 
           <Pressable style={sStyles.closeBtn} onPress={onClose}>
             <Text style={sStyles.closeBtnText}>关闭</Text>
