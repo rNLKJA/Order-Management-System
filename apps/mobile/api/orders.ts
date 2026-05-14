@@ -27,8 +27,13 @@ export interface DailyOrder {
   /** 外包渠道承运方标识（快递公司名 / 骑手 id） */
   courier_ref: string;
   created_by_user_id: number;
-  created_at: string;
+  /** ISO 字符串为主；若后端传毫秒时间戳则为 number */
+  created_at: string | number;
   updated_at: string;
+  /** GET 经 hydrate 附加：录入人姓名 */
+  created_by_full_name?: string;
+  /** GET 经 hydrate 附加：登录名 */
+  created_by_username?: string;
   notes: string;
   /** 赠送餐：不扣次、送达不计收入 */
   is_gift: boolean;

@@ -1,10 +1,37 @@
 import { useState } from 'react';
 import { Modal, View, Text, Pressable, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { formatDateTimeWithSeconds } from '@meal/shared';
 import { IOS_COLORS } from '../../theme/paperTheme';
 import { type MockOrder } from '../../constants/mockData';
 import { STATUS_MAP } from './constants';
 import { statusSheetStyles as sStyles } from './statusSheetStyles';
+
+function coerceCreatedAtInput(v: string | number | undefined): string | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v === 'number' && Number.isFinite(v)) return new Date(v).toISOString();
+  const s = String(v).trim();
+  return s.length > 0 ? s : null;
+}
+
+function formatRecordedAt(order: MockOrder): string | null {
+  const raw = coerceCreatedAtInput(order.created_at);
+  if (!raw) return null;
+  try {
+    return formatDateTimeWithSeconds(raw);
+  } catch {
+    return null;
+  }
+}
+
+function formatRecorderLabel(order: MockOrder): string | null {
+  const fn = order.created_by_full_name?.trim();
+  const un = order.created_by_username?.trim();
+  if (fn && un) return `${fn}（${un}）`;
+  if (fn) return fn;
+  if (un) return un;
+  return null;
+}
 
 const STATUS_FLOW = [
   { key: 'pending' as const, label: '待出餐', color: IOS_COLORS.orange, bg: '#FFF4E5', icon: 'time-outline' as const },
@@ -48,6 +75,9 @@ export function StatusSheet({
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const proofUris = order.proof_images ?? [];
   const isAdhoc = order.card_type === null;
+  const recorderLine = formatRecorderLabel(order);
+  const recordedAtLine = formatRecordedAt(order);
+  const showEntryMeta = Boolean(recorderLine || recordedAtLine);
   const cur = STATUS_MAP[order.status];
   const deliveredLockedForStaff = order.status === 'delivered' && !isAdmin;
   const showDeliveredAdminCorrect = order.status === 'delivered' && isAdmin;
@@ -244,6 +274,16 @@ export function StatusSheet({
               );
             })}
           </View>
+
+          {showEntryMeta ? (
+            <View style={sStyles.metaBlock}>
+              <Text style={sStyles.metaTitle}>录入信息</Text>
+              {recorderLine ? <Text style={sStyles.metaWho}>录入人：{recorderLine}</Text> : null}
+              {recordedAtLine ? (
+                <Text style={sStyles.metaWhen}>录入时间：{recordedAtLine}</Text>
+              ) : null}
+            </View>
+          ) : null}
 
           <Pressable style={sStyles.closeBtn} onPress={onClose}>
             <Text style={sStyles.closeBtnText}>关闭</Text>

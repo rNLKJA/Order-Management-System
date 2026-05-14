@@ -159,4 +159,23 @@ export const statusSheetStyles = StyleSheet.create({
     alignItems: 'center',
   },
   closeBtnText: { fontSize: 17, color: IOS_COLORS.label, fontWeight: '600' },
+
+  metaBlock: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(118,118,128,0.08)',
+  },
+  metaTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: IOS_COLORS.labelSecondary,
+    letterSpacing: 0.3,
+    marginBottom: 6,
+  },
+  metaWho: { fontSize: 14, fontWeight: '600', color: IOS_COLORS.label, lineHeight: 20 },
+  metaWhen: { fontSize: 13, color: IOS_COLORS.labelSecondary, marginTop: 4, lineHeight: 18 },
 });

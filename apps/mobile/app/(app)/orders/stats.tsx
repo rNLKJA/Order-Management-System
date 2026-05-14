@@ -233,9 +233,9 @@ export default function OrdersStatsScreen() {
 
     const fromMs = new Date(`${effectiveFrom}T00:00:00`).getTime();
     const toMs = new Date(`${effectiveTo}T23:59:59.999`).getTime();
-    const inWindow = (ts?: string | null) => {
-      if (!ts) return false;
-      const ms = new Date(ts).getTime();
+    const inWindow = (ts?: string | number | null) => {
+      if (ts === undefined || ts === null) return false;
+      const ms = typeof ts === 'number' ? ts : new Date(ts).getTime();
       return Number.isFinite(ms) && ms >= fromMs && ms <= toMs;
     };
     const snapshot = { pending: 0, fulfilled: 0, delivered: 0, cancelled: 0 };

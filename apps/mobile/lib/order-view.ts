@@ -56,6 +56,9 @@ export function dailyOrderToMockOrder(
     is_gift: order.is_gift,
     is_staff_meal: order.is_staff_meal ?? false,
     proof_images: parseProofImagesJson(order.proof_images_json),
+    created_at: order.created_at,
+    created_by_full_name: order.created_by_full_name,
+    created_by_username: order.created_by_username,
   };
 }
 

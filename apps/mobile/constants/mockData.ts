@@ -90,6 +90,12 @@ export interface MockOrder {
   is_staff_meal?: boolean;
   /** 订餐凭证截图 URL（data URL 或后续可扩展为托管地址），来自 daily_orders.proof_images_json */
   proof_images?: string[];
+  /** 下单/录入时间（API created_at） */
+  created_at?: string | number;
+  /** 录入人姓名（API hydrate） */
+  created_by_full_name?: string;
+  /** 录入人登录名（API hydrate） */
+  created_by_username?: string;
 }
 
 export interface MockFinance {
