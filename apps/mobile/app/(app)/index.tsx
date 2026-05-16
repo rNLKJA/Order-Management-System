@@ -1,6 +1,6 @@
 /**
  * 主界面 — v3 Bento + 毛玻璃。
- * 布局：欢迎卡（左图标右文案）→ 速览 4 连格 → 余餐提醒 → 快捷操作分层。
+ * 布局：欢迎卡（左图标右文案）→ 速览 4 连格 → 余餐提醒 → 快捷操作（首屏四项 + 分隔 + 可展开更多）。
  */
 
 import { useRef, useState, useMemo } from 'react';
@@ -70,6 +70,7 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const isCompactPhone = width <= 430;
   const [todayQuickTab, setTodayQuickTab] = useState<'summary' | 'fulfillment'>('summary');
+  const [moreShortcutsOpen, setMoreShortcutsOpen] = useState(false);
   const hour = new Date().getHours();
   const timeGreeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
 
@@ -121,6 +122,17 @@ export default function HomeScreen() {
       route: '/(app)/members',
     },
     {
+      key: 'orders-manage',
+      title: '每日订餐',
+      subtitle: ordersToday.isLoading
+        ? '加载中...'
+        : `今日 ${totalCount} 份 · 待出 ${pendingCount}`,
+      icon: 'restaurant-outline',
+      color: COLORS.success,
+      bg: COLORS.successSoft,
+      route: '/(app)/orders?group=manage&tab=entry',
+    },
+    {
       key: 'walkins',
       title: '散客目录',
       subtitle: walkinsQuery.isLoading
@@ -132,17 +144,6 @@ export default function HomeScreen() {
       color: COLORS.warning,
       bg: COLORS.warningSoft,
       route: '/(app)/walkins',
-    },
-    {
-      key: 'orders-manage',
-      title: '每日订餐',
-      subtitle: ordersToday.isLoading
-        ? '加载中...'
-        : `今日 ${totalCount} 份 · 待出 ${pendingCount}`,
-      icon: 'restaurant-outline',
-      color: COLORS.success,
-      bg: COLORS.successSoft,
-      route: '/(app)/orders?group=manage&tab=entry',
     },
     {
       key: 'orders-fulfillment',
@@ -223,6 +224,9 @@ export default function HomeScreen() {
     },
   ];
   const entriesByKey = Object.fromEntries(entries.map((e) => [e.key, e])) as Record<string, EntryDef>;
+
+  const primaryShortcutKeys = ['members', 'orders-manage', 'walkins', 'orders-fulfillment'] as const;
+  const moreShortcutKeys = ['finance', 'orders-stats', 'users', 'admin', 'audit-logs', 'profile'] as const;
 
   return (
     <View style={styles.root}>
@@ -390,31 +394,55 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            {/* 快捷操作 */}
+            {/* 快捷操作：首屏四项（会员 → 每日订餐 → 散客 → 出餐），其余收在分隔线下方 */}
             <View style={styles.block}>
               <SectionLabel>快捷操作</SectionLabel>
               <BentoGrid gap={SPACING.md}>
-                <Bento span={6} mobileSpan={12}>
-                  <View style={styles.primaryColumn}>
-                    {entriesByKey.members ? <QuickEntryCard entry={entriesByKey.members} /> : null}
-                    {entriesByKey.walkins ? <QuickEntryCard entry={entriesByKey.walkins} /> : null}
-                  </View>
-                </Bento>
-                <Bento span={6} mobileSpan={12}>
-                  <View style={styles.primaryColumn}>
-                    {entriesByKey['orders-manage'] ? <QuickEntryCard entry={entriesByKey['orders-manage']} compactPhone={isCompactPhone} /> : null}
-                    {entriesByKey['orders-fulfillment'] ? <QuickEntryCard entry={entriesByKey['orders-fulfillment']} compactPhone={isCompactPhone} /> : null}
-                  </View>
-                </Bento>
-
-                {['finance', 'orders-stats', 'users', 'admin', 'audit-logs', 'profile']
-                  .filter((key) => Boolean(entriesByKey[key]))
-                  .map((key) => (
+                {primaryShortcutKeys.map((key) =>
+                  entriesByKey[key] ? (
                     <Bento key={key} span={6} mobileSpan={12}>
-                      <QuickEntryCard entry={entriesByKey[key]!} compact compactPhone={isCompactPhone} />
+                      <QuickEntryCard entry={entriesByKey[key]!} compactPhone={isCompactPhone} />
                     </Bento>
-                  ))}
+                  ) : null,
+                )}
               </BentoGrid>
+
+              <View style={styles.shortcutsDividerWrap} accessibilityElementsHidden>
+                <View style={styles.shortcutsDividerLine} />
+              </View>
+
+              <Pressable
+                onPress={() => setMoreShortcutsOpen((v) => !v)}
+                style={({ pressed }) => [styles.shortcutsMoreToggle, pressed && { opacity: 0.72 }]}
+                accessibilityRole="button"
+                accessibilityLabel={moreShortcutsOpen ? '收起更多快捷入口' : '展开更多快捷入口'}
+              >
+                <View style={styles.shortcutsMoreToggleRow}>
+                  <Text style={styles.shortcutsMoreToggleText}>
+                    {moreShortcutsOpen ? '收起' : '更多功能'}
+                  </Text>
+                  <Ionicons
+                    name={moreShortcutsOpen ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={COLORS.text.tertiary}
+                  />
+                </View>
+                <Text style={styles.shortcutsMoreToggleHint}>
+                  财务流水、订餐数据、员工名单与账号等
+                </Text>
+              </Pressable>
+
+              {moreShortcutsOpen ? (
+                <BentoGrid gap={SPACING.md}>
+                  {moreShortcutKeys
+                    .filter((key) => Boolean(entriesByKey[key]))
+                    .map((key) => (
+                      <Bento key={key} span={6} mobileSpan={12}>
+                        <QuickEntryCard entry={entriesByKey[key]!} compact compactPhone={isCompactPhone} />
+                      </Bento>
+                    ))}
+                </BentoGrid>
+              ) : null}
             </View>
           </View>
       </ScrollView>
@@ -625,8 +653,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  shortcutsDividerWrap: {
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
+    paddingHorizontal: SPACING.xs,
+  },
+  shortcutsDividerLine: {
+    height: StyleSheet.hairlineWidth * 2,
+    backgroundColor: COLORS.text.quaternary,
+    borderRadius: 1,
+  },
+  shortcutsMoreToggle: {
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  shortcutsMoreToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  shortcutsMoreToggleText: {
+    ...TYPE.caption,
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  shortcutsMoreToggleHint: {
+    ...TYPE.footnote,
+    color: COLORS.text.tertiary,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+
   // entries
-  primaryColumn: { gap: SPACING.md },
   entryCard: {
     flexDirection: 'row',
     alignItems: 'center',
