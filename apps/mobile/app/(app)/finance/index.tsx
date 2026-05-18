@@ -81,7 +81,7 @@ export default function FinanceScreen() {
   const insets = useSafeAreaInsets();
   /** 与底部「全部 / 只要收入 / 只要支出」条实际高度对齐（含 FloatingBottomBar 胶囊内边距），避免压住流水卡片 */
   const financeTypeBarReserve = useMemo(
-    () => floatingBottomReserve(84, insets.bottom),
+    () => floatingBottomReserve(99, insets.bottom),
     [insets.bottom],
   );
 

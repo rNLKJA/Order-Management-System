@@ -6,7 +6,8 @@ import { Platform, StyleSheet, View, type ViewProps, type StyleProp, type ViewSt
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MIN_BOTTOM = 10;
-const TOP_PAD = 10;
+/** 胶囊与上方内容间距（与 floatingBottomReserve 默认 topPad 一致） */
+const TOP_PAD = 6;
 
 export function floatingBottomReserve(contentHeight: number, bottomInset: number): number {
   return TOP_PAD + contentHeight + Math.max(bottomInset, MIN_BOTTOM);
@@ -56,7 +57,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 999,
-    paddingVertical: 6,
+    paddingVertical: 12,
     paddingHorizontal: 8,
     ...Platform.select({
       ios: {

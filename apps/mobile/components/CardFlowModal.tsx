@@ -14,14 +14,12 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
   ActivityIndicator,
-  useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   listCards,
@@ -34,6 +32,12 @@ import {
 } from '@meal/shared';
 import { IOS_COLORS } from '../theme/paperTheme';
 import { confirmAction } from '../lib/confirm';
+import { cardFlowStyles as styles } from './cards/cardFlowStyles';
+import { CardPlanPicker } from './cards/CardPlanPicker';
+import { MemberFormPageBanner } from './members/MemberFormPageBanner';
+import { entryStyles } from './orders/entryStyles';
+import { MeshBackground } from './ui';
+import { COLORS, SPACING, TYPE } from '../theme/paperTheme';
 
 /** 员工候选项（收款人/录入者 picker），从 /api/users 拉取 */
 export interface CardFlowUser {
@@ -107,9 +111,6 @@ export function CardFlowModal(props: CardFlowModalProps) {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { width } = useWindowDimensions();
-  const isCompactPhone = width <= 430;
-
   const nameById = useMemo(() => {
     const m = new Map<number, string>();
     for (const u of pickerUsers) m.set(u.id, u.name);
@@ -223,6 +224,16 @@ export function CardFlowModal(props: CardFlowModalProps) {
   const primaryLabel =
     mode === 'purchase' ? '确认开卡' : mode === 'upgrade' ? '确认升级' : '确认续卡';
 
+  const bannerDescription =
+    mode === 'purchase'
+      ? `为「${memberName}」选择卡种，确认收款人与应收金额。`
+      : mode === 'upgrade'
+        ? `从当前卡升级；灰掉的卡不可降级或同价。`
+        : `同卡种续费，剩餐 ≤ ${CARD_RENEWAL_THRESHOLD_MEALS} 份时可办；剩餐结转到新卡。`;
+
+  const bannerIcon: keyof typeof Ionicons.glyphMap =
+    mode === 'purchase' ? 'card-outline' : mode === 'upgrade' ? 'arrow-up-circle-outline' : 'refresh-outline';
+
   const handleConfirm = () => {
     if (!selectedSpec) return;
     let lines: string[];
@@ -283,23 +294,26 @@ export function CardFlowModal(props: CardFlowModalProps) {
       presentationStyle="formSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-        {/* 顶部导航 */}
-        <View style={styles.header}>
-          <Pressable onPress={onClose} disabled={submitting}>
-            <Text style={[styles.cancel, submitting && styles.disabled]}>取消</Text>
-          </Pressable>
-          <Text style={styles.title}>{title}</Text>
-          <Pressable onPress={handleConfirm} disabled={!canSubmit}>
-            <Text style={[styles.confirm, !canSubmit && styles.disabled]}>确认</Text>
-          </Pressable>
-        </View>
+      <View style={styles.root}>
+        <MeshBackground />
+        <SafeAreaView style={styles.safe} edges={['top']}>
+          <View style={styles.header}>
+            <Pressable onPress={onClose} disabled={submitting} hitSlop={12} style={styles.headerSide}>
+              <Text style={[styles.cancel, submitting && styles.disabled]}>取消</Text>
+            </Pressable>
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+            <View style={styles.headerSide} />
+          </View>
 
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.scrollBody}
+          <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
+          <MemberFormPageBanner title={title} description={bannerDescription} icon={bannerIcon} />
           {/* 升级 / 续卡：显示当前卡基线 */}
           {(mode === 'upgrade' || mode === 'renew') && currentCard ? (
             <View style={styles.currentCard}>
@@ -329,16 +343,16 @@ export function CardFlowModal(props: CardFlowModalProps) {
           {/* 价目表切换（续卡模式锁死不显示） */}
           {mode !== 'renew' ? (
             <>
-              <SectionLabel text="订阅类型" />
+              <SectionLabel text="价目表" />
               <View style={styles.card}>
-                <View style={styles.toggleRow}>
-                  <Text style={styles.rowLabel}>价目表</Text>
-                  <View style={styles.toggleGroup}>
+                <View style={styles.priceListToggle}>
+                  <Text style={styles.priceListLabel}>订阅类型</Text>
+                  <View style={entryStyles.modeGroup}>
                     {([false, true] as const).map((v) => (
                       <Pressable
                         key={String(v)}
                         disabled={submitting}
-                        style={[styles.toggleBtn, isHospital === v && styles.toggleBtnActive]}
+                        style={[entryStyles.modeBtn, isHospital === v && entryStyles.modeBtnActive]}
                         onPress={() => {
                           setIsHospital(v);
                           setSelectedCode(null);
@@ -349,8 +363,8 @@ export function CardFlowModal(props: CardFlowModalProps) {
                       >
                         <Text
                           style={[
-                            styles.toggleText,
-                            isHospital === v && styles.toggleTextActive,
+                            entryStyles.modeBtnText,
+                            isHospital === v && entryStyles.modeBtnTextActive,
                           ]}
                         >
                           {v ? '院内' : '院外'}
@@ -359,15 +373,14 @@ export function CardFlowModal(props: CardFlowModalProps) {
                     ))}
                   </View>
                 </View>
-                {crossZone && currentCard ? (
-                  <View style={styles.warnBanner}>
-                    <Text style={styles.warnText}>
-                      注意：和当前卡不在同一价目表（{currentCard.is_hospital ? '院内' : '院外'} → {isHospital ? '院内' : '院外'}），
-                      差价按新价目表计算。
-                    </Text>
-                  </View>
-                ) : null}
               </View>
+              {crossZone && currentCard ? (
+                <View style={styles.warnBanner}>
+                  <Text style={styles.warnText}>
+                    跨价目表（{currentCard.is_hospital ? '院内' : '院外'} → {isHospital ? '院内' : '院外'}），差价按新表计算。
+                  </Text>
+                </View>
+              ) : null}
             </>
           ) : null}
 
@@ -386,191 +399,83 @@ export function CardFlowModal(props: CardFlowModalProps) {
                   : undefined
             }
           />
-          <View style={styles.cardGrid}>
-            {mode === 'renew' && currentCard?.card_code === 'custom' ? (
+          <View style={styles.card}>
+            {mode === 'renew' ? (
               renewSpec ? (
-                <Pressable
-                  disabled
-                  style={[
-                    styles.cardOption,
-                    isCompactPhone && styles.cardOptionCompact,
-                    styles.cardOptionActive,
-                  ]}
-                >
-                  <View style={styles.cardOptionTop}>
-                    <View style={styles.cardInfoLeft}>
-                      <View style={styles.cardIconWrap}>
-                        <Ionicons
-                          name={cardIconByCode('custom')}
-                          size={16}
-                          color={IOS_COLORS.blue}
-                        />
-                      </View>
-                      <View style={{ minWidth: 0, flex: 1 }}>
-                        <Text style={styles.cardOptionName}>{renewSpec.name}</Text>
-                        <Text style={styles.cardOptionMeals}>
-                          续费档 {renewSpec.meals} 份
-                        </Text>
-                      </View>
+                <View style={styles.pickerWrap}>
+                  <View style={[styles.planDetail, styles.planDetailActive]}>
+                    <View style={styles.planDetailTop}>
+                      <Text style={styles.planDetailName}>{renewSpec.name}</Text>
+                      <Text style={styles.planDetailPrice}>¥{renewSpec.totalPrice}</Text>
                     </View>
-                    <Text style={styles.cardOptionPrice}>¥{renewSpec.totalPrice}</Text>
+                    <Text style={styles.planDetailMeta}>
+                      续费档 {renewSpec.meals} 份 · ¥{renewSpec.unitPrice}/份 · 同级续卡
+                    </Text>
                   </View>
-                  <Text style={styles.cardOptionUnit}>¥{renewSpec.unitPrice}/份</Text>
-                </Pressable>
+                </View>
               ) : (
                 <View style={styles.warnBanner}>
-                  <Text style={styles.warnText}>自定义卡缺少档位数据，无法续卡</Text>
+                  <Text style={styles.warnText}>无法续卡：缺少当前卡档位数据</Text>
                 </View>
               )
             ) : (
-              <>
-                {allCards.map((opt) => {
-                  const enabled = allowedCodes.has(opt.code);
-                  const active = enabled && opt.code === selectedCode;
-                  const iconName = cardIconByCode(opt.code);
-                  return (
-                    <Pressable
-                      key={opt.code}
-                      disabled={!enabled || submitting || mode === 'renew'}
-                      onPress={() => {
-                        setSelectedCode(opt.code);
-                        setCustomLabel('');
-                        setCustomMealsText('');
-                        setCustomPaidText('');
-                      }}
-                      style={[
-                        styles.cardOption,
-                        isCompactPhone && styles.cardOptionCompact,
-                        active && styles.cardOptionActive,
-                        !enabled && styles.cardOptionDisabled,
-                      ]}
-                    >
-                      <View style={styles.cardOptionTop}>
-                        <View style={styles.cardInfoLeft}>
-                          <View style={styles.cardIconWrap}>
-                            <Ionicons
-                              name={iconName}
-                              size={16}
-                              color={enabled ? IOS_COLORS.blue : IOS_COLORS.labelTertiary}
-                            />
-                          </View>
-                          <View style={{ minWidth: 0, flex: 1 }}>
-                            <Text
-                              style={[
-                                styles.cardOptionName,
-                                isCompactPhone && styles.cardOptionNameCompact,
-                                !enabled && styles.cardOptionTextDisabled,
-                              ]}
-                            >
-                              {opt.name}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.cardOptionMeals,
-                                !enabled && styles.cardOptionTextDisabled,
-                              ]}
-                            >
-                              {opt.meals} 份
-                            </Text>
-                          </View>
-                        </View>
-                        <Text
-                          style={[
-                            styles.cardOptionPrice,
-                            isCompactPhone && styles.cardOptionPriceCompact,
-                            !enabled && styles.cardOptionTextDisabled,
-                          ]}
-                        >
-                          ¥{opt.totalPrice}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.cardOptionUnit,
-                          !enabled && styles.cardOptionTextDisabled,
-                        ]}
-                      >
-                        ¥{opt.unitPrice}/份
-                      </Text>
-                      {!enabled && mode === 'upgrade' ? (
-                        <Text style={styles.disabledReason}>不支持降级 / 同价</Text>
-                      ) : null}
-                      {!enabled && mode === 'renew' ? (
-                        <Text style={styles.disabledReason}>续卡只能同级</Text>
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
-                {(mode === 'purchase' || mode === 'upgrade') && (
-                  <Pressable
-                    key="custom-plan"
-                    disabled={!allowedCodes.has('custom') || submitting}
-                    onPress={() => setSelectedCode('custom')}
-                    style={[
-                      styles.cardOption,
-                      isCompactPhone && styles.cardOptionCompact,
-                      selectedCode === 'custom' && styles.cardOptionActive,
-                      !allowedCodes.has('custom') && styles.cardOptionDisabled,
-                    ]}
-                  >
-                    <View style={styles.cardOptionTop}>
-                      <View style={styles.cardInfoLeft}>
-                        <View style={styles.cardIconWrap}>
-                          <Ionicons
-                            name={cardIconByCode('custom')}
-                            size={16}
-                            color={
-                              allowedCodes.has('custom')
-                                ? IOS_COLORS.blue
-                                : IOS_COLORS.labelTertiary
-                            }
-                          />
-                        </View>
-                        <View style={{ minWidth: 0, flex: 1 }}>
-                          <Text style={styles.cardOptionName}>自定义套餐</Text>
-                          <Text style={styles.cardOptionMeals}>自定名称 · 餐数 · 总价</Text>
-                        </View>
-                      </View>
-                      <Text style={[styles.cardOptionPrice, { fontSize: 22 }]}>自定</Text>
-                    </View>
-                    <Text style={styles.cardOptionUnit}>单价按总价÷份数计</Text>
-                  </Pressable>
-                )}
-              </>
+              <CardPlanPicker
+                mode={mode}
+                cards={allCards}
+                allowedCodes={allowedCodes}
+                selectedCode={selectedCode}
+                submitting={submitting}
+                showCustom={mode === 'purchase' || mode === 'upgrade'}
+                onSelect={(code) => {
+                  setSelectedCode(code);
+                  setCustomLabel('');
+                  setCustomMealsText('');
+                  setCustomPaidText('');
+                }}
+              />
             )}
           </View>
 
           {(mode === 'purchase' || mode === 'upgrade') && selectedCode === 'custom' ? (
             <>
-              <SectionLabel text="自定义内容" hint="填名称、份数、套餐总价" />
+              <SectionLabel text="自定义套餐" hint="名称 · 份数 · 总价" />
               <View style={styles.card}>
-                <TextInput
-                  style={styles.customField}
-                  placeholder="套餐名称，如：瓜包餐"
-                  placeholderTextColor={IOS_COLORS.labelTertiary}
-                  value={customLabel}
-                  editable={!submitting}
-                  onChangeText={setCustomLabel}
-                  maxLength={64}
-                />
-                <TextInput
-                  style={styles.customField}
-                  placeholder="餐次（整数），如：20"
-                  placeholderTextColor={IOS_COLORS.labelTertiary}
-                  value={customMealsText}
-                  editable={!submitting}
-                  onChangeText={(t) => setCustomMealsText(t.replace(/[^\d]/g, ''))}
-                  keyboardType="number-pad"
-                />
-                <TextInput
-                  style={styles.customField}
-                  placeholder="套餐总价（¥），如：500"
-                  placeholderTextColor={IOS_COLORS.labelTertiary}
-                  value={customPaidText}
-                  editable={!submitting}
-                  onChangeText={(t) => setCustomPaidText(t.replace(/[^0-9.]/g, ''))}
-                  keyboardType="decimal-pad"
-                />
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>套餐名称</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="如：瓜包餐"
+                    placeholderTextColor={IOS_COLORS.labelTertiary}
+                    value={customLabel}
+                    editable={!submitting}
+                    onChangeText={setCustomLabel}
+                    maxLength={64}
+                  />
+                </View>
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>餐次</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="整数，如 20"
+                    placeholderTextColor={IOS_COLORS.labelTertiary}
+                    value={customMealsText}
+                    editable={!submitting}
+                    onChangeText={(t) => setCustomMealsText(t.replace(/[^\d]/g, ''))}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={[styles.field, styles.fieldLast]}>
+                  <Text style={styles.fieldLabel}>套餐总价（¥）</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="如 500"
+                    placeholderTextColor={IOS_COLORS.labelTertiary}
+                    value={customPaidText}
+                    editable={!submitting}
+                    onChangeText={(t) => setCustomPaidText(t.replace(/[^0-9.]/g, ''))}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
               </View>
             </>
           ) : null}
@@ -598,7 +503,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
           </View>
 
           {/* 备注 */}
-          <SectionLabel text="备注（可选）" />
+          <SectionLabel text="备注" hint="可选" />
           <View style={styles.card}>
             <TextInput
               style={styles.notesInput}
@@ -618,74 +523,122 @@ export function CardFlowModal(props: CardFlowModalProps) {
             </View>
           ) : null}
 
-          <View style={{ height: 80 }} />
+          <View style={{ height: 16 }} />
         </ScrollView>
 
-        {/* 底部汇总条 */}
-        <View style={[styles.summary, isCompactPhone && styles.summaryCompact]}>
+          <CardFlowSubmitBar
+            mode={mode}
+            selectedSpec={selectedSpec}
+            collectorName={collectorName}
+            diff={diff}
+            newRemaining={newRemaining}
+            currentCard={currentCard}
+            renewCarried={renewCarried}
+            renewNewTotal={renewNewTotal}
+            canSubmit={canSubmit}
+            submitting={submitting}
+            primaryLabel={primaryLabel}
+            onConfirm={handleConfirm}
+          />
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
+function CardFlowSubmitBar({
+  mode,
+  selectedSpec,
+  collectorName,
+  diff,
+  newRemaining,
+  currentCard,
+  renewCarried,
+  renewNewTotal,
+  canSubmit,
+  submitting,
+  primaryLabel,
+  onConfirm,
+}: {
+  mode: CardFlowMode;
+  selectedSpec: CardSpec | null;
+  collectorName: string;
+  diff: number | null;
+  newRemaining: number | null;
+  currentCard?: CardFlowCurrentCard | null;
+  renewCarried: number;
+  renewNewTotal: number | null;
+  canSubmit: boolean;
+  submitting: boolean;
+  primaryLabel: string;
+  onConfirm: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const padBottom = Math.max(insets.bottom, 10);
+
+  return (
+    <View style={[styles.submitBarShell, { paddingBottom: padBottom }]}>
+      <View style={styles.submitBarCard}>
+        <View style={styles.submitSummaryRow}>
           {selectedSpec ? (
-            <View style={{ flex: 1 }}>
+            <View style={styles.submitSummaryCol}>
               {mode === 'purchase' ? (
                 <>
                   <Text style={styles.summaryMain}>
-                    应收 <Text style={styles.summaryAmount}>¥{selectedSpec.totalPrice}</Text>
+                    应收{' '}
+                    <Text style={styles.summaryAmount}>¥{selectedSpec.totalPrice}</Text>
                   </Text>
-                  <Text style={styles.summarySub}>
-                    {selectedSpec.name} · {selectedSpec.meals} 份 · 收款人 {collectorName}
+                  <Text style={styles.summarySub} numberOfLines={2}>
+                    {selectedSpec.name} · {selectedSpec.meals} 份 · {collectorName}
                   </Text>
                 </>
               ) : mode === 'upgrade' ? (
                 <>
                   <Text style={styles.summaryMain}>
-                    补差价{' '}
-                    <Text style={styles.summaryAmount}>¥{diff ?? 0}</Text>
-                    {'  '}升级后剩{' '}
-                    <Text style={[styles.summaryAmount, { color: IOS_COLORS.green }]}>
-                      {newRemaining ?? 0} 份
+                    补差 <Text style={styles.summaryAmount}>¥{diff ?? 0}</Text>
+                    {' · '}剩{' '}
+                    <Text style={[styles.summaryAmount, { fontSize: 18, color: IOS_COLORS.green }]}>
+                      {newRemaining ?? 0}
                     </Text>
+                    {' '}份
                   </Text>
-                  <Text style={styles.summarySub}>
-                    {currentCard?.card_name ?? '当前卡'} → {selectedSpec.name} · 收款人 {collectorName}
+                  <Text style={styles.summarySub} numberOfLines={2}>
+                    {currentCard?.card_name ?? '当前卡'} → {selectedSpec.name}
                   </Text>
                 </>
               ) : (
                 <>
                   <Text style={styles.summaryMain}>
-                    应收{' '}
-                    <Text style={styles.summaryAmount}>¥{selectedSpec.totalPrice}</Text>
-                    {'  '}续卡后剩{' '}
-                    <Text style={[styles.summaryAmount, { color: IOS_COLORS.green }]}>
-                      {renewNewTotal ?? selectedSpec.meals} 份
+                    应收 <Text style={styles.summaryAmount}>¥{selectedSpec.totalPrice}</Text>
+                    {' · '}续后{' '}
+                    <Text style={[styles.summaryAmount, { fontSize: 18, color: IOS_COLORS.green }]}>
+                      {renewNewTotal ?? selectedSpec.meals}
                     </Text>
+                    {' '}份
                   </Text>
-                  <Text style={styles.summarySub}>
-                    {selectedSpec.name} · 结转 {renewCarried} 份 · 收款人 {collectorName}
+                  <Text style={styles.summarySub} numberOfLines={2}>
+                    结转 {renewCarried} 份 · {collectorName}
                   </Text>
                 </>
               )}
             </View>
           ) : (
-            <Text style={styles.summaryHint}>请选择一张卡</Text>
+            <Text style={styles.summaryHint}>请先选择卡种</Text>
           )}
-
-          <Pressable
-            style={[
-              styles.primaryBtn,
-              isCompactPhone && styles.primaryBtnCompact,
-              !canSubmit && styles.primaryBtnDisabled,
-            ]}
-            disabled={!canSubmit}
-            onPress={handleConfirm}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryBtnText}>{primaryLabel}</Text>
-            )}
-          </Pressable>
         </View>
-      </SafeAreaView>
-    </Modal>
+        <Pressable
+          style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+          disabled={!canSubmit}
+          onPress={onConfirm}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.submitBtnText}>{primaryLabel}</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -732,180 +685,3 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function cardIconByCode(code: SubscriptionCardCode): keyof typeof Ionicons.glyphMap {
-  switch (code) {
-    case 'custom':
-      return 'pricetag-outline';
-    case 'experience':
-      return 'sparkles-outline';
-    case 'small_week':
-      return 'time-outline';
-    case 'week':
-      return 'calendar-outline';
-    case 'month':
-      return 'calendar-clear-outline';
-    case 'season':
-      return 'layers-outline';
-    case 'year':
-      return 'ribbon-outline';
-    default:
-      return 'card-outline';
-  }
-}
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
-
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: IOS_COLORS.card,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
-  },
-  cancel: { fontSize: 17, color: IOS_COLORS.labelSecondary, width: 60 },
-  title: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
-  confirm: { fontSize: 17, color: IOS_COLORS.blue, fontWeight: '600', width: 60, textAlign: 'right' },
-  disabled: { opacity: 0.3 },
-
-  scrollBody: { paddingBottom: 16 },
-
-  currentCard: {
-    backgroundColor: IOS_COLORS.card, marginHorizontal: 16, marginTop: 16,
-    borderRadius: 14, padding: 14, gap: 2,
-  },
-  currentLabel: { fontSize: 15, fontWeight: '600', color: IOS_COLORS.label },
-  currentSub: { fontSize: 13, color: IOS_COLORS.labelSecondary },
-
-  sectionLabelWrap: {
-    paddingHorizontal: 20, paddingTop: 18, paddingBottom: 6,
-    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
-  },
-  sectionLabel: {
-    fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary,
-    textTransform: 'uppercase', letterSpacing: 0.5,
-  },
-  sectionHint: { fontSize: 12, color: IOS_COLORS.labelTertiary },
-
-  card: {
-    marginHorizontal: 16, backgroundColor: IOS_COLORS.card, borderRadius: 14, overflow: 'hidden',
-  },
-
-  toggleRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-  },
-  rowLabel: { fontSize: 15, color: IOS_COLORS.label },
-  toggleGroup: {
-    flexDirection: 'row',
-    backgroundColor: IOS_COLORS.fillMedium, borderRadius: 8, padding: 2,
-  },
-  toggleBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 6 },
-  toggleBtnActive: { backgroundColor: IOS_COLORS.card },
-  toggleText: { fontSize: 14, color: IOS_COLORS.labelSecondary },
-  toggleTextActive: { color: IOS_COLORS.label, fontWeight: '600' },
-
-  warnBanner: {
-    backgroundColor: '#FFF4E5',
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#FFE3B8',
-  },
-  warnText: { fontSize: 13, color: IOS_COLORS.orange, lineHeight: 18 },
-
-  cardGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    paddingHorizontal: 12, gap: 10,
-  },
-  cardOption: {
-    flexGrow: 1, flexBasis: '46%', minWidth: 140,
-    backgroundColor: IOS_COLORS.card, borderRadius: 14, padding: 14, gap: 6,
-    borderWidth: 2, borderColor: 'transparent',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
-  },
-  cardOptionCompact: {
-    flexBasis: '100%',
-    minWidth: 0,
-    padding: 12,
-  },
-  cardOptionActive: { borderColor: IOS_COLORS.blue, backgroundColor: IOS_COLORS.blueLight },
-  cardOptionDisabled: { backgroundColor: IOS_COLORS.fillLight, opacity: 0.55 },
-  cardOptionTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  cardInfoLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
-  cardIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,122,255,0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  cardOptionName: { fontSize: 18, fontWeight: '700', color: IOS_COLORS.label },
-  cardOptionNameCompact: { fontSize: 16 },
-  cardOptionMeals: { fontSize: 13, color: IOS_COLORS.labelSecondary, marginTop: 1 },
-  cardOptionPrice: { fontSize: 34, fontWeight: '700', color: IOS_COLORS.blue, lineHeight: 36, textAlign: 'right' },
-  cardOptionPriceCompact: { fontSize: 28, lineHeight: 30 },
-  cardOptionUnit: { fontSize: 12, color: IOS_COLORS.labelSecondary, textAlign: 'right' },
-  cardOptionTextDisabled: { color: IOS_COLORS.labelTertiary },
-  disabledReason: { fontSize: 11, color: IOS_COLORS.red, marginTop: 2 },
-
-  chipRow: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
-    paddingHorizontal: 14, paddingVertical: 12,
-  },
-  chip: {
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10,
-    backgroundColor: IOS_COLORS.fillLight,
-  },
-  chipActive: { backgroundColor: IOS_COLORS.blue },
-  chipText: { fontSize: 14, color: IOS_COLORS.label },
-  chipTextActive: { color: '#fff', fontWeight: '600' },
-
-  notesInput: {
-    fontSize: 15, color: IOS_COLORS.label,
-    padding: 14, minHeight: 64, textAlignVertical: 'top',
-  },
-
-  customField: {
-    fontSize: 15,
-    color: IOS_COLORS.label,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: IOS_COLORS.separatorLight,
-  },
-
-  errorBanner: {
-    marginHorizontal: 16, marginTop: 12, padding: 12,
-    backgroundColor: '#FFF0F0', borderRadius: 10,
-  },
-  errorText: { fontSize: 14, color: IOS_COLORS.red },
-
-  summary: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: IOS_COLORS.card,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: IOS_COLORS.separatorLight,
-  },
-  summaryCompact: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    gap: 10,
-  },
-  summaryMain: { fontSize: 15, color: IOS_COLORS.label },
-  summaryAmount: { fontSize: 20, fontWeight: '700', color: IOS_COLORS.blue },
-  summarySub: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
-  summaryHint: { flex: 1, fontSize: 14, color: IOS_COLORS.labelSecondary },
-
-  primaryBtn: {
-    height: 44, minWidth: 120, paddingHorizontal: 18,
-    borderRadius: 12, backgroundColor: IOS_COLORS.blue,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  primaryBtnCompact: {
-    width: '100%',
-    minWidth: 0,
-  },
-  primaryBtnDisabled: { backgroundColor: IOS_COLORS.labelTertiary },
-  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-});

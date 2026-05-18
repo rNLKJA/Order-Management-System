@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { IOS_COLORS } from '../../theme/paperTheme';
 
 export const entryStyles = StyleSheet.create({
@@ -16,15 +16,16 @@ export const entryStyles = StyleSheet.create({
   title: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
   confirm: { fontSize: 17, color: IOS_COLORS.blue, fontWeight: '600' },
 
-  /** 上：会员餐/散餐 + 录入日期；下：模式说明（给下面凭证区留全宽） */
+  /** 模式区外层：透明，与 ScrollView 内卡片同边距 */
+  modeRowShell: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  /** 与 formCard 叠用：仅纵向排版 */
   modeRow: {
     flexDirection: 'column',
-    backgroundColor: IOS_COLORS.card,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: IOS_COLORS.separatorLight,
-    gap: 8,
+    gap: 6,
   },
   modeRowInner: {
     flexDirection: 'row',
@@ -37,10 +38,13 @@ export const entryStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   /** 与 modeGroup 同高，避免上下错缝 */
   modeRowDatePicker: {
     flex: 1,
+    minWidth: 0,
+    width: '100%',
     minHeight: 44,
     alignSelf: 'stretch',
   },
@@ -55,52 +59,193 @@ export const entryStyles = StyleSheet.create({
     minHeight: 44,
   },
   modeBtn: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 12,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 8,
-    minWidth: 76,
+    minWidth: 72,
   },
   modeBtnActive: { backgroundColor: IOS_COLORS.card },
-  modeBtnText: { fontSize: 16, color: IOS_COLORS.labelSecondary },
+  modeBtnText: {
+    fontSize: 15,
+    color: IOS_COLORS.labelSecondary,
+    ...(Platform.OS === 'web' ? ({ whiteSpace: 'nowrap' } as object) : {}),
+  },
   modeBtnTextActive: { color: IOS_COLORS.label, fontWeight: '600' },
-  modeHint: { fontSize: 12, color: IOS_COLORS.labelTertiary, lineHeight: 17 },
+  modeHint: { fontSize: 12, color: IOS_COLORS.labelTertiary, lineHeight: 16 },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 24, gap: 10 },
+
+  /** 分组白卡片（搜索 / 份数 / 凭证等） */
+  formCard: {
+    backgroundColor: IOS_COLORS.card,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(17,17,17,0.06)',
+    gap: 10,
+  },
+  cardSectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: IOS_COLORS.label,
+    marginBottom: 2,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  cardTitleRowTitle: {
+    flex: 1,
+    minWidth: 0,
+    marginBottom: 0,
+  },
+  cardTitleSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  cardTitleSwitchLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: IOS_COLORS.labelSecondary,
+  },
+  cardSectionHint: {
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+
+  batchSearchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  batchCountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: IOS_COLORS.blueLight,
+  },
+  batchCountPillEmpty: {
+    backgroundColor: IOS_COLORS.fillLight,
+  },
+  batchCountText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: IOS_COLORS.blue,
+  },
+  batchCountTextEmpty: {
+    color: IOS_COLORS.labelSecondary,
+    fontWeight: '600',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: IOS_COLORS.fillLight,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    minHeight: 44,
+  },
+  searchRowIcon: { marginTop: 1 },
+  memberListInCard: {
+    marginTop: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: IOS_COLORS.separatorLight,
+  },
+  batchRosterList: {
+    gap: 0,
+  },
+  batchRosterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  batchRosterName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: IOS_COLORS.label,
+  },
+  batchRosterMeta: {
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
+    marginTop: 2,
+  },
+  batchQtyBlock: {
+    gap: 8,
+    paddingVertical: 6,
+  },
+  batchQtyName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: IOS_COLORS.label,
+  },
 
   sectionLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: IOS_COLORS.labelSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 8,
-    paddingLeft: 4,
+    letterSpacing: 0.3,
+    marginBottom: 6,
+    paddingLeft: 2,
   },
 
-  /** 仅订餐凭证：全宽卡片（录入日期已移到顶部模式行） */
-  proofCard: {
-    backgroundColor: IOS_COLORS.card,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(17,17,17,0.06)',
+  optionPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 2,
   },
-  proofCardTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: IOS_COLORS.labelSecondary,
-    marginBottom: 8,
-    letterSpacing: 0.2,
+  optionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: IOS_COLORS.fillLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: IOS_COLORS.separatorLight,
+  },
+  optionPillOn: {
+    backgroundColor: IOS_COLORS.blueLight,
+    borderColor: 'rgba(0,122,255,0.35)',
+  },
+  optionPillText: { fontSize: 14, fontWeight: '600', color: IOS_COLORS.labelSecondary },
+  optionPillTextOn: { color: IOS_COLORS.blue },
+
+  proofInlineCard: {
+    gap: 8,
+  },
+  proofInlineTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: IOS_COLORS.label,
+  },
+  proofInlineHint: {
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
+    marginTop: 2,
   },
 
   searchBox: {
-    backgroundColor: IOS_COLORS.card,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: IOS_COLORS.fillLight,
+    borderRadius: 10,
+    paddingHorizontal: 10,
     paddingVertical: 2,
-    marginBottom: 10,
+    marginBottom: 0,
   },
   searchInput: {
     fontSize: 15,
@@ -178,11 +323,11 @@ export const entryStyles = StyleSheet.create({
   selectedMemberCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     backgroundColor: IOS_COLORS.blueLight,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 4,
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 4,
   },
 
   searchHintSpacer: { height: 4 },
@@ -245,7 +390,12 @@ export const entryStyles = StyleSheet.create({
   },
   batchCardDivider: { marginLeft: 0 },
 
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginVertical: 16 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: IOS_COLORS.separatorLight, marginVertical: 10 },
+  inCardDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: IOS_COLORS.separatorLight,
+    marginVertical: 4,
+  },
 
   qtyPairCard: {
     flexDirection: 'row',
@@ -254,6 +404,12 @@ export const entryStyles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     marginBottom: 4,
+  },
+  /** 嵌在 formCard 内，避免白底叠白底 */
+  qtyPairCardInForm: {
+    backgroundColor: IOS_COLORS.fillLight,
+    borderRadius: 10,
+    marginBottom: 0,
   },
   qtyPairCol: {
     flex: 1,
@@ -291,13 +447,13 @@ export const entryStyles = StyleSheet.create({
   qtyControlsCompact: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
   notesBox: {
-    backgroundColor: IOS_COLORS.card,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    marginTop: 12,
+    backgroundColor: IOS_COLORS.fillLight,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+    marginTop: 0,
   },
-  notesInput: { fontSize: 15, color: IOS_COLORS.label, paddingVertical: 10, minHeight: 60 },
+  notesInput: { fontSize: 15, color: IOS_COLORS.label, paddingVertical: 10, minHeight: 44 },
   dateCard: {
     backgroundColor: IOS_COLORS.card,
     borderRadius: 14,
@@ -310,6 +466,26 @@ export const entryStyles = StyleSheet.create({
     color: IOS_COLORS.labelTertiary,
     marginBottom: 16,
     paddingLeft: 4,
+  },
+  dateHintTight: {
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
+    lineHeight: 16,
+    marginBottom: 0,
+    paddingLeft: 0,
+  },
+
+  fieldRowEmbedded: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    gap: 8,
+  },
+  fieldDividerEmbedded: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: IOS_COLORS.separatorLight,
+    marginVertical: 6,
   },
 
   inlineCard: { backgroundColor: IOS_COLORS.card, borderRadius: 14, overflow: 'hidden' },
@@ -367,13 +543,30 @@ export const entryStyles = StyleSheet.create({
   adhocTotalLabel: { fontSize: 15, color: IOS_COLORS.blue },
   adhocTotalValue: { fontSize: 24, fontWeight: '700', color: IOS_COLORS.blue },
 
-  submitBar: {
+  submitBarShell: {
+    paddingHorizontal: 14,
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+  submitBarCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    gap: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: { elevation: 6 },
+      default: {},
+    }),
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08), 0 1px 6px rgba(0,0,0,0.05)',
+        } as object)
+      : {}),
   },
   submitMain: { fontSize: 15, fontWeight: '700', color: IOS_COLORS.label },
   submitSub: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
@@ -386,13 +579,14 @@ export const entryStyles = StyleSheet.create({
     fontWeight: '500',
   },
   submitBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 999,
     backgroundColor: IOS_COLORS.blue,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 110,
+    minWidth: 104,
+    flexShrink: 0,
   },
   submitBtnRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   submitBtnSecondary: {

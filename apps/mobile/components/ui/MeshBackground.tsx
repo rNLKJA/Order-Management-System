@@ -4,11 +4,12 @@
  * Native：LinearGradient 三段 + 3 个半透明圆形 View 近似径向光。
  */
 
+import { memo } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../theme/paperTheme';
 
-export function MeshBackground() {
+function MeshBackgroundInner() {
   if (Platform.OS === 'web') {
     return (
       <View
@@ -55,3 +56,6 @@ const styles = StyleSheet.create({
   spotTR: { right: -100, top: -80 },
   spotBR: { right: -140, bottom: -120 },
 });
+
+/** 全屏装饰层，memo 避免首页 tab 切换时重复绘制 */
+export const MeshBackground = memo(MeshBackgroundInner);

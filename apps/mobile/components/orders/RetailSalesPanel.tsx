@@ -39,7 +39,7 @@ export function RetailSalesPanel() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [productId, setProductId] = useState<number | null>(null);
-  const [qtyText, setQtyText] = useState('1');
+  const [qty, setQty] = useState(1);
   const [amountText, setAmountText] = useState('');
   const [collectorId, setCollectorId] = useState<number | null>(null);
   const [note, setNote] = useState('');
@@ -177,9 +177,8 @@ export function RetailSalesPanel() {
       await notify('提示', '请选择收款人');
       return;
     }
-    const qty = Number(qtyText);
-    if (!Number.isFinite(qty) || qty < 1 || !Number.isInteger(qty)) {
-      await notify('提示', '数量须为正整数');
+    if (qty < 1) {
+      await notify('提示', '数量须至少为 1');
       return;
     }
     const amount = Number(amountText);
@@ -199,7 +198,7 @@ export function RetailSalesPanel() {
       });
       setAmountText('');
       setNote('');
-      setQtyText('1');
+      setQty(1);
       await refresh();
       await notify('已保存', '已记入财务流水（其他产品销售）');
     } catch (e) {
@@ -224,44 +223,80 @@ export function RetailSalesPanel() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>记一笔零售</Text>
-        <Text style={styles.hint}>不绑定会员卡；入账分类为「其他产品销售」</Text>
-        <DatePicker label="业务日期" value={saleDate} onChange={setSaleDate} max={formatDate(new Date())} />
+        <View style={styles.saleCardTop}>
+          <View style={styles.saleCardTopText}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              记一笔零售
+            </Text>
+            <Text style={styles.hint}>不绑定会员卡；入账分类为「其他产品销售」</Text>
+          </View>
+          <DatePicker
+            value={saleDate}
+            onChange={setSaleDate}
+            max={formatDate(new Date())}
+            compact
+            inlineAdjacent
+            style={styles.saleCardDate}
+          />
+        </View>
+
         <Text style={styles.label}>商品</Text>
         {activeProducts.length === 0 ? (
           <Text style={styles.warn}>请先在下方「商品目录」新增可售商品</Text>
         ) : (
-          <View style={styles.chipWrap}>
-            {activeProducts.map((p) => {
-              const sel = productId === p.id;
-              return (
-                <Pressable
-                  key={p.id}
-                  onPress={() => setProductId(p.id)}
-                  style={[styles.chip, sel && styles.chipActive]}
-                >
-                  <Text style={[styles.chipText, sel && styles.chipTextActive]} numberOfLines={1}>
-                    {p.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <>
+            <View style={styles.chipWrap}>
+              {activeProducts.map((p) => {
+                const sel = productId === p.id;
+                return (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => setProductId(p.id)}
+                    style={[styles.chip, sel && styles.chipActive]}
+                  >
+                    <Text style={[styles.chipText, sel && styles.chipTextActive]} numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {productId != null && activeProducts.find((p) => p.id === productId)?.detail ? (
+              <Text style={styles.productHint} numberOfLines={2}>
+                {activeProducts.find((p) => p.id === productId)!.detail}
+              </Text>
+            ) : null}
+          </>
         )}
-        <TextInput
-          style={styles.input}
-          placeholder="数量（件）"
-          keyboardType="number-pad"
-          value={qtyText}
-          onChangeText={setQtyText}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="总价（元）"
-          keyboardType="decimal-pad"
-          value={amountText}
-          onChangeText={setAmountText}
-        />
+
+        <View style={styles.qtyAmountRow}>
+          <View style={styles.qtyAmountCol}>
+            <Text style={styles.fieldLabel}>数量</Text>
+            <View style={styles.fieldControlBox}>
+              <RetailQtyStepper
+                value={qty}
+                onChange={setQty}
+                min={1}
+                max={999}
+                disabled={submitting || activeProducts.length === 0}
+              />
+            </View>
+          </View>
+          <View style={styles.qtyAmountCol}>
+            <Text style={styles.fieldLabel}>总价（元）</Text>
+            <View style={styles.fieldControlBox}>
+              <TextInput
+                style={styles.amountInput}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                value={amountText}
+                onChangeText={setAmountText}
+                editable={!submitting}
+              />
+            </View>
+          </View>
+        </View>
+
         <Text style={styles.label}>收款人</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.collectorRow}>
           {users.map((u) => {
@@ -279,11 +314,21 @@ export function RetailSalesPanel() {
             );
           })}
         </ScrollView>
-        <TextInput style={styles.input} placeholder="备注（可选）" value={note} onChangeText={setNote} />
+
+        <View style={styles.inputBox}>
+          <TextInput
+            style={styles.inputInner}
+            placeholder="备注（可选）"
+            value={note}
+            onChangeText={setNote}
+            editable={!submitting}
+          />
+        </View>
+
         <Pressable
-          style={[styles.primaryBtn, submitting && styles.primaryBtnDisabled]}
+          style={[styles.primaryBtn, (submitting || activeProducts.length === 0) && styles.primaryBtnDisabled]}
           onPress={() => void submitSale()}
-          disabled={submitting}
+          disabled={submitting || activeProducts.length === 0}
         >
           {submitting ? (
             <ActivityIndicator color="#fff" />
@@ -387,23 +432,134 @@ export function RetailSalesPanel() {
   );
 }
 
+function RetailQtyStepper({
+  value,
+  onChange,
+  min = 1,
+  max = 999,
+  disabled = false,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={styles.qtyStepper}>
+      <Pressable
+        style={[styles.qtyBtn, value <= min && styles.qtyBtnDisabled]}
+        onPress={() => onChange(Math.max(min, value - 1))}
+        disabled={disabled || value <= min}
+      >
+        <Text style={styles.qtyBtnText}>−</Text>
+      </Pressable>
+      <Text style={styles.qtyValue}>{value}</Text>
+      <Pressable
+        style={[styles.qtyBtn, value >= max && styles.qtyBtnDisabled]}
+        onPress={() => onChange(Math.min(max, value + 1))}
+        disabled={disabled || value >= max}
+      >
+        <Text style={styles.qtyBtnText}>＋</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 12, paddingBottom: 40, gap: 12 },
+  scrollContent: { paddingHorizontal: 14, paddingBottom: 40, gap: 10 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   card: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: IOS_COLORS.card,
     borderRadius: 14,
-    padding: 14,
+    padding: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(17,17,17,0.08)',
+    borderColor: 'rgba(17,17,17,0.06)',
     gap: 10,
   },
-  cardTitle: { fontSize: 17, fontWeight: '700', color: IOS_COLORS.label },
-  hint: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: -4 },
-  label: { fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary },
+  saleCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+    minWidth: 0,
+  },
+  saleCardTopText: { flex: 1, minWidth: 0, gap: 4 },
+  saleCardDate: {
+    flexShrink: 0,
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    marginTop: 1,
+  },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: IOS_COLORS.label },
+  hint: { fontSize: 12, color: IOS_COLORS.labelTertiary, lineHeight: 16 },
+  label: { fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary, marginBottom: 2 },
+  productHint: { fontSize: 12, color: IOS_COLORS.labelTertiary, lineHeight: 16, marginTop: -4 },
   warn: { fontSize: 13, color: IOS_COLORS.orange },
   muted: { fontSize: 14, color: IOS_COLORS.labelSecondary },
+  qtyAmountRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  qtyAmountCol: { flex: 1, minWidth: 0 },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: IOS_COLORS.labelSecondary,
+    lineHeight: 18,
+    height: 18,
+    marginBottom: 6,
+  },
+  fieldControlBox: {
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: IOS_COLORS.fillLight,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  qtyStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    alignSelf: 'stretch',
+  },
+  qtyBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: IOS_COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyBtnDisabled: { backgroundColor: IOS_COLORS.fillMedium },
+  qtyBtnText: { fontSize: 20, color: '#fff', fontWeight: '500', lineHeight: 24 },
+  qtyValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: IOS_COLORS.label,
+    minWidth: 36,
+    textAlign: 'center',
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: IOS_COLORS.label,
+    paddingVertical: 0,
+    textAlign: 'right',
+  },
+  inputBox: {
+    backgroundColor: IOS_COLORS.fillLight,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  inputInner: {
+    fontSize: 16,
+    color: IOS_COLORS.label,
+    paddingVertical: 10,
+  },
   input: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(17,17,17,0.12)',
@@ -411,7 +567,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    backgroundColor: '#fff',
+    backgroundColor: IOS_COLORS.fillLight,
   },
   textArea: { minHeight: 72, textAlignVertical: 'top' },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -428,8 +584,8 @@ const styles = StyleSheet.create({
   collectorRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
   primaryBtn: {
     backgroundColor: IOS_COLORS.blue,
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: 999,
+    paddingVertical: 13,
     alignItems: 'center',
     marginTop: 4,
   },

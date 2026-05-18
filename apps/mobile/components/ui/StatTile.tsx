@@ -4,6 +4,7 @@
  * `layout="compact"`：图标与标题同一行，适合统计页多格并排。
  */
 
+import { memo } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,7 @@ export interface StatTileProps {
   layout?: 'stacked' | 'compact';
 }
 
-export function StatTile({
+function StatTileInner({
   label,
   value,
   icon,
@@ -141,6 +142,8 @@ export function StatTile({
     </GlassSurface>
   );
 }
+
+export const StatTile = memo(StatTileInner);
 
 const styles = StyleSheet.create({
   tile: {

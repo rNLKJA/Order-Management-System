@@ -15,9 +15,6 @@ import {
   MeshBackground,
   GlassSurface,
   SectionLabel,
-  BentoGrid,
-  Bento,
-  StatTile,
   PressableCard,
   StatusChip,
   IconAvatar,
@@ -96,42 +93,42 @@ export default function MembersScreen() {
         >
           <View style={styles.container}>
             <View style={styles.block}>
-              <SectionLabel>概览</SectionLabel>
-              <BentoGrid gap={SPACING.md}>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile
-                    layout="compact"
-                    label={isSearchMode ? '搜索结果' : '总会员'}
-                    value={`${members.length}`}
-                    icon="people-outline"
-                    color={COLORS.brand}
-                    tint="info"
-                  />
-                </Bento>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile layout="compact" label="院内" value={`${hospitalCount}`} icon="business-outline" color={COLORS.info} tint="warn" />
-                </Bento>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile layout="compact" label="院外" value={`${regularCount}`} icon="home-outline" color={COLORS.success} tint="ok" />
-                </Bento>
-                <Bento span={3} mobileSpan={6}>
-                  <StatTile layout="compact" label="需续卡" value={`${expiredCount}`} icon="alert-circle-outline" color={COLORS.warning} tint="danger" />
-                </Bento>
-              </BentoGrid>
-            </View>
-
-            <View style={styles.block}>
               <SectionLabel>筛选</SectionLabel>
               <GlassSurface padding={SPACING.md} style={styles.filterCard}>
-                <View style={styles.filterRow}>
-                  {(['all', 'hospital', 'regular', 'expired'] as const).map((f) => (
-                    <Pressable key={f} style={[styles.filterChip, filter === f && styles.filterChipActive]} onPress={() => setFilter(f)}>
-                      <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
-                        {f === 'all' ? '全部' : f === 'hospital' ? '院内' : f === 'regular' ? '院外' : '需续卡'}
-                      </Text>
-                    </Pressable>
-                  ))}
+                <View style={styles.statsRow}>
+                  <MemberStatCell
+                    label={isSearchMode ? '搜索' : '总会员'}
+                    value={members.length}
+                    color={COLORS.brand}
+                    active={filter === 'all'}
+                    onPress={() => setFilter('all')}
+                  />
+                  <View style={styles.statDivider} />
+                  <MemberStatCell
+                    label="院内"
+                    value={hospitalCount}
+                    color={COLORS.info}
+                    active={filter === 'hospital'}
+                    onPress={() => setFilter('hospital')}
+                  />
+                  <View style={styles.statDivider} />
+                  <MemberStatCell
+                    label="院外"
+                    value={regularCount}
+                    color={COLORS.success}
+                    active={filter === 'regular'}
+                    onPress={() => setFilter('regular')}
+                  />
+                  <View style={styles.statDivider} />
+                  <MemberStatCell
+                    label="需续卡"
+                    value={expiredCount}
+                    color={COLORS.warning}
+                    active={filter === 'expired'}
+                    onPress={() => setFilter('expired')}
+                  />
                 </View>
+                <View style={styles.statsFilterDivider} />
                 <View style={styles.searchBox}>
                   <Ionicons name="search-outline" size={16} color={COLORS.text.tertiary} />
                   <TextInput
@@ -180,6 +177,38 @@ export default function MembersScreen() {
         </ScrollView>
       </SafeAreaView>
     </View>
+  );
+}
+
+function MemberStatCell({
+  label,
+  value,
+  color,
+  active,
+  onPress,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.statCell,
+        active && styles.statCellActive,
+        pressed && !active && { opacity: 0.72 },
+      ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={[styles.statLabel, active && styles.statLabelActive]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -239,11 +268,50 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: SPACING.page,
   },
-  block: { marginBottom: SPACING.lg },
+  block: { marginBottom: SPACING.md },
   addBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, gap: 2 },
   addBtnText: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
 
   filterCard: { gap: SPACING.sm },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    borderRadius: 10,
+  },
+  statCellActive: {
+    backgroundColor: COLORS.brandSoft,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  statLabel: {
+    ...TYPE.caption,
+    color: COLORS.text.tertiary,
+    fontWeight: '600',
+  },
+  statLabelActive: {
+    color: COLORS.brand,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    marginVertical: 4,
+  },
+  statsFilterDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -260,12 +328,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 18,
   },
-  filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: COLORS.systemGrouped },
-  filterChipActive: { backgroundColor: COLORS.brand },
-  filterChipText: { ...TYPE.caption, color: COLORS.text.tertiary, fontWeight: '600' },
-  filterChipTextActive: { color: '#fff' },
-
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
   rowContent: { flex: 1, gap: 4, minWidth: 0, marginLeft: SPACING.md },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },

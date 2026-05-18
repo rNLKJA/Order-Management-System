@@ -12,7 +12,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../theme/paperTheme';
@@ -40,16 +39,22 @@ function displayContactField(value: string | undefined | null): string {
   return t.length > 0 ? t : '—';
 }
 
+function batchMemberMetaLine(m: MockMember): string {
+  const loc = m.is_hospital ? '院内' : '院外';
+  if (memberHasStaffCard(m)) return `${loc} · 员工卡`;
+  if (m.is_staff) return `${loc} · 员工标记`;
+  if (m.active_card) {
+    return `${loc} · ${m.active_card.card_name} · 剩 ${m.active_card.remaining_meals} 份`;
+  }
+  return `${loc} · 无卡`;
+}
+
 // EntryPanel — 快速录入（会员餐 / 散餐），内嵌在「录入」Tab 中
 // ============================================================
 type EntryMode = 'member' | 'adhoc';
 
 /** 与 POST /api/orders/batch 单请求上限一致 */
 const MEMBER_BATCH_QUEUE_MAX = 30;
-
-/** 平板及以上：已加入名单三列网格 */
-const BATCH_GRID_MIN_WIDTH = 768;
-const BATCH_GRID_GAP = 8;
 
 /** 与顶部 Tab（录入 / 批量 / 赠送）对齐 */
 export type MemberQuickEntryPreset = 'single' | 'batch' | 'gift';
@@ -124,13 +129,6 @@ export function EntryPanel({
   }) => Promise<void>;
   onJumpToOverview?: () => void;
 }) {
-  const { width: windowWidth } = useWindowDimensions();
-  const batchGridWide = windowWidth >= BATCH_GRID_MIN_WIDTH;
-  /** Scroll 内容区左右各 16，列间 BATCH_GRID_GAP */
-  const batchCardColumnWidth = batchGridWide
-    ? Math.floor((windowWidth - 32 - BATCH_GRID_GAP * 2) / 3)
-    : undefined;
-
   const quickInitial = memberPresetState(memberQuickEntry);
   const lockMemberPreset = memberQuickEntry != null;
 
@@ -520,40 +518,48 @@ export function EntryPanel({
 
   return (
     <View style={{ flex: 1 }}>
-      {/* 模式切换 + 录入日期（同一行）；说明在下一行，凭证区全宽 */}
-      <View style={entryStyles.modeRow}>
-        <View style={entryStyles.modeRowInner}>
-          <View style={entryStyles.modeGroup}>
-            {(['member', 'adhoc'] as const).map((m) => (
-              <Pressable
-                key={m}
-                style={[entryStyles.modeBtn, mode === m && entryStyles.modeBtnActive]}
-                onPress={() => setMode(m)}
-              >
-                <Text style={[entryStyles.modeBtnText, mode === m && entryStyles.modeBtnTextActive]}>
-                  {m === 'member' ? '会员餐' : '散餐'}
-                </Text>
-              </Pressable>
-            ))}
+      {/* 模式切换 + 录入日期：与下方录入块同款圆角卡片 */}
+      <View style={entryStyles.modeRowShell}>
+        <View style={[entryStyles.formCard, entryStyles.modeRow]}>
+          <View style={entryStyles.modeRowInner}>
+            <View style={entryStyles.modeGroup}>
+              {(['member', 'adhoc'] as const).map((m) => (
+                <Pressable
+                  key={m}
+                  style={[entryStyles.modeBtn, mode === m && entryStyles.modeBtnActive]}
+                  onPress={() => setMode(m)}
+                >
+                  <Text
+                    style={[entryStyles.modeBtnText, mode === m && entryStyles.modeBtnTextActive]}
+                    numberOfLines={1}
+                  >
+                    {m === 'member' ? '会员餐' : '散餐'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={entryStyles.modeDateWrap}>
+              <DatePicker
+                label="日期"
+                value={entryDate}
+                onChange={setEntryDate}
+                labelMinWidth={32}
+                disabled={submitting}
+                compact
+                style={entryStyles.modeRowDatePicker}
+              />
+            </View>
           </View>
-          <View style={entryStyles.modeDateWrap}>
-            <DatePicker
-              label="录入日期"
-              value={entryDate}
-              onChange={setEntryDate}
-              labelMinWidth={52}
-              disabled={submitting}
-              style={entryStyles.modeRowDatePicker}
-            />
-          </View>
+          {!(lockMemberPreset && mode === 'member') ? (
+            <Text style={entryStyles.modeHint} numberOfLines={2}>
+              {mode === 'member'
+                ? memberIsGift
+                  ? '单人 · 赠送餐：不扣次，一套午/晚份数'
+                  : '从档案选会员；员工卡计次不减余额'
+                : '散餐：无需会员账户，现金收费'}
+            </Text>
+          ) : null}
         </View>
-        <Text style={entryStyles.modeHint} numberOfLines={3}>
-          {mode === 'member'
-            ? memberIsGift
-              ? '赠送餐：每行一位会员，午/晚份数分开填'
-              : '从会员档案中选择；普通会员扣次扣余额，「员工卡」计次不减余额'
-            : '无需会员账户，现金收费'}
-        </Text>
       </View>
 
       <KeyboardAvoidingView
@@ -564,243 +570,143 @@ export function EntryPanel({
           contentContainerStyle={entryStyles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-            <View style={entryStyles.proofCard}>
-              <Text style={entryStyles.proofCardTitle}>
-                订餐凭证 <Text style={{ color: IOS_COLORS.red }}>*</Text>
-              </Text>
-              <OrderProofSection
+            {(mode !== 'member' || memberBatchMode) ? (
+              <EntryProofBlock
                 images={proofImages}
                 onChange={setProofImages}
                 disabled={submitting}
-                compact
-                hideTitle
               />
-            </View>
-            <Text style={entryStyles.dateHint}>
-              默认次日；须至少一张截图。点「添加截图」可选多图。
-            </Text>
+            ) : null}
 
-            {mode === 'member' && !lockMemberPreset && (
-              <>
-                <Text style={[entryStyles.sectionLabel, { marginTop: 4 }]}>选项</Text>
-                <View style={entryStyles.inlineCard}>
-                  <View style={entryStyles.fieldRow}>
-                    <View style={entryStyles.switchLabelCol}>
-                      <Text style={entryStyles.fieldLabel}>赠送餐</Text>
-                      <Text style={entryStyles.switchHint}>打开后不扣会员卡次数</Text>
-                    </View>
-                    <Switch
-                      value={memberIsGift}
-                      onValueChange={setMemberIsGift}
-                      disabled={submitting}
-                      trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
-                      thumbColor={Platform.OS === 'android' ? (memberIsGift ? IOS_COLORS.blue : '#f4f3f4') : undefined}
-                      ios_backgroundColor={IOS_COLORS.fillMedium}
-                    />
-                  </View>
-                  <View style={entryStyles.fieldDivider} />
-                  <View style={entryStyles.fieldRow}>
-                    <View style={entryStyles.switchLabelCol}>
-                      <Text style={entryStyles.fieldLabel}>批量录入</Text>
-                      <Text style={entryStyles.switchHint}>
-                        开：多人，每人单独午/晚份数 · 关：只录一位，共用一套份数
-                      </Text>
-                    </View>
-                    <Switch
-                      value={memberBatchMode}
-                      onValueChange={setBatchMode}
-                      disabled={submitting}
-                      trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
-                      thumbColor={Platform.OS === 'android' ? (memberBatchMode ? IOS_COLORS.blue : '#f4f3f4') : undefined}
-                      ios_backgroundColor={IOS_COLORS.fillMedium}
-                    />
-                  </View>
-                </View>
-                <Text style={entryStyles.dateHint}>
-                  {memberBatchMode
-                    ? '打开批量后：先核对上方「已加入」名单与份数，再在下方「搜索」里加人。'
-                    : '搜索并选定一位会员；页面中间只有一组午餐、晚餐份数。'}
-                </Text>
-              </>
-            )}
+            {mode === 'member' && !lockMemberPreset ? (
+              <View style={entryStyles.optionPillsRow}>
+                <Pressable
+                  style={[entryStyles.optionPill, memberIsGift && entryStyles.optionPillOn]}
+                  onPress={() => setMemberIsGift((v) => !v)}
+                  disabled={submitting}
+                >
+                  <Ionicons
+                    name={memberIsGift ? 'gift' : 'gift-outline'}
+                    size={18}
+                    color={memberIsGift ? IOS_COLORS.blue : IOS_COLORS.labelSecondary}
+                  />
+                  <Text
+                    style={[entryStyles.optionPillText, memberIsGift && entryStyles.optionPillTextOn]}
+                  >
+                    赠送餐
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[entryStyles.optionPill, memberBatchMode && entryStyles.optionPillOn]}
+                  onPress={() => setBatchMode(!memberBatchMode)}
+                  disabled={submitting}
+                >
+                  <Ionicons
+                    name={memberBatchMode ? 'people' : 'people-outline'}
+                    size={18}
+                    color={memberBatchMode ? IOS_COLORS.blue : IOS_COLORS.labelSecondary}
+                  />
+                  <Text
+                    style={[
+                      entryStyles.optionPillText,
+                      memberBatchMode && entryStyles.optionPillTextOn,
+                    ]}
+                  >
+                    批量录入
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             {mode === 'member' ? (
               memberBatchMode ? (
               /* ===== 会员餐 · 批量（每人份数独立） ===== */
               <>
-                <View style={{ marginTop: 6, gap: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={entryStyles.sectionLabel}>已加入 {memberBatchRows.length} 人</Text>
-                    {memberBatchRows.length > 0 ? (
-                      <Pressable onPress={() => setMemberBatchRows([])} hitSlop={8}>
-                        <Text style={entryStyles.changeBtn}>清空本批</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  <View
-                    style={
-                      batchGridWide
-                        ? {
-                            flexDirection: 'row',
-                            flexWrap: 'wrap',
-                            marginHorizontal: -BATCH_GRID_GAP / 2,
-                          }
-                        : { gap: 12 }
-                    }
-                  >
-                    {memberBatchRows.map((row, idx) => (
-                      <View
-                        key={`${row.member.id}-${idx}`}
-                        style={
-                          batchGridWide && batchCardColumnWidth != null
-                            ? {
-                                width: batchCardColumnWidth,
-                                paddingHorizontal: BATCH_GRID_GAP / 2,
-                                marginBottom: 12,
-                              }
-                            : { width: '100%' }
-                        }
-                      >
-                        <View style={entryStyles.inlineCard}>
-                          <View style={entryStyles.batchCardHeader}>
-                            <View style={entryStyles.batchCardBody}>
-                              <View style={entryStyles.batchCardTitleRow}>
-                                <Text
-                                  style={[entryStyles.fieldLabel, entryStyles.batchCardName]}
-                                  numberOfLines={1}
-                                  ellipsizeMode="tail"
-                                >
-                                  {row.member.name}「{row.member.nickname}」
-                                </Text>
-                                <Text style={[entryStyles.dateHint, entryStyles.batchCardMetaInline]} numberOfLines={2}>
-                                  {row.member.is_hospital ? '院内' : '院外'} ·{' '}
-                                  {memberHasStaffCard(row.member)
-                                    ? `员工卡 · ${row.member.active_card!.card_name}`
-                                    : row.member.is_staff
-                                      ? '档案员工标记（请办员工卡）'
-                                      : `${row.member.active_card?.card_name ?? '无有效卡'} · 剩 ${row.member.active_card?.remaining_meals ?? 0} 份`}
+                <BatchMemberSearchCard
+                  memberQuery={memberQuery}
+                  onMemberQueryChange={setMemberQuery}
+                  memberBatchCount={memberBatchRows.length}
+                  onClearBatch={() => setMemberBatchRows([])}
+                  dropdownOpen={dropdownOpen}
+                  memberSearchPending={memberSearchPending}
+                  filteredMembers={filteredMembers}
+                  onAppendMember={appendMemberToBatch}
+                  submitting={submitting}
+                  sectionTitle={memberBatchRows.length > 0 ? '继续加入' : '搜索加入'}
+                />
+
+                {memberBatchRows.length > 0 ? (
+                  <>
+                    <View style={entryStyles.formCard}>
+                      <Text style={entryStyles.cardSectionTitle}>本批名单</Text>
+                      <View style={entryStyles.batchRosterList}>
+                        {memberBatchRows.map((row, idx) => (
+                          <View key={`${row.member.id}-${idx}`}>
+                            {idx > 0 ? <View style={entryStyles.inCardDivider} /> : null}
+                            <View style={entryStyles.batchRosterRow}>
+                              <View
+                                style={[
+                                  entryStyles.memberAvatar,
+                                  {
+                                    backgroundColor: row.member.is_hospital
+                                      ? IOS_COLORS.blueLight
+                                      : '#E8F8ED',
+                                  },
+                                ]}
+                              >
+                                <Text style={entryStyles.memberAvatarText}>
+                                  {(row.member.nickname || row.member.name)[0]}
                                 </Text>
                               </View>
-                              <Text style={[entryStyles.dateHint, entryStyles.batchCardContact]} numberOfLines={1}>
-                                手机 {displayContactField(row.member.phone)}
-                              </Text>
-                              <Text style={[entryStyles.dateHint, entryStyles.batchCardContact]} numberOfLines={1}>
-                                微信 {displayContactField(row.member.wechat_id)}
-                              </Text>
+                              <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={entryStyles.batchRosterName} numberOfLines={1}>
+                                  {row.member.name}「{row.member.nickname}」
+                                </Text>
+                                <Text style={entryStyles.batchRosterMeta} numberOfLines={1}>
+                                  {batchMemberMetaLine(row.member)}
+                                </Text>
+                              </View>
+                              <Pressable
+                                onPress={() => removeMemberBatchRow(idx)}
+                                hitSlop={8}
+                                disabled={submitting}
+                              >
+                                <Ionicons name="trash-outline" size={20} color={IOS_COLORS.red} />
+                              </Pressable>
                             </View>
-                            <Pressable
-                              onPress={() => removeMemberBatchRow(idx)}
-                              hitSlop={8}
-                              disabled={submitting}
-                              style={entryStyles.batchCardDelete}
-                            >
-                              <Ionicons name="trash-outline" size={20} color={IOS_COLORS.red} />
-                            </Pressable>
                           </View>
-                          <View style={[entryStyles.fieldDivider, entryStyles.batchCardDivider]} />
-                          <LunchDinnerQtyPair
-                            lunch={row.lunch}
-                            dinner={row.dinner}
-                            onLunchChange={(v) => updateMemberBatchRow(idx, { lunch: v })}
-                            onDinnerChange={(v) => updateMemberBatchRow(idx, { dinner: v })}
-                            dense
-                          />
-                        </View>
+                        ))}
                       </View>
-                    ))}
-                  </View>
-                </View>
-
-                <Text style={[entryStyles.sectionLabel, { marginTop: 18 }]}>搜索</Text>
-                <Text style={[entryStyles.dateHint, { marginBottom: 8 }]}>
-                  {memberIsGift
-                    ? '赠送餐不扣次：在此搜索并点结果加入列表，再设午/晚份数；午+晚均为 0 不提交。'
-                    : '在此按姓名、昵称或手机号查找会员，点结果加入列表；每人午/晚用步进器设置，均为 0 不提交。'}
-                </Text>
-
-                <View style={entryStyles.searchBox}>
-                  <TextInput
-                    style={entryStyles.searchInput}
-                    placeholder="姓名 / 昵称 / 手机号搜索"
-                    placeholderTextColor={IOS_COLORS.labelTertiary}
-                    value={memberQuery}
-                    onChangeText={setMemberQuery}
-                    clearButtonMode="while-editing"
-                  />
-                </View>
-
-                {dropdownOpen ? (
-                  memberSearchPending ? (
-                    <View style={entryStyles.dropdownEmpty}>
-                      <ActivityIndicator color={IOS_COLORS.blue} />
-                      <Text style={[entryStyles.dropdownEmptyText, { marginTop: 8 }]}>
-                        正在搜索会员…
-                      </Text>
                     </View>
-                  ) : filteredMembers.length > 0 ? (
-                    <View style={entryStyles.memberList}>
-                      <Text style={[entryStyles.dateHint, { paddingHorizontal: 14, paddingVertical: 8 }]}>
-                        点行加入列表。
+
+                    <View style={entryStyles.formCard}>
+                      <Text style={entryStyles.cardSectionTitle}>设份数</Text>
+                      <Text style={entryStyles.cardSectionHint} numberOfLines={2}>
+                        {memberIsGift
+                          ? '赠送餐不扣次；每人单独午/晚，均为 0 不提交'
+                          : '每人单独午/晚，均为 0 不提交'}
                       </Text>
-                      {filteredMembers.map((m, i) => (
-                        <Pressable
-                          key={m.id}
-                          style={({ pressed }) => [
-                            entryStyles.memberRow,
-                            entryStyles.memberRowWithContact,
-                            i === filteredMembers.length - 1 && entryStyles.memberRowLast,
-                            pressed && { backgroundColor: IOS_COLORS.fillLight },
-                          ]}
-                          onPress={() => appendMemberToBatch(m)}
-                        >
-                          <Ionicons
-                            name="add-circle-outline"
-                            size={22}
-                            color={IOS_COLORS.blue}
-                            style={{ marginRight: 4 }}
-                          />
-                          <View
-                            style={[
-                              entryStyles.memberAvatar,
-                              { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' },
-                            ]}
-                          >
-                            <Text style={entryStyles.memberAvatarText}>{(m.nickname || m.name)[0]}</Text>
+                      {memberBatchRows.map((row, idx) => (
+                        <View key={`qty-${row.member.id}-${idx}`}>
+                          {idx > 0 ? <View style={entryStyles.inCardDivider} /> : null}
+                          <View style={entryStyles.batchQtyBlock}>
+                            <Text style={entryStyles.batchQtyName} numberOfLines={1}>
+                              {row.member.name}「{row.member.nickname}」
+                            </Text>
+                            <LunchDinnerQtyPair
+                              lunch={row.lunch}
+                              dinner={row.dinner}
+                              onLunchChange={(v) => updateMemberBatchRow(idx, { lunch: v })}
+                              onDinnerChange={(v) => updateMemberBatchRow(idx, { dinner: v })}
+                              dense
+                              inCard
+                            />
                           </View>
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={entryStyles.memberName}>{m.name}</Text>
-                            <Text style={entryStyles.memberNick}>
-                              「{m.nickname}」· {m.is_hospital ? '院内' : '院外'}
-                            </Text>
-                            <Text style={entryStyles.memberContact} numberOfLines={1}>
-                              手机 {displayContactField(m.phone)}
-                            </Text>
-                            <Text style={entryStyles.memberContact} numberOfLines={1}>
-                              微信 {displayContactField(m.wechat_id)}
-                            </Text>
-                          </View>
-                          {m.active_card ? (
-                            <Text style={entryStyles.memberCardBadge}>
-                              {m.active_card.card_name} 剩{m.active_card.remaining_meals}份
-                            </Text>
-                          ) : m.is_staff ? (
-                            <Text style={[entryStyles.memberNoCard, { color: IOS_COLORS.blue }]}>
-                              员工/档案标记
-                            </Text>
-                          ) : (
-                            <Text style={entryStyles.memberNoCard}>无卡 · 需先开卡</Text>
-                          )}
-                        </Pressable>
+                        </View>
                       ))}
                     </View>
-                  ) : (
-                    <View style={entryStyles.dropdownEmpty}>
-                      <Text style={entryStyles.dropdownEmptyText}>没有匹配的会员</Text>
-                    </View>
-                  )
-                ) : (
-                  <View style={entryStyles.searchHintSpacer} />
-                )}
+                  </>
+                ) : null}
 
                 {!memberIsGift &&
                 memberBatchEntries.some((r) => !r.member.active_card) ? (
@@ -827,46 +733,64 @@ export function EntryPanel({
                   </View>
                 ) : null}
 
-                <View style={entryStyles.divider} />
-
-                <Text style={[entryStyles.sectionLabel, { marginTop: 16 }]}>配送方式</Text>
-                <ChannelPicker
-                  value={deliveryChannel}
-                  onChange={setDeliveryChannel}
-                  courierRef={courierRef}
-                  onCourierRefChange={setCourierRef}
-                  disabled={submitting}
-                />
-
-                <View style={entryStyles.notesBox}>
-                  <TextInput
-                    style={entryStyles.notesInput}
-                    placeholder="备注（可选，本批订单共用）"
-                    placeholderTextColor={IOS_COLORS.labelTertiary}
-                    value={memberNotes}
-                    onChangeText={setMemberNotes}
-                    multiline
-                    numberOfLines={2}
+                <View style={entryStyles.formCard}>
+                  <View style={entryStyles.cardTitleRow}>
+                    <Text style={[entryStyles.cardSectionTitle, entryStyles.cardTitleRowTitle]}>
+                      配送与备注
+                    </Text>
+                    <DeliveryCourierSwitch
+                      value={deliveryChannel}
+                      onChange={setDeliveryChannel}
+                      disabled={submitting}
+                    />
+                  </View>
+                  <ChannelPicker
+                    value={deliveryChannel}
+                    onChange={setDeliveryChannel}
+                    courierRef={courierRef}
+                    onCourierRefChange={setCourierRef}
+                    disabled={submitting}
+                    embedded
+                    switchInHeader
                   />
+                  {deliveryChannel === 'courier' ? <View style={entryStyles.inCardDivider} /> : null}
+                  <View style={entryStyles.notesBox}>
+                    <TextInput
+                      style={entryStyles.notesInput}
+                      placeholder="备注（可选，本批共用）"
+                      placeholderTextColor={IOS_COLORS.labelTertiary}
+                      value={memberNotes}
+                      onChangeText={setMemberNotes}
+                      multiline
+                      numberOfLines={2}
+                    />
+                  </View>
                 </View>
               </>
             ) : (
               /* ===== 会员餐 · 单人 ===== */
               <>
-                <Text style={entryStyles.sectionLabel}>单人录入</Text>
-                <View style={entryStyles.searchBox}>
-                  <TextInput
-                    style={entryStyles.searchInput}
-                    placeholder="姓名 / 昵称 / 手机号搜索"
-                    placeholderTextColor={IOS_COLORS.labelTertiary}
-                    value={memberQuery}
-                    onChangeText={(text) => {
-                      setMemberQuery(text);
-                      if (selectedMember) setSelectedMember(null);
-                    }}
-                    clearButtonMode="while-editing"
-                  />
-                </View>
+                <EntryProofBlock
+                  images={proofImages}
+                  onChange={setProofImages}
+                  disabled={submitting}
+                />
+
+                <View style={entryStyles.formCard}>
+                  <Text style={entryStyles.cardSectionTitle}>选择会员</Text>
+                  <View style={entryStyles.searchBox}>
+                    <TextInput
+                      style={entryStyles.searchInput}
+                      placeholder="姓名 / 昵称 / 手机号搜索"
+                      placeholderTextColor={IOS_COLORS.labelTertiary}
+                      value={memberQuery}
+                      onChangeText={(text) => {
+                        setMemberQuery(text);
+                        if (selectedMember) setSelectedMember(null);
+                      }}
+                      clearButtonMode="while-editing"
+                    />
+                  </View>
 
                 {selectedMember ? (
                   <>
@@ -1016,34 +940,47 @@ export function EntryPanel({
                 ) : (
                   <View style={entryStyles.searchHintSpacer} />
                 )}
+                </View>
 
-                <Text style={[entryStyles.sectionLabel, { marginTop: 16 }]}>份数（仅此一位）</Text>
-                <Text style={[entryStyles.dateHint, { marginBottom: 6 }]}>
-                  以下为该会员共用的一套午餐/晚餐，不是批量那种「每人不同」。
-                </Text>
-                <LunchDinnerQtyPair lunch={lunchQty} dinner={dinnerQty} onLunchChange={setLunchQty} onDinnerChange={setDinnerQty} />
-
-                <View style={entryStyles.divider} />
-
-                <Text style={[entryStyles.sectionLabel, { marginTop: 16 }]}>配送方式</Text>
-                <ChannelPicker
-                  value={deliveryChannel}
-                  onChange={setDeliveryChannel}
-                  courierRef={courierRef}
-                  onCourierRefChange={setCourierRef}
-                  disabled={submitting}
-                />
-
-                <View style={entryStyles.notesBox}>
-                  <TextInput
-                    style={entryStyles.notesInput}
-                    placeholder="备注（可选，如：今日忌辣）"
-                    placeholderTextColor={IOS_COLORS.labelTertiary}
-                    value={memberNotes}
-                    onChangeText={setMemberNotes}
-                    multiline
-                    numberOfLines={2}
+                <View style={entryStyles.formCard}>
+                  <View style={entryStyles.cardTitleRow}>
+                    <Text style={[entryStyles.cardSectionTitle, entryStyles.cardTitleRowTitle]}>
+                      份数与配送
+                    </Text>
+                    <DeliveryCourierSwitch
+                      value={deliveryChannel}
+                      onChange={setDeliveryChannel}
+                      disabled={submitting}
+                    />
+                  </View>
+                  <LunchDinnerQtyPair
+                    lunch={lunchQty}
+                    dinner={dinnerQty}
+                    onLunchChange={setLunchQty}
+                    onDinnerChange={setDinnerQty}
+                    inCard
                   />
+                  <ChannelPicker
+                    value={deliveryChannel}
+                    onChange={setDeliveryChannel}
+                    courierRef={courierRef}
+                    onCourierRefChange={setCourierRef}
+                    disabled={submitting}
+                    embedded
+                    switchInHeader
+                  />
+                  {deliveryChannel === 'courier' ? <View style={entryStyles.inCardDivider} /> : null}
+                  <View style={entryStyles.notesBox}>
+                    <TextInput
+                      style={entryStyles.notesInput}
+                      placeholder="备注（可选，如：今日忌辣）"
+                      placeholderTextColor={IOS_COLORS.labelTertiary}
+                      value={memberNotes}
+                      onChangeText={setMemberNotes}
+                      multiline
+                      numberOfLines={2}
+                    />
+                  </View>
                 </View>
               </>
             )
@@ -1195,25 +1132,22 @@ export function EntryPanel({
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* 底部提交条 */}
-      <View style={entryStyles.submitBar}>
-        <View style={{ flex: 1 }}>
+      {/* 底部提交条：悬浮圆角卡片，与录入块 / 底栏 Tab 一致 */}
+      <View style={entryStyles.submitBarShell}>
+        <View style={[entryStyles.formCard, entryStyles.submitBarCard]}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           {mode === 'member' ? (
             memberBatchMode ? (
-              <>
-                <Text style={entryStyles.submitMain}>
-                  {memberIsGift ? '赠送餐（批量）' : '批量录入'}
-                </Text>
-                <Text style={entryStyles.submitSub}>
-                  {memberBatchEntries.length > 0
-                    ? `将提交 ${memberBatchEntries.length} 位（列表共 ${memberBatchRows.length} 人）`
-                    : memberBatchRows.length > 0
-                      ? `已为 ${memberBatchRows.length} 人设行，请至少为一行填写午/晚份数`
-                      : '请搜索并点行加入会员，再分别设份数'}
-                  {proofOk ? '' : ' · 请先上传凭证'}
-                  {batchHasStaffMember ? ' · 含员工卡/员工标记' : ''}
-                </Text>
-              </>
+              <Text style={entryStyles.submitHint} numberOfLines={3}>
+                {memberIsGift ? '赠送餐批量' : '批量录入'}
+                {memberBatchEntries.length > 0
+                  ? `：将提交 ${memberBatchEntries.length} 位（列表共 ${memberBatchRows.length} 人）`
+                  : memberBatchRows.length > 0
+                    ? `：已为 ${memberBatchRows.length} 人设行，请至少为一行填写午/晚份数`
+                    : '：请搜索并点行加入会员，再分别设份数'}
+                {proofOk ? '' : '；请先上传凭证'}
+                {batchHasStaffMember ? '；含员工卡/员工标记' : ''}
+              </Text>
             ) : selectedMember ? (
               <>
                 <Text style={entryStyles.submitMain}>
@@ -1243,7 +1177,7 @@ export function EntryPanel({
                 ) : null}
               </>
             ) : (
-              <Text style={entryStyles.submitHint}>
+              <Text style={entryStyles.submitHint} numberOfLines={2}>
                 请搜索并选择一位会员
                 {!proofOk ? '，并上传至少一张订餐凭证' : ''}
               </Text>
@@ -1282,6 +1216,7 @@ export function EntryPanel({
             </Text>
           )}
         </Pressable>
+        </View>
       </View>
 
       {/* Toast */}
@@ -1301,6 +1236,185 @@ export function EntryPanel({
 }
 
 // ============================================================
+// BatchMemberSearchCard — 批量录入搜索（置底时结果在输入框上方展开）
+// ============================================================
+function BatchMemberSearchCard({
+  memberQuery,
+  onMemberQueryChange,
+  memberBatchCount,
+  onClearBatch,
+  dropdownOpen,
+  memberSearchPending,
+  filteredMembers,
+  onAppendMember,
+  submitting,
+  sectionTitle,
+}: {
+  memberQuery: string;
+  onMemberQueryChange: (q: string) => void;
+  memberBatchCount: number;
+  onClearBatch: () => void;
+  dropdownOpen: boolean;
+  memberSearchPending: boolean;
+  filteredMembers: MockMember[];
+  onAppendMember: (m: MockMember) => void;
+  submitting: boolean;
+  sectionTitle: string;
+}) {
+  return (
+    <View style={[entryStyles.formCard, { gap: 8 }]}>
+      <Text style={entryStyles.cardSectionTitle}>{sectionTitle}</Text>
+      <View style={entryStyles.searchRow}>
+        <Ionicons
+          name="search"
+          size={18}
+          color={IOS_COLORS.labelTertiary}
+          style={entryStyles.searchRowIcon}
+        />
+        <TextInput
+          style={[entryStyles.searchInput, { flex: 1, paddingVertical: 8, minWidth: 0 }]}
+          placeholder={
+            memberBatchCount > 0
+              ? `搜索加入 · 已 ${memberBatchCount} 人`
+              : '搜索姓名 / 昵称 / 手机加入'
+          }
+          placeholderTextColor={IOS_COLORS.labelTertiary}
+          value={memberQuery}
+          onChangeText={onMemberQueryChange}
+          clearButtonMode="while-editing"
+          editable={!submitting}
+        />
+        {memberBatchCount > 0 ? (
+          <Pressable onPress={onClearBatch} hitSlop={8} disabled={submitting}>
+            <Text style={entryStyles.changeBtn}>清空</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {dropdownOpen ? (
+        memberSearchPending ? (
+          <View style={entryStyles.dropdownEmpty}>
+            <ActivityIndicator color={IOS_COLORS.blue} />
+            <Text style={[entryStyles.dropdownEmptyText, { marginTop: 8 }]}>正在搜索…</Text>
+          </View>
+        ) : filteredMembers.length > 0 ? (
+          <View style={entryStyles.memberListInCard}>
+            {filteredMembers.map((m, i) => (
+              <Pressable
+                key={m.id}
+                style={({ pressed }) => [
+                  entryStyles.memberRow,
+                  entryStyles.memberRowWithContact,
+                  i === filteredMembers.length - 1 && entryStyles.memberRowLast,
+                  pressed && { backgroundColor: IOS_COLORS.fillLight },
+                ]}
+                onPress={() => onAppendMember(m)}
+              >
+                <Ionicons
+                  name="add-circle-outline"
+                  size={22}
+                  color={IOS_COLORS.blue}
+                  style={{ marginRight: 4 }}
+                />
+                <View
+                  style={[
+                    entryStyles.memberAvatar,
+                    { backgroundColor: m.is_hospital ? IOS_COLORS.blueLight : '#E8F8ED' },
+                  ]}
+                >
+                  <Text style={entryStyles.memberAvatarText}>{(m.nickname || m.name)[0]}</Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={entryStyles.memberName}>{m.name}</Text>
+                  <Text style={entryStyles.memberNick}>
+                    「{m.nickname}」· {m.is_hospital ? '院内' : '院外'}
+                  </Text>
+                  <Text style={entryStyles.memberContact} numberOfLines={1}>
+                    手机 {displayContactField(m.phone)}
+                  </Text>
+                </View>
+                {m.active_card ? (
+                  <Text style={entryStyles.memberCardBadge}>剩{m.active_card.remaining_meals}份</Text>
+                ) : m.is_staff ? (
+                  <Text style={[entryStyles.memberNoCard, { color: IOS_COLORS.blue }]}>员工</Text>
+                ) : (
+                  <Text style={entryStyles.memberNoCard}>无卡</Text>
+                )}
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View style={[entryStyles.dropdownEmpty, { paddingVertical: 12 }]}>
+            <Text style={entryStyles.dropdownEmptyText}>没有匹配的会员</Text>
+          </View>
+        )
+      ) : null}
+    </View>
+  );
+}
+
+// ============================================================
+// EntryProofBlock — 紧凑凭证区（横条添加 + 小缩略图）
+// ============================================================
+function EntryProofBlock({
+  images,
+  onChange,
+  disabled = false,
+}: {
+  images: string[];
+  onChange: (v: string[]) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={entryStyles.formCard}>
+      <View style={entryStyles.proofInlineCard}>
+        <View>
+          <Text style={entryStyles.proofInlineTitle}>
+            订餐凭证 <Text style={entryStyles.fieldRequired}>*</Text>
+          </Text>
+          <Text style={entryStyles.proofInlineHint}>至少 1 张截图，可多选</Text>
+        </View>
+        <OrderProofSection
+          images={images}
+          onChange={onChange}
+          disabled={disabled}
+          compact
+          hideTitle
+          pairColumn
+        />
+      </View>
+    </View>
+  );
+}
+
+// ============================================================
+// DeliveryCourierSwitch — 标题行右侧「快递」开关
+// ============================================================
+function DeliveryCourierSwitch({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: 'self' | 'courier';
+  onChange: (v: 'self' | 'courier') => void;
+  disabled?: boolean;
+}) {
+  const isCourier = value === 'courier';
+  return (
+    <View style={entryStyles.cardTitleSwitch}>
+      <Text style={entryStyles.cardTitleSwitchLabel}>快递</Text>
+      <Switch
+        value={isCourier}
+        onValueChange={(on) => onChange(on ? 'courier' : 'self')}
+        disabled={disabled}
+        trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
+        thumbColor={Platform.OS === 'android' ? (isCourier ? IOS_COLORS.blue : '#f4f3f4') : undefined}
+        ios_backgroundColor={IOS_COLORS.fillMedium}
+      />
+    </View>
+  );
+}
+
+// ============================================================
 // ChannelPicker — 配送方式（员工自送 / 外包快递）+ 快递承运方备注
 // ============================================================
 function ChannelPicker({
@@ -1309,38 +1423,53 @@ function ChannelPicker({
   courierRef,
   onCourierRefChange,
   disabled = false,
+  embedded = false,
+  switchInHeader = false,
 }: {
   value: 'self' | 'courier';
   onChange: (v: 'self' | 'courier') => void;
   courierRef: string;
   onCourierRefChange: (v: string) => void;
   disabled?: boolean;
+  embedded?: boolean;
+  /** 开关已放在卡片标题行时，仅渲染承运方 */
+  switchInHeader?: boolean;
 }) {
   const isCourier = value === 'courier';
-  return (
-    <View style={entryStyles.inlineCard}>
-      <View style={entryStyles.fieldRow}>
-        <View style={entryStyles.switchLabelCol}>
-          <Text style={entryStyles.fieldLabel}>使用快递</Text>
-          <Text style={entryStyles.switchHint}>关闭则员工自送；打开后可填承运方</Text>
+  const rowStyle = embedded ? entryStyles.fieldRowEmbedded : entryStyles.fieldRow;
+  const dividerStyle = embedded ? entryStyles.fieldDividerEmbedded : entryStyles.fieldDivider;
+  const body = (
+    <>
+      {!switchInHeader ? (
+        <View style={rowStyle}>
+          <View style={entryStyles.switchLabelCol}>
+            <Text style={entryStyles.fieldLabel}>使用快递</Text>
+            {!embedded ? (
+              <Text style={entryStyles.switchHint}>关闭则员工自送；打开后可填承运方</Text>
+            ) : (
+              <Text style={entryStyles.switchHint} numberOfLines={1}>
+                关=自送 · 开=快递
+              </Text>
+            )}
+          </View>
+          <Switch
+            value={isCourier}
+            onValueChange={(on) => onChange(on ? 'courier' : 'self')}
+            disabled={disabled}
+            trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
+            thumbColor={Platform.OS === 'android' ? (isCourier ? IOS_COLORS.blue : '#f4f3f4') : undefined}
+            ios_backgroundColor={IOS_COLORS.fillMedium}
+          />
         </View>
-        <Switch
-          value={isCourier}
-          onValueChange={(on) => onChange(on ? 'courier' : 'self')}
-          disabled={disabled}
-          trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blueLight }}
-          thumbColor={Platform.OS === 'android' ? (isCourier ? IOS_COLORS.blue : '#f4f3f4') : undefined}
-          ios_backgroundColor={IOS_COLORS.fillMedium}
-        />
-      </View>
+      ) : null}
       {value === 'courier' ? (
         <>
-          <View style={entryStyles.fieldDivider} />
-          <View style={entryStyles.fieldRow}>
+          {!switchInHeader ? <View style={dividerStyle} /> : null}
+          <View style={rowStyle}>
             <Text style={entryStyles.fieldLabel}>承运方</Text>
             <TextInput
               style={entryStyles.fieldInput}
-              placeholder="选填：快递公司 / 骑手手机后四位"
+              placeholder="选填"
               placeholderTextColor={IOS_COLORS.labelTertiary}
               value={courierRef}
               onChangeText={onCourierRefChange}
@@ -1350,8 +1479,10 @@ function ChannelPicker({
           </View>
         </>
       ) : null}
-    </View>
+    </>
   );
+  if (embedded) return body;
+  return <View style={entryStyles.inlineCard}>{body}</View>;
 }
 
 // ============================================================
@@ -1395,6 +1526,7 @@ function LunchDinnerQtyPair({
   onDinnerChange,
   min = 0,
   dense = false,
+  inCard = false,
 }: {
   lunch: number;
   dinner: number;
@@ -1402,9 +1534,16 @@ function LunchDinnerQtyPair({
   onDinnerChange: (v: number) => void;
   min?: number;
   dense?: boolean;
+  inCard?: boolean;
 }) {
   return (
-    <View style={[entryStyles.qtyPairCard, dense && entryStyles.qtyPairCardDense]}>
+    <View
+      style={[
+        entryStyles.qtyPairCard,
+        dense && entryStyles.qtyPairCardDense,
+        inCard && entryStyles.qtyPairCardInForm,
+      ]}
+    >
       <View style={[entryStyles.qtyPairCol, dense && entryStyles.qtyPairColDense]}>
         <Text style={[entryStyles.qtyPairCaption, dense && entryStyles.qtyPairCaptionDense]}>午餐份数</Text>
         <QtyStepper value={lunch} onChange={onLunchChange} min={min} compact />

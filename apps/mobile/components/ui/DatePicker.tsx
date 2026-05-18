@@ -22,6 +22,10 @@ export interface DatePickerProps {
   /** YYYY-MM-DD, HTML5 max */
   max?: string;
   style?: object;
+  /** 与分段控件等同排时使用，缩小内边距并保证可收缩 */
+  compact?: boolean;
+  /** 日期紧跟在标签右侧（不撑满整行、不右对齐到行末） */
+  inlineAdjacent?: boolean;
 }
 
 function isValidDate(v: string): boolean {
@@ -38,38 +42,60 @@ export function DatePicker({
   min,
   max,
   style,
+  compact = false,
+  inlineAdjacent = false,
 }: DatePickerProps) {
-  const labelStyle = [styles.labelInline, labelMinWidth ? { minWidth: labelMinWidth } : null];
+  const labelStyle = [
+    styles.labelInline,
+    compact && styles.labelInlineCompact,
+    labelMinWidth ? { minWidth: labelMinWidth } : null,
+  ];
+  const wrapStyle = [
+    styles.wrap,
+    compact && styles.wrapCompact,
+    inlineAdjacent && styles.wrapInlineAdjacent,
+    style,
+  ];
+  const inputFlex = inlineAdjacent ? { flexGrow: 0, flexShrink: 0 } : ({ flex: 1, minWidth: 0 } as const);
   if (Platform.OS === 'web') {
     // 在 Web 上 React 要求 createElement('input')；在 Native 的 TS 里 JSX.IntrinsicElements
     // 不认识 'input'，所以用 React.createElement 绕开类型系统的 JSX 限制。
     const InputEl = require('react').createElement;
     return (
-      <View style={[styles.wrap, style]}>
+      <View style={wrapStyle}>
         {label ? (
           <Text numberOfLines={1} ellipsizeMode="tail" style={labelStyle}>
             {label}
           </Text>
         ) : null}
-        {InputEl('input', {
-          type: 'date',
-          value,
-          disabled,
-          min,
-          max,
-          onChange: (e: { target: { value: string } }) => {
-            const next = e.target.value;
-            if (next === '' || isValidDate(next)) onChange(next);
-          },
-          style: label ? { ...webInputStyle, ...webInputStyleInline } : webInputStyle,
-        })}
+        <View style={inputFlex}>
+          {InputEl('input', {
+            type: 'date',
+            value,
+            disabled,
+            min,
+            max,
+            onChange: (e: { target: { value: string } }) => {
+              const next = e.target.value;
+              if (next === '' || isValidDate(next)) onChange(next);
+            },
+            style: label
+              ? {
+                  ...webInputStyle,
+                  ...(inlineAdjacent ? webInputStyleAdjacent : webInputStyleInline),
+                  ...(inlineAdjacent ? webInputStyleAdjacentSize : webInputStyleFlex),
+                  ...(compact ? webInputStyleCompact : {}),
+                }
+              : { ...webInputStyle, ...webInputStyleFlex },
+          })}
+        </View>
       </View>
     );
   }
 
   // Native：先留着 TextInput，等接原生 picker 再换
   return (
-    <View style={[styles.wrap, style]}>
+    <View style={wrapStyle}>
       {label ? (
         <Text numberOfLines={1} ellipsizeMode="tail" style={labelStyle}>
           {label}
@@ -78,7 +104,12 @@ export function DatePicker({
       <TextInput
         value={value}
         onChangeText={onChange}
-        style={[styles.nativeInput, label ? styles.nativeInputInline : null]}
+        style={[
+          styles.nativeInput,
+          label && !inlineAdjacent ? styles.nativeInputInline : null,
+          label && inlineAdjacent ? styles.nativeInputAdjacent : null,
+          compact && styles.nativeInputCompact,
+        ]}
         placeholder={placeholder}
         placeholderTextColor={COLORS.text.quaternary}
         editable={!disabled}
@@ -109,6 +140,28 @@ const webInputStyleInline = {
   textAlign: 'right',
 } as const;
 
+const webInputStyleFlex = {
+  width: '100%',
+  minWidth: 0,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+} as const;
+
+const webInputStyleCompact = {
+  fontSize: 15,
+} as const;
+
+const webInputStyleAdjacent = {
+  textAlign: 'left',
+} as const;
+
+const webInputStyleAdjacentSize = {
+  width: 'auto',
+  minWidth: 128,
+  maxWidth: 160,
+  flex: 'none',
+} as const;
+
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
@@ -117,17 +170,32 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    minWidth: 0,
+  },
+  wrapCompact: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  wrapInlineAdjacent: {
+    alignSelf: 'stretch',
+    justifyContent: 'flex-start',
+    maxWidth: '100%',
   },
   labelInline: {
     ...TYPE.caption,
     color: COLORS.text.tertiary,
     letterSpacing: 0.4,
-    marginRight: 8,
+    marginRight: 6,
     minWidth: 14,
     flexShrink: 0,
   },
+  labelInlineCompact: {
+    marginRight: 4,
+    letterSpacing: 0,
+  },
   nativeInput: {
     flex: 1,
+    minWidth: 0,
     fontSize: 16,
     color: COLORS.text.primary,
     paddingVertical: 4,
@@ -135,5 +203,16 @@ const styles = StyleSheet.create({
   },
   nativeInputInline: {
     textAlign: 'right',
+  },
+  nativeInputCompact: {
+    fontSize: 15,
+    paddingVertical: 2,
+  },
+  nativeInputAdjacent: {
+    flexGrow: 0,
+    flexShrink: 0,
+    width: 132,
+    textAlign: 'left',
+    paddingLeft: 2,
   },
 });

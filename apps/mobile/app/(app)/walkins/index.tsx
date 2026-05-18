@@ -15,9 +15,6 @@ import {
   MeshBackground,
   SectionLabel,
   GlassSurface,
-  BentoGrid,
-  Bento,
-  StatTile,
   PressableCard,
   StatusChip,
   IconAvatar,
@@ -77,23 +74,24 @@ export default function WalkinsScreen() {
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
           <View style={styles.container}>
             <View style={styles.block}>
-              <SectionLabel>概览</SectionLabel>
-              <BentoGrid gap={SPACING.md}>
-                <Bento span={4} mobileSpan={6}>
-                  <StatTile label="散客数" value={`${filtered.length}`} icon="walk-outline" color={COLORS.warning} tint="warn" />
-                </Bento>
-                <Bento span={4} mobileSpan={6}>
-                  <StatTile label="有订单" value={`${withOrders}`} icon="receipt-outline" color={COLORS.info} tint="info" />
-                </Bento>
-                <Bento span={4} mobileSpan={12}>
-                  <StatTile label="累计消费" value={`¥${Math.round(totalSpent)}`} icon="wallet-outline" color={COLORS.success} tint="ok" />
-                </Bento>
-              </BentoGrid>
-            </View>
-
-            <View style={styles.block}>
               <SectionLabel>筛选</SectionLabel>
               <GlassSurface padding={SPACING.md} style={styles.filterCard}>
+                <View style={styles.statsRow}>
+                  <WalkinStatCell
+                    label={qNorm ? '搜索' : '散客数'}
+                    value={String(filtered.length)}
+                    color={COLORS.warning}
+                  />
+                  <View style={styles.statDivider} />
+                  <WalkinStatCell label="有订单" value={String(withOrders)} color={COLORS.info} />
+                  <View style={styles.statDivider} />
+                  <WalkinStatCell
+                    label="累计消费"
+                    value={`¥${Math.round(totalSpent)}`}
+                    color={COLORS.success}
+                  />
+                </View>
+                <View style={styles.statsFilterDivider} />
                 <View style={styles.searchBox}>
                   <Ionicons name="search-outline" size={16} color={COLORS.text.tertiary} />
                   <TextInput
@@ -110,7 +108,7 @@ export default function WalkinsScreen() {
                     </Pressable>
                   ) : null}
                 </View>
-                <Text style={styles.countText}>{filtered.length} 位散客 · 累计 {totalMeals} 份</Text>
+                <Text style={styles.countText}>累计 {totalMeals} 份餐</Text>
               </GlassSurface>
             </View>
 
@@ -143,6 +141,27 @@ export default function WalkinsScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+    </View>
+  );
+}
+
+function WalkinStatCell({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
+  return (
+    <View style={styles.statCell}>
+      <Text style={[styles.statValue, { color }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {value}
+      </Text>
+      <Text style={styles.statLabel} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -194,7 +213,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: SPACING.page,
   },
-  block: { marginBottom: SPACING.lg },
+  block: { marginBottom: SPACING.md },
 
   addBtn: {
     flexDirection: 'row',
@@ -204,6 +223,41 @@ const styles = StyleSheet.create({
   },
   addBtnText: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
   filterCard: { gap: SPACING.sm },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    minWidth: 0,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+  },
+  statLabel: {
+    ...TYPE.caption,
+    color: COLORS.text.tertiary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    marginVertical: 4,
+  },
+  statsFilterDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -214,7 +268,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   searchInput: { flex: 1, ...TYPE.body, color: COLORS.text.primary },
-  countText: { ...TYPE.caption, color: COLORS.text.tertiary },
+  countText: { ...TYPE.caption, color: COLORS.text.quaternary, marginTop: 2 },
 
   row: {
     flexDirection: 'row',

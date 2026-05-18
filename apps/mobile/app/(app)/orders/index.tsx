@@ -4,11 +4,17 @@
  * 子组件见 components/orders/。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, View, Text, Pressable, SectionList } from 'react-native';
+import {
+  ActivityIndicator,
+  View,
+  Text,
+  Pressable,
+  SectionList,
+  Platform,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatDate } from '@meal/shared';
 import { IOS_COLORS } from '../../../theme/paperTheme';
 import { type MockMember, type MockOrder } from '../../../constants/mockData';
 import { ordersApi } from '../../../api/orders';
@@ -20,9 +26,10 @@ import { DatePicker } from '../../../components/ui/DatePicker';
 import { MemberQuickInfoModal } from '../../../components/MemberQuickInfoModal';
 import { confirmAction, confirmDestructive } from '../../../lib/confirm';
 import { DELIVERY_FAIL_REASON_OPTIONS, type TabKey, type PrimaryTab } from '../../../components/orders/constants';
-import { todayStr, tomorrowStr } from '../../../components/orders/date-utils';
+import { tomorrowStr } from '../../../components/orders/date-utils';
 import { orderScreenStyles as styles } from '../../../components/orders/orderScreenStyles';
 import { OrderTabBar } from '../../../components/orders/OrderTabBar';
+import { OrderTabPageBanner } from '../../../components/orders/OrderTabPageBanner';
 import { SummaryItem } from '../../../components/orders/SummaryItem';
 import { OrderRow } from '../../../components/orders/OrderRow';
 import { EntryPanel } from '../../../components/orders/EntryPanel';
@@ -40,16 +47,16 @@ export default function OrdersScreen() {
 
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  /** 底部悬浮 Tab 占位（dense 五键 + 胶囊内边距；略小于旧 90 以减少录入区与底栏间空隙） */
+  /** 底部悬浮 Tab 占位（五键 dense + 紧凑胶囊） */
   const orderTabBarReserve = useMemo(
-    () => floatingBottomReserve(62, insets.bottom),
+    () => floatingBottomReserve(48, insets.bottom),
     [insets.bottom],
   );
   const isAdmin = user?.role === 'admin';
   const { group, tab } = useLocalSearchParams<{ group?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [activePrimary, setActivePrimary] = useState<PrimaryTab>('manage');
-  const [overviewDate, setOverviewDate] = useState<string>(() => todayStr());
+  const [overviewDate, setOverviewDate] = useState<string>(() => tomorrowStr());
   const [activeOrder, setActiveOrder] = useState<MockOrder | null>(null);
   const [deliveryFailOrder, setDeliveryFailOrder] = useState<MockOrder | null>(null);
   const [deliveryFailReason, setDeliveryFailReason] = useState<string>(DELIVERY_FAIL_REASON_OPTIONS[0]);
@@ -349,7 +356,6 @@ export default function OrdersScreen() {
     flashToast,
   ]);
 
-  const now = new Date();
 
   useEffect(() => {
     if (group === 'fulfillment') {
@@ -382,48 +388,12 @@ export default function OrdersScreen() {
 
       <View style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <View style={{ flex: 1, paddingBottom: orderTabBarReserve }}>
-      <View style={styles.pageMetaRow}>
-        <Text style={styles.pageMetaText}>{`今日 ${formatDate(now)}`}</Text>
-      </View>
+      <OrderTabPageBanner activeTab={activeTab} />
 
       {/* —— 总览 —— */}
       {activeTab === 'overview' && (
         <>
           <View style={styles.overviewDateCard}>
-            <View style={styles.overviewDateQuickRow}>
-              <Pressable
-                style={[
-                  styles.overviewDateQuick,
-                  overviewDate === todayStr() && styles.overviewDateQuickActive,
-                ]}
-                onPress={() => setOverviewDate(todayStr())}
-              >
-                <Text
-                  style={[
-                    styles.overviewDateQuickText,
-                    overviewDate === todayStr() && styles.overviewDateQuickTextActive,
-                  ]}
-                >
-                  今天
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.overviewDateQuick,
-                  overviewDate === tomorrowStr() && styles.overviewDateQuickActive,
-                ]}
-                onPress={() => setOverviewDate(tomorrowStr())}
-              >
-                <Text
-                  style={[
-                    styles.overviewDateQuickText,
-                    overviewDate === tomorrowStr() && styles.overviewDateQuickTextActive,
-                  ]}
-                >
-                  明天
-                </Text>
-              </Pressable>
-            </View>
             <DatePicker
               value={overviewDate}
               onChange={setOverviewDate}
@@ -452,24 +422,24 @@ export default function OrdersScreen() {
               <SummaryItem label="已送达" value={`${statusDeliveredQty}份`} color="#34C759" />
             </View>
           </View>
-          <Text style={styles.summaryHint}>
-            上行：总餐数为当日有效订餐合计（不含已取消）；午餐/晚餐为餐别拆分；散餐为其中的散客单。下行：待出餐、已出餐、已送达份数，随订单状态变化。
-          </Text>
 
           {/* 订单列表 — 展示当日全部订单，午晚分组 */}
           <SectionList
             ref={sectionRef}
             sections={allSections}
             keyExtractor={(item) => String(item.id)}
-            stickySectionHeadersEnabled
-            renderSectionHeader={({ section }) => (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionHeaderTitle}>{section.title}</Text>
-                <Text style={styles.sectionCount}>
-                  {section.data.reduce((s, o) => s + o.quantity, 0)} 份
-                </Text>
-              </View>
-            )}
+            stickySectionHeadersEnabled={Platform.OS !== 'web'}
+            renderSectionHeader={({ section }) => {
+              const qty = section.data.reduce((s, o) => s + o.quantity, 0);
+              return (
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionHeaderTitle} numberOfLines={1}>
+                    {section.title}
+                  </Text>
+                  <Text style={styles.sectionCount}>{qty} 份</Text>
+                </View>
+              );
+            }}
             renderItem={({ item, index, section }) => (
               <OrderRow
                 order={item}
@@ -545,7 +515,7 @@ export default function OrdersScreen() {
 
       </View>
 
-      <FloatingBottomBar>
+      <FloatingBottomBar pillStyle={styles.orderTabFloatingPill}>
         <OrderTabBar
           activePrimary={activePrimary}
           activeTab={activeTab}

@@ -31,29 +31,29 @@ export default function NewMemberScreen() {
       <MeshBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <AppHeader title="新增会员" onBack={() => router.back()} />
-        <View style={{ flex: 1 }}>
-      <MemberForm
-        submitLabel="创建会员"
-        submitting={submitting}
-        onCancel={() => router.back()}
-        onSubmit={async (values) => {
-          setSubmitting(true);
-          try {
-            const res = await membersApi.create(values);
-            qc.invalidateQueries({ queryKey: ['members'] });
-            if (res.duplicatePhone) {
-              setDuplicate({ hint: res.duplicatePhone, newId: res.member.id });
-            } else {
-              router.replace(`/(app)/members/${res.member.id}`);
+        <MemberForm
+          submitLabel="创建会员"
+          submitting={submitting}
+          onCancel={() => router.back()}
+          onSubmit={async (values) => {
+            setSubmitting(true);
+            try {
+              const res = await membersApi.create(values);
+              qc.invalidateQueries({ queryKey: ['members'] });
+              if (res.duplicatePhone) {
+                setDuplicate({ hint: res.duplicatePhone, newId: res.member.id });
+              } else {
+                router.replace(`/(app)/members/${res.member.id}`);
+              }
+            } catch (e) {
+              if (e instanceof ApiError) setErrorMsg(e.message);
+              else setErrorMsg('创建失败，请稍后重试');
+            } finally {
+              setSubmitting(false);
             }
-          } catch (e) {
-            if (e instanceof ApiError) setErrorMsg(e.message);
-            else setErrorMsg('创建失败，请稍后重试');
-          } finally {
-            setSubmitting(false);
-          }
-        }}
-      />
+          }}
+        />
+      </SafeAreaView>
 
       <Portal>
         <Dialog visible={!!duplicate} onDismiss={() => setDuplicate(null)}>
@@ -90,15 +90,9 @@ export default function NewMemberScreen() {
         </Dialog>
       </Portal>
 
-      <Snackbar
-        visible={!!errorMsg}
-        onDismiss={() => setErrorMsg(null)}
-        duration={4000}
-      >
+      <Snackbar visible={!!errorMsg} onDismiss={() => setErrorMsg(null)} duration={4000}>
         {errorMsg ?? ''}
       </Snackbar>
-        </View>
-      </SafeAreaView>
     </View>
   );
 }

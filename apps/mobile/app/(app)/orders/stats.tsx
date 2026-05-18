@@ -117,7 +117,7 @@ export default function OrdersStatsScreen() {
 
   const insets = useSafeAreaInsets();
   const statsBottomBarReserve = useMemo(
-    () => floatingBottomReserve(52, insets.bottom),
+    () => floatingBottomReserve(67, insets.bottom),
     [insets.bottom],
   );
 

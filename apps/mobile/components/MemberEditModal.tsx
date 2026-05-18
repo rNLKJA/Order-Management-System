@@ -1,9 +1,5 @@
 /**
- * 会员资料编辑 Modal —— iOS 分组样式，和 members/[id].tsx 风格保持一致。
- *
- * 字段：姓名、昵称、手机号、微信号、地址、忌口、院内/院外。
- * 校验：复用 packages/shared 的 memberCreateSchema，保证前后端契约一致。
- * 提交：直接调 PATCH /api/members/:id；上层 onSaved 回调负责刷新列表 / 详情。
+ * 会员资料编辑 Modal —— iOS 分组样式，与新增会员页字段布局一致。
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -13,9 +9,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +17,12 @@ import { memberCreateSchema, type MemberUpdateInput } from '@meal/shared';
 import { IOS_COLORS } from '../theme/paperTheme';
 import { type MockMember } from '../constants/mockData';
 import { membersApi } from '../api/members';
+import {
+  MemberFormFields,
+  type MemberFormFieldValues,
+} from './members/MemberFormFields';
+import { memberFormStyles } from './members/memberFormStyles';
+import { MeshBackground } from './ui';
 
 export interface MemberEditModalProps {
   visible: boolean;
@@ -31,46 +31,46 @@ export interface MemberEditModalProps {
   onSaved: () => void;
 }
 
+function memberToFields(member: MockMember): MemberFormFieldValues {
+  return {
+    name: member.name,
+    nickname: member.nickname,
+    phone: member.phone,
+    wechatId: member.wechat_id,
+    address: member.address,
+    dietaryNotes: member.dietary_notes,
+    isHospital: member.is_hospital,
+  };
+}
+
+function fieldsToUpdate(v: MemberFormFieldValues): MemberUpdateInput {
+  return {
+    name: v.name.trim(),
+    nickname: v.nickname.trim(),
+    phone: v.phone.trim(),
+    wechat_id: v.wechatId.trim(),
+    address: v.address.trim(),
+    dietary_notes: v.dietaryNotes.trim(),
+    is_hospital: v.isHospital,
+  };
+}
+
 export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEditModalProps) {
-  const [name, setName] = useState(member.name);
-  const [nickname, setNickname] = useState(member.nickname);
-  const [phone, setPhone] = useState(member.phone);
-  const [wechatId, setWechatId] = useState(member.wechat_id);
-  const [address, setAddress] = useState(member.address);
-  const [dietaryNotes, setDietaryNotes] = useState(member.dietary_notes);
-  const [isHospital, setIsHospital] = useState(member.is_hospital);
+  const [values, setValues] = useState<MemberFormFieldValues>(() => memberToFields(member));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setName(member.name);
-      setNickname(member.nickname);
-      setPhone(member.phone);
-      setWechatId(member.wechat_id);
-      setAddress(member.address);
-      setDietaryNotes(member.dietary_notes);
-      setIsHospital(member.is_hospital);
+      setValues(memberToFields(member));
       setErrors({});
       setSubmitError(null);
       setSubmitting(false);
     }
   }, [visible, member]);
 
-  const candidate: MemberUpdateInput = useMemo(
-    () => ({
-      name: name.trim(),
-      nickname: nickname.trim(),
-      phone: phone.trim(),
-      wechat_id: wechatId.trim(),
-      address: address.trim(),
-      dietary_notes: dietaryNotes.trim(),
-      is_hospital: isHospital,
-    }),
-    [name, nickname, phone, wechatId, address, dietaryNotes, isHospital],
-  );
-
+  const candidate = useMemo(() => fieldsToUpdate(values), [values]);
   const validation = useMemo(() => memberCreateSchema.safeParse(candidate), [candidate]);
   const isWalkin = !!member.is_walkin;
 
@@ -84,6 +84,10 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
     candidate.is_hospital !== member.is_hospital;
 
   const canSave = validation.success && dirty && !submitting;
+
+  const onChange = <K extends keyof MemberFormFieldValues>(key: K, value: MemberFormFieldValues[K]) => {
+    setValues((prev) => ({ ...prev, [key]: value }));
+  };
 
   const handleSave = async () => {
     if (!validation.success) {
@@ -124,12 +128,14 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
       presentationStyle="formSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <View style={styles.root}>
+        <MeshBackground />
+        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.header}>
           <Pressable onPress={onClose} disabled={submitting}>
             <Text style={[styles.cancel, submitting && styles.disabled]}>取消</Text>
           </Pressable>
-          <Text style={styles.title}>编辑资料与送餐地址</Text>
+          <Text style={styles.title}>编辑资料</Text>
           <Pressable onPress={handleSave} disabled={!canSave}>
             {submitting ? (
               <ActivityIndicator color={IOS_COLORS.blue} />
@@ -141,89 +147,11 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
 
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={styles.scrollBody}
+          contentContainerStyle={memberFormStyles.scroll}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <SectionLabel text="基本信息" />
-          <View style={styles.card}>
-            <Field
-              label="姓名"
-              required
-              value={name}
-              onChangeText={setName}
-              placeholder="真实姓名"
-              error={errors.name}
-            />
-            <Field
-              label="昵称"
-              value={nickname}
-              onChangeText={setNickname}
-              placeholder="微信昵称 / 常用称呼"
-              error={errors.nickname}
-              isLast
-            />
-          </View>
-
-          <SectionLabel text="联系方式与送餐" />
-          <View style={styles.card}>
-            <Field
-              label="手机号"
-              required
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="11 位手机号，必填"
-              keyboardType="phone-pad"
-              error={errors.phone}
-            />
-            <Field
-              label="微信号"
-              value={wechatId}
-              onChangeText={setWechatId}
-              placeholder="6-20 位字母/数字/下划线"
-              autoCapitalize="none"
-              error={errors.wechat_id}
-            />
-            <Field
-              label="送餐地址"
-              value={address}
-              onChangeText={setAddress}
-              placeholder="科室、病区、楼号或可送餐的详细位置"
-              error={errors.address}
-              isLast
-              multiline
-              hint="配送员按此地址送餐；股东/员工院内点餐也请写明送餐点。"
-            />
-          </View>
-
-          <SectionLabel text="业务属性" />
-          <View style={styles.card}>
-            <View style={styles.toggleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowLabel}>院内订阅</Text>
-                <Text style={styles.rowHint}>
-                  勾选后计入院内价目表；切换后下一次开卡默认走院内价目。
-                </Text>
-              </View>
-              <Switch
-                value={isHospital}
-                onValueChange={setIsHospital}
-                trackColor={{ false: IOS_COLORS.fillMedium, true: IOS_COLORS.blue }}
-              />
-            </View>
-          </View>
-
-          <SectionLabel text="忌口（会带到每次订单备注）" />
-          <View style={styles.card}>
-            <TextInput
-              style={styles.notesInput}
-              value={dietaryNotes}
-              onChangeText={setDietaryNotes}
-              placeholder="如：不吃辣 / 过敏海鲜 / 一份素食"
-              placeholderTextColor={IOS_COLORS.labelTertiary}
-              multiline
-              maxLength={512}
-            />
-          </View>
+          <MemberFormFields values={values} errors={errors} onChange={onChange} />
 
           {submitError ? (
             <View style={styles.errorBanner}>
@@ -231,129 +159,44 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
             </View>
           ) : null}
 
-          {dirty ? (
-            <Text style={styles.dirtyHint}>有未保存的修改</Text>
-          ) : (
-            <Text style={styles.dirtyHint}>未修改</Text>
-          )}
-
-          <View style={{ height: 40 }} />
+          <Text style={styles.dirtyHint}>{dirty ? '有未保存的修改' : '未修改'}</Text>
+          <View style={{ height: 24 }} />
         </ScrollView>
-      </SafeAreaView>
+        </SafeAreaView>
+      </View>
     </Modal>
-  );
-}
-
-function SectionLabel({ text }: { text: string }) {
-  return (
-    <View style={styles.sectionLabelWrap}>
-      <Text style={styles.sectionLabel}>{text}</Text>
-    </View>
-  );
-}
-
-function Field({
-  label, value, onChangeText, placeholder, error,
-  isLast, keyboardType, autoCapitalize, multiline, required, hint,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  placeholder?: string;
-  error?: string;
-  isLast?: boolean;
-  keyboardType?: 'default' | 'phone-pad';
-  autoCapitalize?: 'none' | 'sentences';
-  multiline?: boolean;
-  required?: boolean;
-  hint?: string;
-}) {
-  return (
-    <View style={[styles.field, isLast && styles.fieldLast]}>
-      <Text style={styles.fieldLabel}>
-        {label}
-        {required ? <Text style={styles.fieldRequired}> *</Text> : null}
-      </Text>
-      <TextInput
-        style={[styles.fieldInput, multiline && styles.fieldInputMulti]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={IOS_COLORS.labelTertiary}
-        keyboardType={keyboardType}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={false}
-        multiline={multiline}
-      />
-      {hint && !error ? <Text style={styles.fieldHint}>{hint}</Text> : null}
-      {error ? <Text style={styles.fieldError}>{error}</Text> : null}
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: IOS_COLORS.card,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: 'transparent',
   },
   cancel: { fontSize: 17, color: IOS_COLORS.labelSecondary, width: 60 },
   title: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
   save: { fontSize: 17, color: IOS_COLORS.blue, fontWeight: '600', width: 60, textAlign: 'right' },
   disabled: { opacity: 0.3 },
 
-  scrollBody: { paddingBottom: 24 },
-
-  sectionLabelWrap: {
-    paddingHorizontal: 20, paddingTop: 18, paddingBottom: 6,
-  },
-  sectionLabel: {
-    fontSize: 13, fontWeight: '600', color: IOS_COLORS.labelSecondary,
-    textTransform: 'uppercase', letterSpacing: 0.5,
-  },
-  card: {
-    marginHorizontal: 16, backgroundColor: IOS_COLORS.card, borderRadius: 14, overflow: 'hidden',
-  },
-
-  field: {
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: IOS_COLORS.separatorLight,
-  },
-  fieldLast: { borderBottomWidth: 0 },
-  fieldLabel: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginBottom: 2 },
-  fieldRequired: { color: IOS_COLORS.red, fontWeight: '700' },
-  fieldInput: { fontSize: 16, color: IOS_COLORS.label, paddingVertical: 4 },
-  fieldInputMulti: { minHeight: 56, textAlignVertical: 'top' },
-  fieldError: { fontSize: 12, color: IOS_COLORS.red, marginTop: 4 },
-  fieldHint: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 4, lineHeight: 16 },
-
-  toggleRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 12,
-  },
-  innerDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: IOS_COLORS.separatorLight,
-    marginLeft: 16,
-  },
-  rowLabel: { fontSize: 16, color: IOS_COLORS.label },
-  rowHint: { fontSize: 12, color: IOS_COLORS.labelSecondary, marginTop: 2 },
-
-  notesInput: {
-    fontSize: 15, color: IOS_COLORS.label,
-    padding: 14, minHeight: 72, textAlignVertical: 'top',
-  },
-
   errorBanner: {
-    marginHorizontal: 16, marginTop: 12, padding: 12,
-    backgroundColor: '#FFF0F0', borderRadius: 10,
+    marginHorizontal: 6,
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#FFF0F0',
+    borderRadius: 10,
   },
   errorText: { fontSize: 14, color: IOS_COLORS.red },
 
   dirtyHint: {
-    marginTop: 18, textAlign: 'center',
-    fontSize: 12, color: IOS_COLORS.labelTertiary,
+    marginTop: 14,
+    textAlign: 'center',
+    fontSize: 12,
+    color: IOS_COLORS.labelTertiary,
   },
 });

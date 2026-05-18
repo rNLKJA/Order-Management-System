@@ -3,8 +3,8 @@
  * 布局：欢迎卡（左图标右文案）→ 速览 4 连格 → 余餐提醒 → 快捷操作（首屏四项 + 分隔 + 可展开更多）。
  */
 
-import { useRef, useState, useMemo } from 'react';
-import { StyleSheet, ScrollView, View, useWindowDimensions, Pressable } from 'react-native';
+import { useRef, useState, useMemo, useCallback } from 'react';
+import { Platform, StyleSheet, ScrollView, View, useWindowDimensions, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
@@ -31,30 +31,25 @@ import {
   Bento,
   GlassSurface,
   PressableCard,
-  StatTile,
   IconAvatar,
   SectionLabel,
   FloatingBottomBar,
   floatingBottomReserve,
 } from '../../components/ui';
+import { HomeTodayStats, type TodayFinanceSnapshot } from '../../components/home/HomeTodayStats';
+import { HomeQuickEntryCard, type HomeEntryDef } from '../../components/home/HomeQuickEntryCard';
 import { useScrollToTopOnFocus } from '../../hooks/useScrollToTopOnFocus';
 
-type EntryDef = {
-  key: string;
-  title: string;
-  subtitle: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-  bg: string;
-  route: string;
+const EMPTY_FIN: TodayFinanceSnapshot = {
+  income: 0,
+  expense: 0,
+  net: 0,
+  realized_income: 0,
+  realized_net: 0,
 };
 
-const ICON_OPTICAL_NUDGE: Partial<
-  Record<EntryDef['icon'], { x?: number; y?: number }>
-> = {
-  'wallet-outline': { x: 0.5, y: -0.5 },
-  'bar-chart-outline': { x: 0.5, y: -1 },
-};
+const PRIMARY_SHORTCUT_KEYS = ['members', 'orders-manage', 'walkins', 'orders-fulfillment'] as const;
+const MORE_SHORTCUT_KEYS = ['finance', 'orders-stats', 'users', 'admin', 'audit-logs', 'profile'] as const;
 
 export default function HomeScreen() {
   const scrollRef = useRef<ScrollView>(null);
@@ -64,7 +59,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   /** 含双段图标+文案与 FloatingBottomBar 胶囊内边距，避免压住快捷入口 */
   const homeBottomNavReserve = useMemo(
-    () => floatingBottomReserve(88, insets.bottom),
+    () => floatingBottomReserve(103, insets.bottom),
     [insets.bottom],
   );
   const { width } = useWindowDimensions();
@@ -81,35 +76,47 @@ export default function HomeScreen() {
     queryKey: ['walkins', 'list'],
     queryFn: async () => (await walkinsApi.list()).items,
     refetchOnWindowFocus: true,
+    staleTime: 60_000,
   });
 
-  // 首页"会员档案"统计只算正式会员，散客另入"散客目录"tile
-  const members = (membersView.data ?? []).filter((m) => !m.is_walkin);
-  const renewalCount = members.filter(
-    (m) => m.active_card && m.active_card.remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS,
-  ).length;
+  const members = useMemo(
+    () => (membersView.data ?? []).filter((m) => !m.is_walkin),
+    [membersView.data],
+  );
+  const renewalCount = useMemo(
+    () =>
+      members.filter(
+        (m) => m.active_card && m.active_card.remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS,
+      ).length,
+    [members],
+  );
 
-  const fin = financeToday.data ?? {
-    income: 0,
-    expense: 0,
-    net: 0,
-    realized_income: 0,
-    prepaid_income: 0,
-    realized_net: 0,
-    realized_by_channel: { hospital: 0, regular: 0, walkin: 0 },
-    byCategory: {},
-  };
+  const finSnapshot = useMemo<TodayFinanceSnapshot>(() => {
+    const fin = financeToday.data;
+    if (!fin) return EMPTY_FIN;
+    return {
+      income: fin.income,
+      expense: fin.expense,
+      net: fin.net,
+      realized_income: fin.realized_income,
+      realized_net: fin.realized_net,
+    };
+  }, [financeToday.data]);
 
-  const orders = ordersToday.data ?? [];
-  const totalCount = orders
-    .filter((o) => o.status !== 'cancelled')
-    .reduce((sum, o) => sum + o.quantity, 0);
-  const pendingCount = orders
-    .filter((o) => o.status === 'pending')
-    .reduce((sum, o) => sum + o.quantity, 0);
+  const { totalCount, pendingCount } = useMemo(() => {
+    const orders = ordersToday.data ?? [];
+    let total = 0;
+    let pending = 0;
+    for (const o of orders) {
+      if (o.status === 'cancelled') continue;
+      total += o.quantity;
+      if (o.status === 'pending') pending += o.quantity;
+    }
+    return { totalCount: total, pendingCount: pending };
+  }, [ordersToday.data]);
 
   const walkinCount = walkinsQuery.data?.length ?? 0;
-  const entries: EntryDef[] = [
+  const entries = useMemo((): HomeEntryDef[] => [
     {
       key: 'members',
       title: '会员档案',
@@ -161,7 +168,7 @@ export default function HomeScreen() {
       title: '财务流水',
       subtitle: financeToday.isLoading
         ? '加载中...'
-        : `今日履约 ${formatCNY(fin.realized_income)} · 预收 ${formatCNY(fin.prepaid_income)}`,
+        : `今日履约 ${formatCNY(financeToday.data?.realized_income ?? 0)} · 预收 ${formatCNY(financeToday.data?.prepaid_income ?? 0)}`,
       icon: 'wallet-outline',
       color: COLORS.warning,
       bg: COLORS.warningSoft,
@@ -209,7 +216,7 @@ export default function HomeScreen() {
             bg: 'rgba(118,118,128,0.12)',
             route: '/(app)/audit-logs',
           },
-        ] as EntryDef[])
+        ] as HomeEntryDef[])
       : []),
     {
       key: 'profile',
@@ -222,11 +229,31 @@ export default function HomeScreen() {
       bg: COLORS.infoSoft,
       route: '/(app)/profile',
     },
-  ];
-  const entriesByKey = Object.fromEntries(entries.map((e) => [e.key, e])) as Record<string, EntryDef>;
+  ], [
+    members.length,
+    membersView.isLoading,
+    renewalCount,
+    ordersToday.isLoading,
+    totalCount,
+    pendingCount,
+    walkinCount,
+    walkinsQuery.isLoading,
+    financeToday.isLoading,
+    financeToday.data?.realized_income,
+    financeToday.data?.prepaid_income,
+    user?.role,
+    user?.is_superadmin,
+    user?.full_name,
+  ]);
 
-  const primaryShortcutKeys = ['members', 'orders-manage', 'walkins', 'orders-fulfillment'] as const;
-  const moreShortcutKeys = ['finance', 'orders-stats', 'users', 'admin', 'audit-logs', 'profile'] as const;
+  const entriesByKey = useMemo(
+    () => Object.fromEntries(entries.map((e) => [e.key, e])) as Record<string, HomeEntryDef>,
+    [entries],
+  );
+
+  const toggleMoreShortcuts = useCallback(() => {
+    setMoreShortcutsOpen((v) => !v);
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -235,6 +262,7 @@ export default function HomeScreen() {
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={Platform.OS !== 'web'}
         contentContainerStyle={[
           styles.scroll,
           // 手动应用顶部安全区：状态栏 / 刘海屏 / 动态岛都让开
@@ -263,101 +291,8 @@ export default function HomeScreen() {
               </GlassSurface>
             </View>
 
-            {/* 汇总 / 履约速览（口径由底栏切换；无额外标题以减轻首屏噪音） */}
             <View style={styles.block}>
-              <BentoGrid gap={SPACING.md}>
-                {todayQuickTab === 'summary' ? (
-                  <>
-                    <Bento span={3} mobileSpan={6}>
-                      <StatTile
-                        layout="compact"
-                        label="今日总收入"
-                        value={formatCNY(fin.income)}
-                        icon="arrow-up-circle-outline"
-                        color={COLORS.brand}
-                        tint="info"
-                        hint="账本全部收入（含预收等）"
-                      />
-                    </Bento>
-                    <Bento span={3} mobileSpan={6}>
-                      <StatTile
-                        layout="compact"
-                        label="今日支出"
-                        value={formatCNY(fin.expense)}
-                        icon="arrow-down-circle-outline"
-                        color={COLORS.danger}
-                        tint="danger"
-                      />
-                    </Bento>
-                    <Bento span={3} mobileSpan={6}>
-                      <StatTile
-                        layout="compact"
-                        label="今日净额"
-                        value={formatCNY(fin.net)}
-                        icon={fin.net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
-                        color={fin.net >= 0 ? COLORS.success : COLORS.danger}
-                        tint={fin.net >= 0 ? 'ok' : 'danger'}
-                        hint="总收入减总支出"
-                      />
-                    </Bento>
-                    <Bento span={3} mobileSpan={6}>
-                      <StatTile
-                        layout="compact"
-                        label="待出餐"
-                        value={`${pendingCount} 份`}
-                        icon="time-outline"
-                        color={COLORS.warning}
-                        tint="warn"
-                      />
-                    </Bento>
-                  </>
-                ) : (
-                  <>
-                    <Bento span={3} mobileSpan={6}>
-                      <StatTile
-                        layout="compact"
-                        label="今日履约收入"
-                        value={formatCNY(fin.realized_income)}
-                        icon="restaurant-outline"
-                        color={COLORS.success}
-                        tint="ok"
-                        hint="已送达餐费（院内/院外/散客）"
-                      />
-                    </Bento>
-                    <Bento span={3} mobileSpan={6}>
-                      <StatTile
-                        layout="compact"
-                        label="今日支出"
-                        value={formatCNY(fin.expense)}
-                        icon="arrow-down-circle-outline"
-                        color={COLORS.danger}
-                        tint="danger"
-                      />
-                    </Bento>
-                    <Bento span={3} mobileSpan={6}>
-                      <StatTile
-                        layout="compact"
-                        label="今日净额"
-                        value={formatCNY(fin.realized_net)}
-                        icon={fin.realized_net >= 0 ? 'checkmark-circle-outline' : 'close-circle-outline'}
-                        color={fin.realized_net >= 0 ? COLORS.success : COLORS.danger}
-                        tint={fin.realized_net >= 0 ? 'ok' : 'danger'}
-                        hint="履约收入减当日支出"
-                      />
-                    </Bento>
-                    <Bento span={3} mobileSpan={6}>
-                      <StatTile
-                        layout="compact"
-                        label="待出餐"
-                        value={`${pendingCount} 份`}
-                        icon="time-outline"
-                        color={COLORS.warning}
-                        tint="warn"
-                      />
-                    </Bento>
-                  </>
-                )}
-              </BentoGrid>
+              <HomeTodayStats tab={todayQuickTab} fin={finSnapshot} pendingCount={pendingCount} />
             </View>
 
             {/* 余餐提醒（条件显示） */}
@@ -398,10 +333,14 @@ export default function HomeScreen() {
             <View style={styles.block}>
               <SectionLabel>快捷操作</SectionLabel>
               <BentoGrid gap={SPACING.md}>
-                {primaryShortcutKeys.map((key) =>
+                {PRIMARY_SHORTCUT_KEYS.map((key) =>
                   entriesByKey[key] ? (
                     <Bento key={key} span={6} mobileSpan={12}>
-                      <QuickEntryCard entry={entriesByKey[key]!} compactPhone={isCompactPhone} />
+                      <HomeQuickEntryCard
+                        entry={entriesByKey[key]!}
+                        compactPhone={isCompactPhone}
+                        featured={key === 'orders-manage'}
+                      />
                     </Bento>
                   ) : null,
                 )}
@@ -412,7 +351,7 @@ export default function HomeScreen() {
               </View>
 
               <Pressable
-                onPress={() => setMoreShortcutsOpen((v) => !v)}
+                onPress={toggleMoreShortcuts}
                 style={({ pressed }) => [styles.shortcutsMoreToggle, pressed && { opacity: 0.72 }]}
                 accessibilityRole="button"
                 accessibilityLabel={moreShortcutsOpen ? '收起更多快捷入口' : '展开更多快捷入口'}
@@ -434,13 +373,15 @@ export default function HomeScreen() {
 
               {moreShortcutsOpen ? (
                 <BentoGrid gap={SPACING.md}>
-                  {moreShortcutKeys
-                    .filter((key) => Boolean(entriesByKey[key]))
-                    .map((key) => (
-                      <Bento key={key} span={6} mobileSpan={12}>
-                        <QuickEntryCard entry={entriesByKey[key]!} compact compactPhone={isCompactPhone} />
-                      </Bento>
-                    ))}
+                  {MORE_SHORTCUT_KEYS.filter((key) => Boolean(entriesByKey[key])).map((key) => (
+                    <Bento key={key} span={6} mobileSpan={12}>
+                      <HomeQuickEntryCard
+                        entry={entriesByKey[key]!}
+                        compact
+                        compactPhone={isCompactPhone}
+                      />
+                    </Bento>
+                  ))}
                 </BentoGrid>
               ) : null}
             </View>
@@ -494,61 +435,6 @@ export default function HomeScreen() {
       </FloatingBottomBar>
       </View>
     </View>
-  );
-}
-
-function QuickEntryCard({
-  entry,
-  compact,
-  tall,
-  compactPhone,
-}: {
-  entry: EntryDef;
-  compact?: boolean;
-  tall?: boolean;
-  compactPhone?: boolean;
-}) {
-  const iconSize = compact ? 40 : 42;
-  const nudge = ICON_OPTICAL_NUDGE[entry.icon];
-  return (
-    <PressableCard
-      padding={compact ? SPACING.base : SPACING.lg}
-      onPress={() => router.push(entry.route as never)}
-      style={[
-        styles.entryCard,
-        compact && styles.entryCardCompact,
-        tall && styles.entryCardTall,
-        compactPhone && styles.entryCardPhone,
-        tall && compactPhone && styles.entryCardTallPhone,
-      ]}
-    >
-      <View style={styles.entryIconSlot}>
-        <IconAvatar
-          icon={entry.icon}
-          color={entry.color}
-          bg={entry.bg}
-          size={iconSize}
-          iconOffsetX={nudge?.x ?? 0}
-          iconOffsetY={nudge?.y ?? 0}
-        />
-      </View>
-      <View style={styles.entryText}>
-        <Text style={styles.entryTitle}>{entry.title}</Text>
-        <Text
-          style={[styles.entrySubtitle, (compact || compactPhone) && styles.entrySubtitleCompact]}
-          numberOfLines={2}
-        >
-          {entry.subtitle}
-        </Text>
-      </View>
-      <View style={styles.entryChevronSlot}>
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={COLORS.text.quaternary}
-        />
-      </View>
-    </PressableCard>
   );
 }
 
@@ -687,30 +573,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // entries
-  entryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  entryCardCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 84,
-  },
-  entryCardTall: { minHeight: 192 },
-  entryCardPhone: { borderRadius: 14 },
-  entryCardTallPhone: { minHeight: 160 },
-  entryIconSlot: {
-    width: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  entryText: { flex: 1, marginLeft: SPACING.sm },
-  entryChevronSlot: {
-    width: 20,
-    alignItems: 'flex-end',
-  },
-  entryTitle: { ...TYPE.title3, color: COLORS.text.primary, marginBottom: 4 },
-  entrySubtitle: { ...TYPE.footnote, color: COLORS.text.secondary },
-  entrySubtitleCompact: { fontSize: 12, lineHeight: 16 },
 });

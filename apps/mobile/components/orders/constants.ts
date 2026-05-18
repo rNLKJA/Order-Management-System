@@ -48,3 +48,54 @@ export const TABS: {
   { key: 'delivery', label: '送餐', icon: 'bicycle-outline' },
   { key: 'courier', label: '快递', icon: 'cube-outline' },
 ];
+
+/** 底部 Tab 切换时，顶部说明区文案（与 TABS 图标一致） */
+export const ORDER_TAB_PAGE_META: Record<
+  TabKey,
+  { title: string; description: string; icon: keyof typeof Ionicons.glyphMap }
+> = {
+  overview: {
+    title: '总览',
+    icon: 'list-outline',
+    description: '按日期查看订餐份数、出餐与送达进度',
+  },
+  entry: {
+    title: '录入',
+    icon: 'person-outline',
+    description: '为一位会员或散客录单，须上传订餐凭证',
+  },
+  entry_batch: {
+    title: '批量录入',
+    icon: 'people-outline',
+    description: '搜索加人 → 设午/晚份数 → 配送备注，共用凭证',
+  },
+  entry_gift: {
+    title: '赠送餐',
+    icon: 'gift-outline',
+    description: '赠送餐不扣次；批量加人后每人单独设份数',
+  },
+  retail: {
+    title: '零售',
+    icon: 'pricetag-outline',
+    description: '维护产品目录、记一笔销售、看当日流水',
+  },
+  prep: {
+    title: '出餐',
+    icon: 'fast-food-outline',
+    description: '今日待出餐订单，标记已出餐',
+  },
+  delivery: {
+    title: '送餐',
+    icon: 'bicycle-outline',
+    description: '员工自送订单，标记送达或送餐失败',
+  },
+  courier: {
+    title: '快递',
+    icon: 'cube-outline',
+    description: '外包快递订单，标记送达或配送失败',
+  },
+};
+
+export function orderTabPageMeta(tab: TabKey) {
+  return ORDER_TAB_PAGE_META[tab];
+}

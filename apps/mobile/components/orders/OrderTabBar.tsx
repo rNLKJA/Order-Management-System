@@ -4,6 +4,17 @@ import { IOS_COLORS } from '../../theme/paperTheme';
 import { orderScreenStyles as styles } from './orderScreenStyles';
 import { TABS, type PrimaryTab, type TabKey } from './constants';
 
+const TAB_ACTIVE_ICON: Partial<Record<TabKey, keyof typeof Ionicons.glyphMap>> = {
+  overview: 'list',
+  entry: 'person',
+  entry_batch: 'people',
+  entry_gift: 'gift',
+  retail: 'pricetag',
+  prep: 'fast-food',
+  delivery: 'bicycle',
+  courier: 'cube',
+};
+
 export function OrderTabBar({
   activePrimary,
   activeTab,
@@ -35,11 +46,18 @@ export function OrderTabBar({
           <Pressable
             key={t.key}
             onPress={() => onTabChange(t.key)}
-            style={[styles.tabItem, denseTabs && styles.tabItemDense, active && styles.tabItemActive]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            style={({ pressed }) => [
+              styles.tabItem,
+              denseTabs && styles.tabItemDense,
+              active && styles.tabItemActive,
+              pressed && !active && { opacity: 0.72 },
+            ]}
           >
             <Ionicons
-              name={t.icon}
-              size={denseTabs ? 16 : 18}
+              name={active ? (TAB_ACTIVE_ICON[t.key] ?? t.icon) : t.icon}
+              size={denseTabs ? 15 : 17}
               color={active ? IOS_COLORS.blue : IOS_COLORS.labelSecondary}
             />
             <Text
