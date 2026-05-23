@@ -18,7 +18,11 @@ export interface MealLabelData {
   shopName: string;
   customerName: string;
   mealTypeLabel: '午餐' | '晚餐';
+  /** 单张标签上的份数，餐盒贴标恒为 1 */
   quantity: number;
+  /** 本订单共几份（>1 时在标签上显示 1/2 等） */
+  copyIndex?: number;
+  copyTotal?: number;
   tags: string[];
   dietaryNotes: string | null;
   orderNotes: string | null;

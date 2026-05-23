@@ -8,6 +8,14 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function formatMainLine(label: MealLabelData): string {
+  const portion =
+    label.copyTotal && label.copyIndex
+      ? `${label.quantity} 份 (${label.copyIndex}/${label.copyTotal})`
+      : `${label.quantity} 份`;
+  return `${label.customerName} · ${portion}`;
+}
+
 function labelBlock(label: MealLabelData): string {
   const tags =
     label.tags.length > 0
@@ -25,7 +33,7 @@ function labelBlock(label: MealLabelData): string {
       <div class="shop">${escapeHtml(label.shopName)}</div>
       <div class="rule"></div>
       <div class="meal">${escapeHtml(label.mealTypeLabel)}</div>
-      <div class="main">${escapeHtml(label.customerName)} · ${label.quantity} 份</div>
+      <div class="main">${escapeHtml(formatMainLine(label))}</div>
       ${tags}
       ${dietary}
       ${notes}

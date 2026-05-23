@@ -20,7 +20,7 @@ export function mapOrderToMealLabel(order: MockOrder, shopName = DEFAULT_SHOP_NA
     shopName: shopName.trim() || DEFAULT_SHOP_NAME,
     customerName: displayCustomerName(order),
     mealTypeLabel: order.meal_type === 'lunch' ? '午餐' : '晚餐',
-    quantity: order.quantity,
+    quantity: 1,
     tags: buildMealLabelTags(order),
     dietaryNotes: order.dietary_notes?.trim() || null,
     orderNotes: order.notes?.trim() || null,
@@ -29,6 +29,18 @@ export function mapOrderToMealLabel(order: MockOrder, shopName = DEFAULT_SHOP_NA
   };
 }
 
+/** 按餐盒展开：2 份订单 → 2 张标签，每张「1 份 (1/2)」「1 份 (2/2)」 */
 export function mapOrdersToMealLabels(orders: MockOrder[], shopName = DEFAULT_SHOP_NAME): MealLabelData[] {
-  return orders.map((order) => mapOrderToMealLabel(order, shopName));
+  const labels: MealLabelData[] = [];
+  for (const order of orders) {
+    const copies = Math.max(1, Math.floor(order.quantity));
+    for (let i = 0; i < copies; i++) {
+      labels.push({
+        ...mapOrderToMealLabel(order, shopName),
+        copyIndex: copies > 1 ? i + 1 : undefined,
+        copyTotal: copies > 1 ? copies : undefined,
+      });
+    }
+  }
+  return labels;
 }

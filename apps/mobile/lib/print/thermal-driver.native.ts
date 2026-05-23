@@ -10,11 +10,15 @@ import type { MealLabelData, PaperWidthMm } from './types';
 export { ThermalPrinter };
 
 export function buildMealLabelNodes(label: MealLabelData): Node[] {
+  const portion =
+    label.copyTotal && label.copyIndex
+      ? `${label.quantity} 份 (${label.copyIndex}/${label.copyTotal})`
+      : `${label.quantity} 份`;
   const nodes: Node[] = [
     text(label.shopName, { align: 'center', bold: true }),
     line(),
     text(label.mealTypeLabel, { align: 'center', bold: true, size: 2 }),
-    text(`${label.customerName} · ${label.quantity} 份`, { align: 'center', bold: true }),
+    text(`${label.customerName} · ${portion}`, { align: 'center', bold: true }),
   ];
 
   if (label.tags.length > 0) {

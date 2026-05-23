@@ -10,6 +10,9 @@ export function MealLabelPreview({ label }: { label: MealLabelData }) {
       <Text style={styles.mealType}>{label.mealTypeLabel}</Text>
       <Text style={styles.mainLine}>
         {label.customerName} · {label.quantity} 份
+        {label.copyTotal && label.copyIndex
+          ? ` (${label.copyIndex}/${label.copyTotal})`
+          : ''}
       </Text>
       {label.tags.length > 0 ? (
         <Text style={styles.tags}>{label.tags.join('  ')}</Text>
