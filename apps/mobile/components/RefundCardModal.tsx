@@ -24,6 +24,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SheetHeader } from './ui';
 import { IOS_COLORS } from '../theme/paperTheme';
 
 export interface RefundCardCurrent {
@@ -121,19 +122,15 @@ export function RefundCardModal(props: RefundCardModalProps) {
       onRequestClose={onClose}
     >
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-        <View style={styles.header}>
-          <Pressable onPress={onClose} disabled={submitting}>
-            <Text style={[styles.cancel, submitting && styles.disabled]}>
-              取消
-            </Text>
-          </Pressable>
-          <Text style={styles.title}>退卡</Text>
-          <Pressable onPress={handleConfirm} disabled={!canSubmit}>
-            <Text style={[styles.confirm, !canSubmit && styles.disabled]}>
-              确认
-            </Text>
-          </Pressable>
-        </View>
+        <SheetHeader
+          title="退卡"
+          onClose={onClose}
+          onConfirm={handleConfirm}
+          confirmLabel="确认"
+          confirmDisabled={!canSubmit}
+          confirming={submitting}
+          confirmDestructive
+        />
 
         <ScrollView
           style={{ flex: 1 }}
@@ -288,27 +285,6 @@ function Meta({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: IOS_COLORS.card,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: IOS_COLORS.separatorLight,
-  },
-  cancel: { fontSize: 17, color: IOS_COLORS.labelSecondary, width: 60 },
-  title: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
-  confirm: {
-    fontSize: 17,
-    color: '#FF3B30',
-    fontWeight: '600',
-    width: 60,
-    textAlign: 'right',
-  },
-  disabled: { opacity: 0.3 },
 
   scrollBody: { padding: 16, gap: 6 },
 

@@ -24,7 +24,9 @@
         "CFBundleLocalizations": [
           "zh-Hans"
         ],
-        "CFBundleDevelopmentRegion": "zh-Hans"
+        "CFBundleDevelopmentRegion": "zh-Hans",
+        "NSBluetoothAlwaysUsageDescription": "用于连接厨房蓝牙热敏打印机，打印餐盒标签。",
+        "NSBluetoothPeripheralUsageDescription": "用于连接厨房蓝牙热敏打印机，打印餐盒标签。"
       }
     },
     "android": {
@@ -39,10 +41,6 @@
       "output": "single-page-app",
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-router",
-      "expo-secure-store"
-    ],
     "experiments": {
       "typedRoutes": true
     },

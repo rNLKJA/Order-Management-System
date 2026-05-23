@@ -4,9 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,7 +20,7 @@ import {
   type MemberFormFieldValues,
 } from './members/MemberFormFields';
 import { memberFormStyles } from './members/memberFormStyles';
-import { MeshBackground } from './ui';
+import { MeshBackground, SheetHeader } from './ui';
 
 export interface MemberEditModalProps {
   visible: boolean;
@@ -131,19 +129,14 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
       <View style={styles.root}>
         <MeshBackground />
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <View style={styles.header}>
-          <Pressable onPress={onClose} disabled={submitting}>
-            <Text style={[styles.cancel, submitting && styles.disabled]}>取消</Text>
-          </Pressable>
-          <Text style={styles.title}>编辑资料</Text>
-          <Pressable onPress={handleSave} disabled={!canSave}>
-            {submitting ? (
-              <ActivityIndicator color={IOS_COLORS.blue} />
-            ) : (
-              <Text style={[styles.save, !canSave && styles.disabled]}>保存</Text>
-            )}
-          </Pressable>
-        </View>
+        <SheetHeader
+          title="编辑资料"
+          onClose={onClose}
+          onConfirm={handleSave}
+          confirmLabel="保存"
+          confirmDisabled={!canSave}
+          confirming={submitting}
+        />
 
         <ScrollView
           style={{ flex: 1 }}
@@ -171,18 +164,6 @@ export function MemberEditModal({ visible, member, onClose, onSaved }: MemberEdi
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: IOS_COLORS.systemGrouped },
   safe: { flex: 1, backgroundColor: 'transparent' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: 'transparent',
-  },
-  cancel: { fontSize: 17, color: IOS_COLORS.labelSecondary, width: 60 },
-  title: { fontSize: 17, fontWeight: '600', color: IOS_COLORS.label },
-  save: { fontSize: 17, color: IOS_COLORS.blue, fontWeight: '600', width: 60, textAlign: 'right' },
-  disabled: { opacity: 0.3 },
 
   errorBanner: {
     marginHorizontal: 6,

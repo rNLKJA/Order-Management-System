@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { IOS_COLORS } from '../../../theme/paperTheme';
 import {
   AppHeader,
+  HeaderTextAction,
   MeshBackground,
   GlassSurface,
   SectionLabel,
@@ -278,9 +279,7 @@ export default function MemberDetailScreen() {
         <AppHeader
           title="会员详情"
           right={
-            <Pressable onPress={() => setShowEditModal(true)} hitSlop={8} style={{ paddingHorizontal: 6 }}>
-              <Text style={styles.editBtn}>编辑</Text>
-            </Pressable>
+            <HeaderTextAction label="编辑" onPress={() => setShowEditModal(true)} />
           }
         />
 

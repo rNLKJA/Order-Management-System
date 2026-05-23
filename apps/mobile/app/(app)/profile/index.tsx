@@ -30,6 +30,7 @@ import {
   StatTile,
   StatusChip,
 } from '../../../components/ui';
+import { PrintSettingsSection } from '../../../components/print/PrintSettingsSection';
 import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 export default function ProfileScreen() {
@@ -201,6 +202,11 @@ export default function ProfileScreen() {
                   isLast
                 />
               </GlassSurface>
+            </View>
+
+            <View style={styles.section}>
+              <SectionLabel>打印</SectionLabel>
+              <PrintSettingsSection />
             </View>
 
             <View style={styles.section}>

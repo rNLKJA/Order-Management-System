@@ -12,6 +12,7 @@ import { Text } from 'react-native-paper';
 import { COLORS, SPACING, TYPE } from '../../../theme/paperTheme';
 import {
   AppHeader,
+  HeaderTextAction,
   MeshBackground,
   SectionLabel,
   GlassSurface,
@@ -60,14 +61,11 @@ export default function WalkinsScreen() {
         <AppHeader
           title="散客目录"
           right={
-            <Pressable
+            <HeaderTextAction
+              label="录单"
+              icon="add"
               onPress={() => router.push('/(app)/orders')}
-              style={styles.addBtn}
-              hitSlop={8}
-            >
-              <Ionicons name="add" size={22} color={COLORS.brand} />
-              <Text style={styles.addBtnText}>录单</Text>
-            </Pressable>
+            />
           }
         />
 
@@ -215,13 +213,6 @@ const styles = StyleSheet.create({
   },
   block: { marginBottom: SPACING.md },
 
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 4,
-  },
-  addBtnText: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
   filterCard: { gap: SPACING.sm },
   statsRow: {
     flexDirection: 'row',

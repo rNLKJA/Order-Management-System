@@ -15,15 +15,19 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { IOS_COLORS } from '../../../theme/paperTheme';
 import { type MockMember, type MockOrder } from '../../../constants/mockData';
 import { ordersApi } from '../../../api/orders';
 import { useOrdersByDate, useOrdersToday, useInvalidateOrders } from '../../../hooks/useOrdersToday';
 import { useMembersView, useInvalidateMembersView } from '../../../hooks/useMembersView';
+import { usePrintSettings } from '../../../hooks/usePrintSettings';
 import { dailyOrderToMockOrder, membersByIdFrom } from '../../../lib/order-view';
 import { AppHeader, MeshBackground, FloatingBottomBar, floatingBottomReserve } from '../../../components/ui';
 import { DatePicker } from '../../../components/ui/DatePicker';
 import { MemberQuickInfoModal } from '../../../components/MemberQuickInfoModal';
+import { MealLabelPreviewSheet } from '../../../components/print/MealLabelPreviewSheet';
+import { PrinterSetupSheet } from '../../../components/print/PrinterSetupSheet';
 import { confirmAction, confirmDestructive } from '../../../lib/confirm';
 import { DELIVERY_FAIL_REASON_OPTIONS, type TabKey, type PrimaryTab } from '../../../components/orders/constants';
 import { tomorrowStr } from '../../../components/orders/date-utils';
@@ -64,6 +68,11 @@ export default function OrdersScreen() {
   const [deliveryFailSubmitting, setDeliveryFailSubmitting] = useState(false);
   const [quickInfoMember, setQuickInfoMember] = useState<MockMember | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [printOrders, setPrintOrders] = useState<MockOrder[]>([]);
+  const [printPreviewVisible, setPrintPreviewVisible] = useState(false);
+  const [printerSetupVisible, setPrinterSetupVisible] = useState(false);
+
+  const { hasPrinter, refresh: refreshPrintSettings } = usePrintSettings();
 
   const todayOrdersQuery = useOrdersToday();
   const overviewOrdersQuery = useOrdersByDate(overviewDate);
@@ -324,6 +333,35 @@ export default function OrdersScreen() {
     [handleUpdateStatus],
   );
 
+  const handleOpenPrintPreview = useCallback((ordersToPrint: MockOrder[]) => {
+    if (ordersToPrint.length === 0) return;
+    setPrintOrders(ordersToPrint);
+    setPrintPreviewVisible(true);
+  }, []);
+
+  const handlePrintOrder = useCallback(
+    (order: MockOrder) => {
+      handleOpenPrintPreview([order]);
+    },
+    [handleOpenPrintPreview],
+  );
+
+  const handlePrintBatch = useCallback(
+    (batch: MockOrder[]) => {
+      handleOpenPrintPreview(batch);
+    },
+    [handleOpenPrintPreview],
+  );
+
+  const handlePrinted = useCallback(
+    (count: number) => {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      flashToast(`已发送 ${count} 张标签到打印机`);
+      void refreshPrintSettings();
+    },
+    [flashToast, refreshPrintSettings],
+  );
+
   const handleOpenDeliveryFailed = useCallback((order: MockOrder) => {
     setActiveOrder(null);
     setDeliveryFailOrder(order);
@@ -388,7 +426,11 @@ export default function OrdersScreen() {
 
       <View style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <View style={{ flex: 1, paddingBottom: orderTabBarReserve }}>
-      <OrderTabPageBanner activeTab={activeTab} />
+      <OrderTabPageBanner
+        activeTab={activeTab}
+        printerConnected={hasPrinter}
+        onOpenPrintSettings={activeTab === 'prep' ? () => setPrinterSetupVisible(true) : undefined}
+      />
 
       {/* —— 总览 —— */}
       {activeTab === 'overview' && (
@@ -484,6 +526,8 @@ export default function OrdersScreen() {
           onMarkFulfilled={handleMarkFulfilled}
           onOpenDetail={setActiveOrder}
           onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
+          onPrintOrder={handlePrintOrder}
+          onPrintBatch={handlePrintBatch}
         />
       )}
 
@@ -496,6 +540,7 @@ export default function OrdersScreen() {
           onMarkDeliveryFailed={handleOpenDeliveryFailed}
           onOpenDetail={setActiveOrder}
           onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
+          onPrintOrder={handlePrintOrder}
           channel="self"
         />
       )}
@@ -509,6 +554,7 @@ export default function OrdersScreen() {
           onMarkDeliveryFailed={handleOpenDeliveryFailed}
           onOpenDetail={setActiveOrder}
           onShowMember={(id) => setQuickInfoMember(membersById[id] ?? null)}
+          onPrintOrder={handlePrintOrder}
           channel="courier"
         />
       )}
@@ -571,6 +617,7 @@ export default function OrdersScreen() {
           onMarkDelivered={handleMarkDelivered}
           onMarkDeliveryFailed={handleOpenDeliveryFailed}
           onOpenProfile={jumpToOrderProfile}
+          onPrintLabel={handlePrintOrder}
         />
       )}
 
@@ -587,6 +634,28 @@ export default function OrdersScreen() {
           setDeliveryFailOrder(null);
         }}
         onSubmit={() => void handleSubmitDeliveryFailed()}
+      />
+
+      <MealLabelPreviewSheet
+        visible={printPreviewVisible}
+        orders={printOrders}
+        onClose={() => {
+          setPrintPreviewVisible(false);
+          setPrintOrders([]);
+        }}
+        onPrinted={handlePrinted}
+        onNeedPrinter={() => {
+          setPrintPreviewVisible(false);
+          setPrinterSetupVisible(true);
+        }}
+      />
+
+      <PrinterSetupSheet
+        visible={printerSetupVisible}
+        onClose={() => {
+          setPrinterSetupVisible(false);
+          void refreshPrintSettings();
+        }}
       />
 
       </SafeAreaView>

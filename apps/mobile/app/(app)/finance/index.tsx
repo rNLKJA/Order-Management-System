@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text, Menu, ActivityIndicator } from 'react-native-paper';
 import {
   AppHeader,
+  HeaderTextAction,
   MeshBackground,
   GlassSurface,
   BentoGrid,
@@ -30,7 +31,8 @@ import {
   PressableCard,
   StatusChip,
   FloatingBottomBar,
-  floatingBottomReserve,
+  FloatingSegmentBar,
+  floatingSegmentBarReserve,
 } from '../../../components/ui';
 import {
   FINANCE_CATEGORY_LABEL,
@@ -57,6 +59,12 @@ import { usersApi } from '../../../api/users';
 
 type TypeFilter = 'all' | 'income' | 'expense';
 
+const FINANCE_TYPE_SEGMENTS = [
+  { key: 'all' as const, label: '全部', icon: 'layers-outline' as const },
+  { key: 'income' as const, label: '只要收入', icon: 'trending-up-outline' as const },
+  { key: 'expense' as const, label: '只要支出', icon: 'trending-down-outline' as const },
+];
+
 const CATEGORY_OPTIONS: Array<FinanceCategory | 'all'> = [
   'all',
   'card_prepaid_hospital',
@@ -81,7 +89,7 @@ export default function FinanceScreen() {
   const insets = useSafeAreaInsets();
   /** 与底部「全部 / 只要收入 / 只要支出」条实际高度对齐（含 FloatingBottomBar 胶囊内边距），避免压住流水卡片 */
   const financeTypeBarReserve = useMemo(
-    () => floatingBottomReserve(99, insets.bottom),
+    () => floatingSegmentBarReserve(insets.bottom),
     [insets.bottom],
   );
 
@@ -267,20 +275,16 @@ export default function FinanceScreen() {
           title="财务流水"
           right={
             <View style={styles.headerActionsRow}>
-              <Pressable
+              <HeaderTextAction
+                label="零售收入"
+                icon="pricetag-outline"
                 onPress={() => setOtherIncomeModalVisible(true)}
-                style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
-              >
-                <Ionicons name="pricetag-outline" size={16} color={COLORS.brand} />
-                <Text style={styles.headerActionText}>零售收入</Text>
-              </Pressable>
-              <Pressable
+              />
+              <HeaderTextAction
+                label="新增支出"
+                icon="add-circle-outline"
                 onPress={() => setModalVisible(true)}
-                style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
-              >
-                <Ionicons name="add-circle-outline" size={16} color={COLORS.brand} />
-                <Text style={styles.headerActionText}>新增支出</Text>
-              </Pressable>
+              />
             </View>
           }
         />
@@ -550,39 +554,11 @@ export default function FinanceScreen() {
         </ScrollView>
 
         <FloatingBottomBar>
-          <View style={styles.segmentedBar}>
-            {(['all', 'income', 'expense'] as const).map((v) => {
-              const active = typeFilter === v;
-              const icon =
-                v === 'all'
-                  ? ('layers-outline' as const)
-                  : v === 'income'
-                    ? ('trending-up-outline' as const)
-                    : ('trending-down-outline' as const);
-              const label = v === 'all' ? '全部' : v === 'income' ? '只要收入' : '只要支出';
-              return (
-                <Pressable
-                  key={v}
-                  style={[styles.segment, active && styles.segmentActive]}
-                  onPress={() => setTypeFilter(v)}
-                >
-                  <View style={styles.segmentInner}>
-                    <Ionicons
-                      name={icon}
-                      size={16}
-                      color={active ? COLORS.brand : COLORS.text.tertiary}
-                    />
-                    <Text
-                      style={[styles.segmentText, active && styles.segmentTextActive]}
-                      numberOfLines={1}
-                    >
-                      {label}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+          <FloatingSegmentBar
+            segments={FINANCE_TYPE_SEGMENTS}
+            value={typeFilter}
+            onChange={setTypeFilter}
+          />
         </FloatingBottomBar>
         </View>
 
@@ -701,19 +677,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 6,
-    maxWidth: 260,
+    gap: 8,
+    maxWidth: 220,
   },
-  headerAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,122,255,0.08)',
-  },
-  headerActionText: { ...TYPE.footnote, color: COLORS.brand, fontWeight: '600' },
   heroCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.base },
   heroMain: { flex: 1, minWidth: 0 },
   heroTitle: { ...TYPE.headline, color: COLORS.text.primary },
@@ -736,38 +702,6 @@ const styles = StyleSheet.create({
   filterCard: { gap: SPACING.md },
   dateRow: { flexDirection: 'row', gap: SPACING.sm },
   dateField: { flex: 1 },
-
-  segmentedBar: {
-    flexDirection: 'row',
-    gap: 4,
-    padding: 2,
-    backgroundColor: 'transparent',
-  },
-  segmentInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 999,
-    minHeight: 40,
-  },
-  segmentActive: {
-    backgroundColor: 'rgba(118,118,128,0.16)',
-  },
-  segmentText: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    fontWeight: '500',
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  segmentTextActive: { color: COLORS.text.primary, fontWeight: '600' },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, alignItems: 'center' },
   selectBtn: {

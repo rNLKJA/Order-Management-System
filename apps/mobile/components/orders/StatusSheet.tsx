@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatDateTimeWithSeconds } from '@meal/shared';
 import { IOS_COLORS } from '../../theme/paperTheme';
 import { type MockOrder } from '../../constants/mockData';
+import { isPrintSupported } from '../../lib/print';
 import { STATUS_MAP } from './constants';
 import { statusSheetStyles as sStyles } from './statusSheetStyles';
 
@@ -77,6 +78,7 @@ export function StatusSheet({
   onMarkDelivered,
   onMarkDeliveryFailed,
   onOpenProfile,
+  onPrintLabel,
 }: {
   order: MockOrder;
   /** 已送达订单按送餐失败退餐仅管理员可用（与后端 403 一致） */
@@ -87,6 +89,7 @@ export function StatusSheet({
   onMarkDelivered: (o: MockOrder) => void;
   onMarkDeliveryFailed: (o: MockOrder) => void;
   onOpenProfile: (o: MockOrder) => void;
+  onPrintLabel?: (o: MockOrder) => void;
 }) {
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const proofUris = order.proof_images ?? [];
@@ -237,6 +240,32 @@ export function StatusSheet({
                 <Text style={sStyles.metaWhen}>录入时间：—</Text>
               )}
             </View>
+          ) : null}
+
+          {isPrintSupported() && onPrintLabel && order.status !== 'cancelled' ? (
+            <Pressable
+              style={({ pressed }) => [
+                sStyles.statusBtn,
+                {
+                  backgroundColor: IOS_COLORS.blueLight,
+                  borderColor: IOS_COLORS.blue,
+                  borderWidth: 1,
+                  marginBottom: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                },
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={() => {
+                onClose();
+                onPrintLabel(order);
+              }}
+            >
+              <Ionicons name="print-outline" size={20} color={IOS_COLORS.blue} />
+              <Text style={[sStyles.statusBtnLabel, { color: IOS_COLORS.blue }]}>补打餐盒标签</Text>
+            </Pressable>
           ) : null}
 
           <Text style={sStyles.sectionLabel}>

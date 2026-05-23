@@ -2,6 +2,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { IOS_COLORS } from '../../theme/paperTheme';
 import { type MockMember, type MockOrder } from '../../constants/mockData';
+import { isPrintSupported } from '../../lib/print';
 import { prepDeliveryStyles as prepStyles } from './prepDeliveryStyles';
 
 export function PrepView({
@@ -9,12 +10,17 @@ export function PrepView({
   onMarkFulfilled,
   onOpenDetail,
   onShowMember,
+  onPrintOrder,
+  onPrintBatch,
 }: {
   orders: MockOrder[];
   onMarkFulfilled: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
   onShowMember: (memberId: number) => void;
+  onPrintOrder?: (order: MockOrder) => void;
+  onPrintBatch?: (orders: MockOrder[]) => void;
 }) {
+  const printEnabled = isPrintSupported() && Boolean(onPrintOrder);
   const pendingOrders = orders.filter((o) => o.status === 'pending');
   const lunch = pendingOrders.filter((o) => o.meal_type === 'lunch');
   const dinner = pendingOrders.filter((o) => o.meal_type === 'dinner');
@@ -46,12 +52,26 @@ export function PrepView({
         <View style={prepStyles.mealBlock}>
           <View style={prepStyles.mealHeader}>
             <Text style={prepStyles.mealTitle}>午餐 · 优先出餐</Text>
-            <Text style={prepStyles.mealCount}>{totalLunch} 份</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {printEnabled && onPrintBatch ? (
+                <Pressable
+                  onPress={() => onPrintBatch(lunch)}
+                  style={({ pressed }) => [prepStyles.batchBtn, pressed && { opacity: 0.85 }]}
+                  hitSlop={4}
+                >
+                  <Ionicons name="print-outline" size={14} color={IOS_COLORS.blue} />
+                  <Text style={prepStyles.batchBtnText}>打印全部</Text>
+                </Pressable>
+              ) : null}
+              <Text style={prepStyles.mealCount}>{totalLunch} 份</Text>
+            </View>
           </View>
           {lunch.map((o) => (
             <PrepCard
               key={o.id}
               order={o}
+              printEnabled={printEnabled}
+              onPrint={onPrintOrder}
               onConfirm={() => onMarkFulfilled(o)}
               onOpen={() => onOpenDetail(o)}
               onShowMember={onShowMember}
@@ -64,12 +84,26 @@ export function PrepView({
         <View style={prepStyles.mealBlock}>
           <View style={prepStyles.mealHeader}>
             <Text style={prepStyles.mealTitle}>晚餐</Text>
-            <Text style={prepStyles.mealCount}>{totalDinner} 份</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {printEnabled && onPrintBatch ? (
+                <Pressable
+                  onPress={() => onPrintBatch(dinner)}
+                  style={({ pressed }) => [prepStyles.batchBtn, pressed && { opacity: 0.85 }]}
+                  hitSlop={4}
+                >
+                  <Ionicons name="print-outline" size={14} color={IOS_COLORS.blue} />
+                  <Text style={prepStyles.batchBtnText}>打印全部</Text>
+                </Pressable>
+              ) : null}
+              <Text style={prepStyles.mealCount}>{totalDinner} 份</Text>
+            </View>
           </View>
           {dinner.map((o) => (
             <PrepCard
               key={o.id}
               order={o}
+              printEnabled={printEnabled}
+              onPrint={onPrintOrder}
               onConfirm={() => onMarkFulfilled(o)}
               onOpen={() => onOpenDetail(o)}
               onShowMember={onShowMember}
@@ -85,17 +119,22 @@ export function PrepView({
           <Text style={prepStyles.emptySub}>请去「送餐」页面检查配送</Text>
         </View>
       )}
+
     </ScrollView>
   );
 }
 
 function PrepCard({
   order,
+  printEnabled,
+  onPrint,
   onConfirm,
   onOpen,
   onShowMember,
 }: {
   order: MockOrder;
+  printEnabled: boolean;
+  onPrint?: (order: MockOrder) => void;
   onConfirm: () => void;
   onOpen: () => void;
   onShowMember: (memberId: number) => void;
@@ -179,15 +218,28 @@ function PrepCard({
           ) : null}
         </View>
       </Pressable>
-      <Pressable
-        style={({ pressed }) => [prepStyles.sideConfirm, pressed && { opacity: 0.85 }]}
-        onPress={onConfirm}
-      >
-        <Ionicons name="checkmark" size={18} color="#fff" />
-        <Text style={prepStyles.sideConfirmText} numberOfLines={1}>
-          出餐完成
-        </Text>
-      </Pressable>
+      <View style={prepStyles.sideActions}>
+        {printEnabled && onPrint ? (
+          <Pressable
+            style={({ pressed }) => [prepStyles.sidePrint, pressed && { opacity: 0.85 }]}
+            onPress={() => onPrint(order)}
+          >
+            <Ionicons name="print-outline" size={16} color="#fff" />
+            <Text style={prepStyles.sidePrintText} numberOfLines={1}>
+              打印
+            </Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          style={({ pressed }) => [prepStyles.sideConfirm, pressed && { opacity: 0.85 }]}
+          onPress={onConfirm}
+        >
+          <Ionicons name="checkmark" size={18} color="#fff" />
+          <Text style={prepStyles.sideConfirmText} numberOfLines={1}>
+            出餐完成
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -199,6 +251,7 @@ export function DeliveryView({
   onMarkDeliveryFailed,
   onOpenDetail,
   onShowMember,
+  onPrintOrder,
   channel = 'self',
 }: {
   orders: MockOrder[];
@@ -207,8 +260,10 @@ export function DeliveryView({
   onMarkDeliveryFailed: (order: MockOrder) => void;
   onOpenDetail: (o: MockOrder) => void;
   onShowMember: (memberId: number) => void;
+  onPrintOrder?: (order: MockOrder) => void;
   channel?: 'self' | 'courier';
 }) {
+  const printEnabled = isPrintSupported() && Boolean(onPrintOrder);
   const fulfilled = orders.filter(
     (o) => o.status === 'fulfilled' && (o.delivery_channel ?? 'self') === channel,
   );
@@ -249,6 +304,8 @@ export function DeliveryView({
               key={o.id}
               order={o}
               member={membersById[o.member_id]}
+              printEnabled={printEnabled}
+              onPrint={onPrintOrder}
               onConfirm={() => onMarkDelivered(o)}
               onMarkDeliveryFailed={() => onMarkDeliveryFailed(o)}
               onOpen={() => onOpenDetail(o)}
@@ -269,6 +326,8 @@ export function DeliveryView({
               key={o.id}
               order={o}
               member={membersById[o.member_id]}
+              printEnabled={printEnabled}
+              onPrint={onPrintOrder}
               onConfirm={() => onMarkDelivered(o)}
               onMarkDeliveryFailed={() => onMarkDeliveryFailed(o)}
               onOpen={() => onOpenDetail(o)}
@@ -302,6 +361,8 @@ export function DeliveryView({
 function DeliveryCard({
   order,
   member,
+  printEnabled,
+  onPrint,
   onConfirm,
   onMarkDeliveryFailed,
   onOpen,
@@ -309,6 +370,8 @@ function DeliveryCard({
 }: {
   order: MockOrder;
   member?: MockMember;
+  printEnabled: boolean;
+  onPrint?: (order: MockOrder) => void;
   onConfirm: () => void;
   onMarkDeliveryFailed: () => void;
   onOpen: () => void;
@@ -413,19 +476,32 @@ function DeliveryCard({
           </Pressable>
         </View>
       </Pressable>
-      <Pressable
-        style={({ pressed }) => [
-          prepStyles.sideConfirm,
-          { backgroundColor: '#34C759' },
-          pressed && { opacity: 0.85 },
-        ]}
-        onPress={onConfirm}
-      >
-        <Ionicons name="checkmark-done" size={18} color="#fff" />
-        <Text style={prepStyles.sideConfirmText} numberOfLines={1}>
-          确认送达
-        </Text>
-      </Pressable>
+      <View style={prepStyles.sideActions}>
+        {printEnabled && onPrint ? (
+          <Pressable
+            style={({ pressed }) => [prepStyles.sidePrint, pressed && { opacity: 0.85 }]}
+            onPress={() => onPrint(order)}
+          >
+            <Ionicons name="print-outline" size={16} color="#fff" />
+            <Text style={prepStyles.sidePrintText} numberOfLines={1}>
+              补打
+            </Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          style={({ pressed }) => [
+            prepStyles.sideConfirm,
+            { backgroundColor: '#34C759' },
+            pressed && { opacity: 0.85 },
+          ]}
+          onPress={onConfirm}
+        >
+          <Ionicons name="checkmark-done" size={18} color="#fff" />
+          <Text style={prepStyles.sideConfirmText} numberOfLines={1}>
+            确认送达
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

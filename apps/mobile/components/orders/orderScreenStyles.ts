@@ -30,9 +30,9 @@ export const orderScreenStyles = StyleSheet.create({
     paddingHorizontal: 2,
     gap: 3,
   },
-  /** 与 OrderTabBar 配套的悬浮胶囊内边距（略低于全局 FloatingBottomBar 默认） */
+  /** 与 OrderTabBar 配套的悬浮胶囊内边距（与全局 FloatingBottomBar 默认一致，保留便于单独微调） */
   orderTabFloatingPill: {
-    paddingVertical: 7,
+    paddingVertical: 8,
     paddingHorizontal: 6,
   },
   tabItemActive: {
@@ -80,6 +80,17 @@ export const orderScreenStyles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     color: IOS_COLORS.labelTertiary,
+  },
+  tabPageBannerPrinter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingHorizontal: 4,
+    flexShrink: 0,
+  },
+  tabPageBannerPrinterText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   overviewDateCard: {
     marginHorizontal: 12,

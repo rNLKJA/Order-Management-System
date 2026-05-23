@@ -36,7 +36,7 @@ import { cardFlowStyles as styles } from './cards/cardFlowStyles';
 import { CardPlanPicker } from './cards/CardPlanPicker';
 import { MemberFormPageBanner } from './members/MemberFormPageBanner';
 import { entryStyles } from './orders/entryStyles';
-import { MeshBackground } from './ui';
+import { MeshBackground, SheetHeader } from './ui';
 import { COLORS, SPACING, TYPE } from '../theme/paperTheme';
 
 /** 员工候选项（收款人/录入者 picker），从 /api/users 拉取 */
@@ -297,15 +297,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
       <View style={styles.root}>
         <MeshBackground />
         <SafeAreaView style={styles.safe} edges={['top']}>
-          <View style={styles.header}>
-            <Pressable onPress={onClose} disabled={submitting} hitSlop={12} style={styles.headerSide}>
-              <Text style={[styles.cancel, submitting && styles.disabled]}>取消</Text>
-            </Pressable>
-            <Text style={styles.title} numberOfLines={1}>
-              {title}
-            </Text>
-            <View style={styles.headerSide} />
-          </View>
+          <SheetHeader title={title} onClose={onClose} closeLabel="取消" />
 
           <ScrollView
           style={styles.scrollView}

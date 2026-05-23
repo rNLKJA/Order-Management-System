@@ -4,6 +4,7 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "forceConsistentCasingInFileNames": true,
+    "moduleSuffixes": [".native", ".web", ""],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],

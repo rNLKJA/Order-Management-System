@@ -3,8 +3,10 @@ export { GlassSurface } from './GlassSurface';
 export type { GlassSurfaceProps } from './GlassSurface';
 export { BentoGrid, Bento } from './BentoGrid';
 export type { BentoGridProps, BentoProps } from './BentoGrid';
-export { AppHeader } from './AppHeader';
+export { AppHeader, HeaderTextAction } from './AppHeader';
 export type { AppHeaderProps } from './AppHeader';
+export { SheetHeader } from './SheetHeader';
+export type { SheetHeaderProps } from './SheetHeader';
 export { StatusChip } from './StatusChip';
 export type { StatusChipProps } from './StatusChip';
 export { StatTile } from './StatTile';
@@ -23,3 +25,9 @@ export { ConfirmHost, confirm as confirmDialog } from './ConfirmDialog';
 export type { ConfirmOptions, ConfirmTone } from './ConfirmDialog';
 export { FloatingBottomBar, floatingBottomReserve } from './FloatingBottomBar';
 export type { FloatingBottomBarProps } from './FloatingBottomBar';
+export {
+  FloatingSegmentBar,
+  FLOATING_SEGMENT_BAR_HEIGHT,
+  floatingSegmentBarReserve,
+} from './FloatingSegmentBar';
+export type { FloatingSegmentBarProps, FloatingSegmentItem } from './FloatingSegmentBar';

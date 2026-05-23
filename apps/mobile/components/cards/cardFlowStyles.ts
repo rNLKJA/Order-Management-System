@@ -1,31 +1,11 @@
 import { Platform, StyleSheet } from 'react-native';
-import { COLORS, IOS_COLORS, SPACING, TYPE } from '../../theme/paperTheme';
+import { COLORS, IOS_COLORS } from '../../theme/paperTheme';
 
 /** 开卡 / 升级 / 续卡 Modal — Mesh 底 + 白卡片，与会员档案 / 新增会员一致 */
 export const cardFlowStyles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.systemGrouped },
   safe: { flex: 1, backgroundColor: 'transparent' },
   scrollView: { flex: 1, backgroundColor: 'transparent' },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.page - 4,
-    paddingVertical: SPACING.sm,
-    minHeight: 52,
-    backgroundColor: 'transparent',
-  },
-  headerSide: { flex: 1, minWidth: 72 },
-  cancel: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
-  title: {
-    ...TYPE.headline,
-    color: COLORS.text.primary,
-    textAlign: 'center',
-    flex: 2,
-    paddingHorizontal: 8,
-  },
-  disabled: { opacity: 0.35 },
 
   scroll: {
     paddingHorizontal: 14,

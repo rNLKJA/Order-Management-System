@@ -34,7 +34,8 @@ import {
   IconAvatar,
   SectionLabel,
   FloatingBottomBar,
-  floatingBottomReserve,
+  FloatingSegmentBar,
+  floatingSegmentBarReserve,
 } from '../../components/ui';
 import { HomeTodayStats, type TodayFinanceSnapshot } from '../../components/home/HomeTodayStats';
 import { HomeQuickEntryCard, type HomeEntryDef } from '../../components/home/HomeQuickEntryCard';
@@ -51,6 +52,11 @@ const EMPTY_FIN: TodayFinanceSnapshot = {
 const PRIMARY_SHORTCUT_KEYS = ['members', 'orders-manage', 'walkins', 'orders-fulfillment'] as const;
 const MORE_SHORTCUT_KEYS = ['finance', 'orders-stats', 'users', 'admin', 'audit-logs', 'profile'] as const;
 
+const HOME_BOTTOM_SEGMENTS = [
+  { key: 'summary' as const, label: '汇总', icon: 'pie-chart-outline' as const },
+  { key: 'fulfillment' as const, label: '履约', icon: 'ribbon-outline' as const },
+];
+
 export default function HomeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTopOnFocus(scrollRef);
@@ -59,7 +65,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   /** 含双段图标+文案与 FloatingBottomBar 胶囊内边距，避免压住快捷入口 */
   const homeBottomNavReserve = useMemo(
-    () => floatingBottomReserve(103, insets.bottom),
+    () => floatingSegmentBarReserve(insets.bottom),
     [insets.bottom],
   );
   const { width } = useWindowDimensions();
@@ -388,50 +394,11 @@ export default function HomeScreen() {
           </View>
       </ScrollView>
       <FloatingBottomBar>
-        <View style={styles.segmentedBar}>
-          <Pressable
-            style={[styles.segment, todayQuickTab === 'summary' && styles.segmentActive]}
-            onPress={() => setTodayQuickTab('summary')}
-          >
-            <View style={styles.segmentInner}>
-              <Ionicons
-                name="pie-chart-outline"
-                size={18}
-                color={todayQuickTab === 'summary' ? COLORS.brand : COLORS.text.tertiary}
-              />
-              <Text
-                style={[
-                  styles.segmentText,
-                  todayQuickTab === 'summary' && styles.segmentTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                汇总
-              </Text>
-            </View>
-          </Pressable>
-          <Pressable
-            style={[styles.segment, todayQuickTab === 'fulfillment' && styles.segmentActive]}
-            onPress={() => setTodayQuickTab('fulfillment')}
-          >
-            <View style={styles.segmentInner}>
-              <Ionicons
-                name="ribbon-outline"
-                size={18}
-                color={todayQuickTab === 'fulfillment' ? COLORS.brand : COLORS.text.tertiary}
-              />
-              <Text
-                style={[
-                  styles.segmentText,
-                  todayQuickTab === 'fulfillment' && styles.segmentTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                履约
-              </Text>
-            </View>
-          </Pressable>
-        </View>
+        <FloatingSegmentBar
+          segments={HOME_BOTTOM_SEGMENTS}
+          value={todayQuickTab}
+          onChange={setTodayQuickTab}
+        />
       </FloatingBottomBar>
       </View>
     </View>
@@ -473,37 +440,6 @@ const styles = StyleSheet.create({
   greetingName: { ...TYPE.title1, color: COLORS.text.primary },
 
   block: { marginBottom: SPACING.lg },
-
-  segmentedBar: {
-    flexDirection: 'row',
-    gap: 4,
-    padding: 2,
-    backgroundColor: 'transparent',
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  segmentInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  segmentActive: {
-    backgroundColor: 'rgba(118,118,128,0.16)',
-  },
-  segmentText: {
-    fontSize: 13,
-    color: COLORS.text.secondary,
-    fontWeight: '500',
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  segmentTextActive: { color: COLORS.text.primary, fontWeight: '600' },
 
   /** 纵向：子项 stretch 到同一行高，各槽内 justifyContent:center 实现图标/文案/箭头垂直居中 */
   reminderRow: {

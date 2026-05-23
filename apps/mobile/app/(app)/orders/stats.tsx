@@ -11,13 +11,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import {
@@ -37,7 +35,8 @@ import {
   SectionLabel,
   StatTile,
   FloatingBottomBar,
-  floatingBottomReserve,
+  FloatingSegmentBar,
+  floatingSegmentBarReserve,
 } from '../../../components/ui';
 import { ordersApi, type DailyOrder } from '../../../api/orders';
 import { COLORS, RADIUS, SPACING, TYPE } from '../../../theme/paperTheme';
@@ -45,18 +44,12 @@ import { useScrollToTopOnFocus } from '../../../hooks/useScrollToTopOnFocus';
 
 type ChartRange = 'today' | 'week' | 'month' | 'year' | 'custom';
 
-function chartRangeBarIcon(r: 'today' | 'week' | 'month' | 'year'): keyof typeof Ionicons.glyphMap {
-  switch (r) {
-    case 'today':
-      return 'sunny-outline';
-    case 'week':
-      return 'calendar-outline';
-    case 'month':
-      return 'calendar-number-outline';
-    case 'year':
-      return 'stats-chart-outline';
-  }
-}
+const STATS_CHART_SEGMENTS = [
+  { key: 'today' as const, label: '今天', icon: 'sunny-outline' as const },
+  { key: 'week' as const, label: '近7天', icon: 'calendar-outline' as const },
+  { key: 'month' as const, label: '近30天', icon: 'calendar-number-outline' as const },
+  { key: 'year' as const, label: '近一年', icon: 'stats-chart-outline' as const },
+];
 
 function diffDaysInclusive(from: string, to: string): number {
   return diffCalendarDaysInclusiveShanghai(from, to);
@@ -117,7 +110,7 @@ export default function OrdersStatsScreen() {
 
   const insets = useSafeAreaInsets();
   const statsBottomBarReserve = useMemo(
-    () => floatingBottomReserve(67, insets.bottom),
+    () => floatingSegmentBarReserve(insets.bottom),
     [insets.bottom],
   );
 
@@ -537,30 +530,16 @@ export default function OrdersStatsScreen() {
 
         </ScrollView>
         <FloatingBottomBar>
-          <View style={[styles.chartRangeRow, styles.chartRangeRowFloating]}>
-            {(['today', 'week', 'month', 'year'] as const).map((r) => {
-              const active = chartRange === r;
-              return (
-                <Pressable
-                  key={r}
-                  style={[styles.chartRangeChip, active && styles.chartRangeChipActive]}
-                  onPress={() => applyChartRange(r)}
-                >
-                  <Ionicons
-                    name={chartRangeBarIcon(r)}
-                    size={15}
-                    color={active ? COLORS.brand : COLORS.text.tertiary}
-                  />
-                  <Text
-                    style={[styles.chartRangeText, active && styles.chartRangeTextActive]}
-                    numberOfLines={1}
-                  >
-                    {r === 'today' ? '今天' : r === 'week' ? '近7天' : r === 'month' ? '近30天' : '近一年'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <FloatingSegmentBar
+            segments={STATS_CHART_SEGMENTS}
+            value={
+              chartRange === 'custom'
+                ? null
+                : chartRange
+            }
+            onChange={applyChartRange}
+            compact
+          />
         </FloatingBottomBar>
         </View>
       </SafeAreaView>
@@ -640,33 +619,6 @@ const styles = StyleSheet.create({
   },
   rangePicker: { flex: 1 },
   rangeDash: { ...TYPE.caption, color: COLORS.text.tertiary, fontWeight: '600' },
-  chartRangeRow: { flexDirection: 'row', gap: 8, marginBottom: SPACING.sm },
-  chartRangeRowFloating: {
-    marginBottom: 0,
-    padding: 4,
-    backgroundColor: 'transparent',
-    gap: 6,
-  },
-  chartRangeChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: 'rgba(118,118,128,0.12)',
-  },
-  chartRangeChipActive: { backgroundColor: 'rgba(0,122,255,0.16)' },
-  chartRangeText: {
-    ...TYPE.caption,
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  chartRangeTextActive: { color: COLORS.brand },
   trendChart: {
     flexDirection: 'row',
     alignItems: 'flex-end',

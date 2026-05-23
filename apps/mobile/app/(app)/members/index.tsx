@@ -12,6 +12,7 @@ import { type MockMember } from '../../../constants/mockData';
 import { useMembersViewWithLimit } from '../../../hooks/useMembersView';
 import {
   AppHeader,
+  HeaderTextAction,
   MeshBackground,
   GlassSurface,
   SectionLabel,
@@ -78,10 +79,11 @@ export default function MembersScreen() {
         <AppHeader
           title="会员档案"
           right={
-            <Pressable onPress={() => router.push('/(app)/members/new')} style={styles.addBtn} hitSlop={8}>
-              <Ionicons name="add" size={22} color={COLORS.brand} />
-              <Text style={styles.addBtnText}>新增</Text>
-            </Pressable>
+            <HeaderTextAction
+              label="新增"
+              icon="add"
+              onPress={() => router.push('/(app)/members/new')}
+            />
           }
         />
 
@@ -269,9 +271,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.page,
   },
   block: { marginBottom: SPACING.md },
-  addBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, gap: 2 },
-  addBtnText: { ...TYPE.body, color: COLORS.brand, fontWeight: '600' },
-
   filterCard: { gap: SPACING.sm },
   statsRow: {
     flexDirection: 'row',
