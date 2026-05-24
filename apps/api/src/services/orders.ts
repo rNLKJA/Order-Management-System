@@ -9,6 +9,7 @@
 import { and, eq } from 'drizzle-orm';
 import { isStaffMealsCardCode } from '@meal/shared';
 import { schema } from '../db/client.js';
+import { activateQueuedCardAfterExhaust } from './card-queue.js';
 import { toShanghaiDate } from './finance.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -72,6 +73,10 @@ export async function deductMeals(
       updated_at: new Date(),
     })
     .where(eq(schema.cards.id, card.id));
+
+  if (newStatus === 'exhausted') {
+    await activateQueuedCardAfterExhaust(tx, input.memberId, card.id);
+  }
 
   return {
     card: { ...card, used_meals: newUsed, remaining_meals: newRemaining, status: newStatus },

@@ -661,6 +661,100 @@ describe('POST /api/cards/:id/upgrade', () => {
 });
 
 // ============================================================
+// POST /api/cards/:id/advance
+// ============================================================
+
+describe('POST /api/cards/:id/advance', () => {
+  let ctx: Ctx;
+
+  beforeEach(async () => {
+    ctx = await buildCtx();
+  });
+
+  it('周卡剩餐时提前包月卡：queued 状态 + 全价入账', async () => {
+    const { id: memberId } = await seedMember(ctx.db, {
+      created_by_user_id: ctx.userId,
+      is_hospital: false,
+    });
+    const week = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      used_meals: 5,
+      unit_price: 28,
+      paid_amount: 280,
+      status: 'active',
+    });
+
+    const res = await authedFetch(ctx.app, ctx.token, `/api/cards/${week.id}/advance`, {
+      method: 'POST',
+      body: JSON.stringify({ card_code: 'month', is_hospital: false }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      active_card: { id: number; status: string; remaining_meals: number };
+      queued_card: {
+        id: number;
+        status: string;
+        card_code: string;
+        remaining_meals: number;
+        queued_after_card_id: number | null;
+        paid_amount: number;
+      };
+      paid_amount: number;
+    };
+    expect(body.active_card.id).toBe(week.id);
+    expect(body.active_card.status).toBe('active');
+    expect(body.active_card.remaining_meals).toBe(5);
+    expect(body.queued_card.status).toBe('queued');
+    expect(body.queued_card.card_code).toBe('month');
+    expect(body.queued_card.remaining_meals).toBe(40);
+    expect(body.queued_card.queued_after_card_id).toBe(week.id);
+    expect(body.paid_amount).toBe(1000);
+
+    const activeList = await authedFetch(
+      ctx.app,
+      ctx.token,
+      `/api/cards?member_id=${memberId}&status=active`,
+    );
+    const activeBody = (await activeList.json()) as { cards: Array<{ id: number }> };
+    expect(activeBody.cards).toHaveLength(1);
+    expect(activeBody.cards[0]!.id).toBe(week.id);
+  });
+
+  it('已有 queued 卡时拒绝再次提前包卡', async () => {
+    const { id: memberId } = await seedMember(ctx.db, {
+      created_by_user_id: ctx.userId,
+    });
+    const active = await seedCard(ctx.db, {
+      member_id: memberId,
+      created_by_user_id: ctx.userId,
+      collector_user_id: ctx.userId,
+      card_code: 'week',
+      is_hospital: false,
+      total_meals: 10,
+      used_meals: 1,
+      unit_price: 28,
+      paid_amount: 280,
+    });
+    const first = await authedFetch(ctx.app, ctx.token, `/api/cards/${active.id}/advance`, {
+      method: 'POST',
+      body: JSON.stringify({ card_code: 'month', is_hospital: false }),
+    });
+    expect(first.status).toBe(201);
+
+    const second = await authedFetch(ctx.app, ctx.token, `/api/cards/${active.id}/advance`, {
+      method: 'POST',
+      body: JSON.stringify({ card_code: 'season', is_hospital: false }),
+    });
+    expect(second.status).toBe(409);
+  });
+});
+
+// ============================================================
 // POST /api/cards/:id/refund
 // ============================================================
 
@@ -729,7 +823,7 @@ describe('POST /api/cards/:id/refund', () => {
     expect(body.code).toBe('INVALID_REFUND_AMOUNT');
   });
 
-  it('非 active 卡退款 → 422 CARD_NOT_ACTIVE', async () => {
+  it('非 active / queued 卡退款 → 422 CARD_NOT_REFUNDABLE', async () => {
     const { id: memberId } = await seedMember(ctx.db, {
       created_by_user_id: ctx.userId,
     });
@@ -751,7 +845,7 @@ describe('POST /api/cards/:id/refund', () => {
     });
     expect(res.status).toBe(422);
     const body = (await res.json()) as { code: string };
-    expect(body.code).toBe('CARD_NOT_ACTIVE');
+    expect(body.code).toBe('CARD_NOT_REFUNDABLE');
   });
 
   it('不存在的卡 → 404', async () => {

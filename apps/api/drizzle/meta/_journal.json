@@ -78,6 +78,13 @@
       "when": 1777786745982,
       "tag": "0012_retail_products",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1777886745982,
+      "tag": "0013_card_queued",
+      "breakpoints": true
     }
   ]
 }

@@ -5,13 +5,14 @@
  */
 
 import type {
+  CardAdvanceInput,
   CardPurchaseInput,
   CardUpgradeInput,
   FinanceCategory,
 } from '@meal/shared';
 import { api } from './client';
 
-export type CardStatus = 'active' | 'upgraded' | 'exhausted' | 'refunded';
+export type CardStatus = 'active' | 'queued' | 'upgraded' | 'exhausted' | 'refunded';
 
 export interface Card {
   id: number;
@@ -25,6 +26,7 @@ export interface Card {
   paid_amount: number;
   status: CardStatus;
   upgraded_from_id: number | null;
+  queued_after_card_id: number | null;
   collector_user_id: number;
   created_by_user_id: number;
   purchased_at: number;
@@ -51,6 +53,7 @@ export interface FinanceEntrySummary {
 
 export type PurchaseInput = CardPurchaseInput;
 export type UpgradeInput = CardUpgradeInput;
+export type AdvanceInput = CardAdvanceInput;
 
 export interface RenewInput {
   collector_user_id?: number;
@@ -105,6 +108,14 @@ export const cardsApi = {
       carried_meals: number;
       paid_amount: number;
     }>(`/api/cards/${cardId}/renew`, input),
+
+  advance: (activeCardId: number, input: AdvanceInput) =>
+    api.post<{
+      active_card: Card;
+      queued_card: Card;
+      financeEntry: FinanceEntrySummary;
+      paid_amount: number;
+    }>(`/api/cards/${activeCardId}/advance`, input),
 
   refund: (cardId: number, input: RefundInput) =>
     api.post<RefundResponse>(`/api/cards/${cardId}/refund`, input),

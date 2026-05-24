@@ -98,7 +98,9 @@ export default function MemberDetailScreen() {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showRenewModal, setShowRenewModal] = useState(false);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundTarget, setRefundTarget] = useState<'active' | 'queued'>('active');
   const [showEditModal, setShowEditModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [recordTab, setRecordTab] = useState<'orders' | 'cards'>('orders');
@@ -175,6 +177,40 @@ export default function MemberDetailScreen() {
     [member, invalidate],
   );
 
+  const handleAdvance = useCallback(
+    async (p: CardFlowSubmitPayload) => {
+      if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
+      const { queued_card, paid_amount } = await cardsApi.advance(
+        member.active_card.id,
+        p.spec.code === 'custom'
+          ? {
+              card_code: 'custom',
+              custom_label: p.spec.name,
+              total_meals: p.spec.meals,
+              paid_amount: p.spec.totalPrice,
+              is_hospital: p.isHospital,
+              collector_user_id: p.collectorUserId,
+              created_by_user_id: p.createdByUserId,
+              notes: p.notes,
+            }
+          : {
+              card_code: p.spec.code,
+              is_hospital: p.isHospital,
+              collector_user_id: p.collectorUserId,
+              created_by_user_id: p.createdByUserId,
+              notes: p.notes,
+            },
+      );
+      setShowAdvanceModal(false);
+      await invalidate(member.id);
+      triggerSuccessHaptic();
+      setToast(
+        `已提前包卡【${p.spec.name}】，应收 ¥${paid_amount}，待当前卡用完后生效（${queued_card.total_meals} 份）`,
+      );
+    },
+    [member, invalidate],
+  );
+
   const handleRenew = useCallback(
     async (p: CardFlowSubmitPayload) => {
       if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
@@ -205,19 +241,19 @@ export default function MemberDetailScreen() {
 
   const handleRefund = useCallback(
     async (p: RefundSubmitPayload) => {
-      if (!member || !member.active_card) throw new Error('会员当前无进行中的卡');
-      await cardsApi.refund(member.active_card.id, {
+      const target =
+        refundTarget === 'queued' ? member?.queued_card : member?.active_card;
+      if (!member || !target) throw new Error('没有可退的卡');
+      await cardsApi.refund(target.id, {
         refund_amount: p.refund_amount,
         reason: p.reason,
       });
       setShowRefundModal(false);
       await invalidate(member.id);
       triggerSuccessHaptic();
-      setToast(
-        `已退卡：${member.active_card.card_name}，退款 ¥${p.refund_amount}`,
-      );
+      setToast(`已退卡：${target.card_name}，退款 ¥${p.refund_amount}`);
     },
-    [member, invalidate],
+    [member, invalidate, refundTarget],
   );
 
   if (isLoading || !member) {
@@ -267,6 +303,7 @@ export default function MemberDetailScreen() {
   }
 
   const card = member.active_card;
+  const queuedCard = member.queued_card;
   const progressPct = card ? (card.remaining_meals / card.total_meals) * 100 : 0;
   const progressColor = progressPct > 50 ? '#34C759' : progressPct > 20 ? '#FF9500' : '#FF3B30';
   const renewal = card ? card.remaining_meals <= CARD_RENEWAL_THRESHOLD_MEALS : false;
@@ -396,6 +433,33 @@ export default function MemberDetailScreen() {
               ) : null}
             </View>
 
+            {queuedCard ? (
+              <View style={styles.queuedCard}>
+                <View style={styles.activeCardHeader}>
+                  <Text style={styles.activeCardName}>{queuedCard.card_name}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: '#FFF4E5' }]}>
+                    <Text style={[styles.statusText, { color: '#FF9500' }]}>待生效</Text>
+                  </View>
+                </View>
+                <Text style={styles.cardType}>
+                  {queuedCard.is_hospital ? '院内价目' : '院外价目'} · ¥{queuedCard.unit_price}/份 ·{' '}
+                  {queuedCard.total_meals} 份
+                </Text>
+                <Text style={styles.queuedHint}>
+                  当前【{card.card_name}】用完后自动生效 · 已付 ¥{queuedCard.paid_amount}
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [styles.queuedRefundBtn, pressed && { opacity: 0.75 }]}
+                  onPress={() => {
+                    setRefundTarget('queued');
+                    setShowRefundModal(true);
+                  }}
+                >
+                  <Text style={styles.queuedRefundText}>退待生效卡</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             {/* 续卡与升级均可操作，保留低余餐提醒 */}
             <View style={styles.actionRow}>
               <Pressable
@@ -406,8 +470,9 @@ export default function MemberDetailScreen() {
                   pressed && { opacity: 0.8 },
                 ]}
                 onPress={() => setShowRenewModal(true)}
+                disabled={Boolean(queuedCard)}
               >
-                <Text style={styles.renewBtnText}>续卡</Text>
+                <Text style={[styles.renewBtnText, queuedCard && { opacity: 0.45 }]}>续卡</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [
@@ -417,10 +482,24 @@ export default function MemberDetailScreen() {
                   pressed && { opacity: 0.8 },
                 ]}
                 onPress={() => setShowUpgradeModal(true)}
+                disabled={Boolean(queuedCard)}
               >
-                <Text style={styles.upgradeBtnText}>升级卡片</Text>
+                <Text style={[styles.upgradeBtnText, queuedCard && { opacity: 0.45 }]}>升级卡片</Text>
               </Pressable>
             </View>
+            {!queuedCard ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionBtn,
+                  styles.advanceBtn,
+                  pressed && { opacity: 0.85 },
+                ]}
+                onPress={() => setShowAdvanceModal(true)}
+              >
+                <Ionicons name="time-outline" size={18} color="#fff" />
+                <Text style={styles.advanceBtnText}>提前包卡</Text>
+              </Pressable>
+            ) : null}
 
           </View>
         ) : (
@@ -524,7 +603,10 @@ export default function MemberDetailScreen() {
         {card ? (
           <Pressable
             style={({ pressed }) => [styles.refundBottomBtn, pressed && { opacity: 0.7 }]}
-            onPress={() => setShowRefundModal(true)}
+            onPress={() => {
+              setRefundTarget('active');
+              setShowRefundModal(true);
+            }}
             hitSlop={6}
           >
             <Ionicons name="close-circle-outline" size={16} color="#FF3B30" />
@@ -596,17 +678,49 @@ export default function MemberDetailScreen() {
         />
       ) : null}
       {card ? (
+        <CardFlowModal
+          visible={showAdvanceModal}
+          mode="advance"
+          memberName={member.nickname || member.name}
+          memberIsHospital={member.is_hospital}
+          pickerUsers={pickerUsers}
+          defaultCollectorId={defaultCollectorId}
+          defaultRecorderId={defaultRecorderId}
+          currentCard={{
+            card_name: card.card_name,
+            card_code: card.card_code as SubscriptionCardCode,
+            custom_label: card.custom_label,
+            custom_pack_meals: card.custom_pack_meals,
+            is_hospital: card.is_hospital,
+            paid_amount: card.paid_amount,
+            used_meals: card.used_meals,
+            total_meals: card.total_meals,
+            remaining_meals: card.remaining_meals,
+          }}
+          onClose={() => setShowAdvanceModal(false)}
+          onSubmit={handleAdvance}
+        />
+      ) : null}
+      {card ? (
         <RefundCardModal
           visible={showRefundModal}
           memberName={member.nickname || member.name}
           currentCard={{
-            card_name: card.card_name,
-            is_hospital: card.is_hospital,
-            paid_amount: card.paid_amount,
-            total_meals: card.total_meals,
-            used_meals: card.used_meals,
-            remaining_meals: card.remaining_meals,
-            unit_price: card.unit_price,
+            card_name:
+              (refundTarget === 'queued' ? queuedCard : card)?.card_name ?? card.card_name,
+            is_hospital:
+              (refundTarget === 'queued' ? queuedCard : card)?.is_hospital ?? card.is_hospital,
+            paid_amount:
+              (refundTarget === 'queued' ? queuedCard : card)?.paid_amount ?? card.paid_amount,
+            total_meals:
+              (refundTarget === 'queued' ? queuedCard : card)?.total_meals ?? card.total_meals,
+            used_meals:
+              (refundTarget === 'queued' ? queuedCard : card)?.used_meals ?? card.used_meals,
+            remaining_meals:
+              (refundTarget === 'queued' ? queuedCard : card)?.remaining_meals ??
+              card.remaining_meals,
+            unit_price:
+              (refundTarget === 'queued' ? queuedCard : card)?.unit_price ?? card.unit_price,
           }}
           onClose={() => setShowRefundModal(false)}
           onSubmit={handleRefund}
@@ -877,6 +991,7 @@ function HistoryCardRow({
 }) {
   const statusMap = {
     active: { label: '进行中', color: '#34C759', bg: '#E8F8ED' },
+    queued: { label: '待生效', color: '#FF9500', bg: '#FFF4E5' },
     upgraded: { label: '已升级', color: '#007AFF', bg: IOS_COLORS.blueLight },
     exhausted: { label: '已用完', color: IOS_COLORS.labelSecondary, bg: IOS_COLORS.fillLight },
     refunded: { label: '已退卡', color: '#FF3B30', bg: '#FFE8E6' },
@@ -1070,6 +1185,27 @@ const styles = StyleSheet.create({
   actionBtnFull: { width: '100%' },
   upgradeBtn: { backgroundColor: IOS_COLORS.blue },
   upgradeBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  advanceBtn: {
+    marginTop: 10,
+    backgroundColor: '#5856D6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  advanceBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  queuedCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#FFFBF5',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,149,0,0.25)',
+    gap: 6,
+  },
+  queuedHint: { fontSize: 13, color: IOS_COLORS.orange, lineHeight: 18 },
+  queuedRefundBtn: { alignSelf: 'flex-start', marginTop: 4, paddingVertical: 4 },
+  queuedRefundText: { fontSize: 14, color: '#FF3B30', fontWeight: '500' },
   renewBtn: { backgroundColor: '#FF9500' },
   renewBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
   purchaseBtn: {

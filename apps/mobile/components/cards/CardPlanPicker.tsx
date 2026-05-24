@@ -11,7 +11,7 @@ import {
 } from '@meal/shared';
 import { COLORS, IOS_COLORS } from '../../theme/paperTheme';
 import { cardFlowStyles as styles } from './cardFlowStyles';
-type PickerMode = 'purchase' | 'upgrade' | 'renew';
+type PickerMode = 'purchase' | 'upgrade' | 'renew' | 'advance';
 
 function mealsLabel(spec: CardSpec): string {
   if (spec.code === STAFF_CARD_CODE) return '扣次不计余额';

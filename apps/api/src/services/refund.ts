@@ -2,7 +2,7 @@
  * 退卡业务逻辑。
  *
  * 约束：
- * - 仅 active 卡可以退（upgraded / exhausted / refunded 都不行）
+ * - 仅 active / queued 卡可以退（queued 须未使用）
  * - 0 ≤ refund_amount ≤ paid_amount
  * - 调用方在事务里执行，本函数返回更新后的卡和新写入的 FinanceEntry
  */
@@ -19,6 +19,7 @@ export class CardRefundError extends Error {
     public readonly code:
       | 'CARD_NOT_FOUND'
       | 'CARD_NOT_ACTIVE'
+      | 'CARD_NOT_REFUNDABLE'
       | 'INVALID_REFUND_AMOUNT',
     message: string,
   ) {
@@ -61,10 +62,16 @@ export async function refundCard(
   if (!card) {
     throw new CardRefundError('CARD_NOT_FOUND', '待退的卡不存在');
   }
-  if (card.status !== 'active') {
+  if (card.status !== 'active' && card.status !== 'queued') {
     throw new CardRefundError(
-      'CARD_NOT_ACTIVE',
-      `仅 active 卡可退，当前状态：${card.status}`,
+      'CARD_NOT_REFUNDABLE',
+      `仅进行中或待生效的卡可退，当前状态：${card.status}`,
+    );
+  }
+  if (card.status === 'queued' && card.used_meals > 0) {
+    throw new CardRefundError(
+      'CARD_NOT_REFUNDABLE',
+      '待生效卡已有使用记录，无法退卡',
     );
   }
 

@@ -45,7 +45,7 @@ export interface CardFlowUser {
   name: string;
 }
 
-export type CardFlowMode = 'purchase' | 'upgrade' | 'renew';
+export type CardFlowMode = 'purchase' | 'upgrade' | 'renew' | 'advance';
 
 /**
  * Modal 需要知道的"当前卡"最小字段集（供升级 / 续卡模式展示基线与计算）。
@@ -160,7 +160,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
     if (mode === 'renew' && currentCard?.card_code) {
       return new Set<SubscriptionCardCode>([currentCard.card_code]);
     }
-    if (mode === 'purchase') {
+    if (mode === 'purchase' || mode === 'advance') {
       const set = new Set<SubscriptionCardCode>(allCards.map((c) => c.code));
       set.add('custom');
       return set;
@@ -220,19 +220,39 @@ export function CardFlowModal(props: CardFlowModalProps) {
     (mode !== 'renew' || renewThresholdOk);
 
   const title =
-    mode === 'purchase' ? '购买新卡' : mode === 'upgrade' ? '升级卡片' : '续卡';
+    mode === 'purchase'
+      ? '购买新卡'
+      : mode === 'upgrade'
+        ? '升级卡片'
+        : mode === 'renew'
+          ? '续卡'
+          : '提前包卡';
   const primaryLabel =
-    mode === 'purchase' ? '确认开卡' : mode === 'upgrade' ? '确认升级' : '确认续卡';
+    mode === 'purchase'
+      ? '确认开卡'
+      : mode === 'upgrade'
+        ? '确认升级'
+        : mode === 'renew'
+          ? '确认续卡'
+          : '确认提前包卡';
 
   const bannerDescription =
     mode === 'purchase'
       ? `为「${memberName}」选择卡种，确认收款人与应收金额。`
       : mode === 'upgrade'
         ? `从当前卡升级；灰掉的卡不可降级或同价。`
-        : `同卡种续费，剩餐 ≤ ${CARD_RENEWAL_THRESHOLD_MEALS} 份时可办；剩餐结转到新卡。`;
+        : mode === 'renew'
+          ? `同卡种续费，剩餐 ≤ ${CARD_RENEWAL_THRESHOLD_MEALS} 份时可办；剩餐结转到新卡。`
+          : `当前卡未用完时按全价买下一张卡，待当前卡用完自动生效（非升级、不结转剩餐）。`;
 
   const bannerIcon: keyof typeof Ionicons.glyphMap =
-    mode === 'purchase' ? 'card-outline' : mode === 'upgrade' ? 'arrow-up-circle-outline' : 'refresh-outline';
+    mode === 'purchase'
+      ? 'card-outline'
+      : mode === 'upgrade'
+        ? 'arrow-up-circle-outline'
+        : mode === 'renew'
+          ? 'refresh-outline'
+          : 'time-outline';
 
   const handleConfirm = () => {
     if (!selectedSpec) return;
@@ -253,6 +273,13 @@ export function CardFlowModal(props: CardFlowModalProps) {
         `收款人：${collectorName}`,
         crossZone ? '注意：跨价目表换种（院内 ↔ 院外）' : '',
       ].filter(Boolean);
+    } else if (mode === 'advance') {
+      confirmTitle = '确认提前包卡';
+      lines = [
+        `为 ${memberName} 提前购买【${selectedSpec.name}】`,
+        `应收 ¥${selectedSpec.totalPrice} · 当前【${currentCard?.card_name ?? '在用餐卡'}】用完后自动生效`,
+        `新卡 ${selectedSpec.meals} 份 · 不结转当前剩餐 · 收款人：${collectorName}`,
+      ];
     } else {
       confirmTitle = '确认续卡';
       lines = [
@@ -307,7 +334,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
         >
           <MemberFormPageBanner title={title} description={bannerDescription} icon={bannerIcon} />
           {/* 升级 / 续卡：显示当前卡基线 */}
-          {(mode === 'upgrade' || mode === 'renew') && currentCard ? (
+          {(mode === 'upgrade' || mode === 'renew' || mode === 'advance') && currentCard ? (
             <View style={styles.currentCard}>
               <Text style={styles.currentLabel}>
                 当前：{currentCard.card_name ?? '当前卡'}
@@ -317,7 +344,9 @@ export function CardFlowModal(props: CardFlowModalProps) {
                 已用 {currentCard.used_meals}/{currentCard.total_meals} 份
                 {mode === 'renew' && currentCard.remaining_meals != null
                   ? ` · 剩 ${currentCard.remaining_meals} 份`
-                  : ''}
+                  : mode === 'advance' && currentCard.remaining_meals != null
+                    ? ` · 剩 ${currentCard.remaining_meals} 份（用完后下一张卡生效）`
+                    : ''}
               </Text>
             </View>
           ) : null}
@@ -387,8 +416,10 @@ export function CardFlowModal(props: CardFlowModalProps) {
               mode === 'upgrade'
                 ? '禁降级 / 禁同价，灰掉的卡不可选'
                 : mode === 'renew'
-                  ? '如需换卡请走升级流程'
-                  : undefined
+                  ? '如需换卡种请走提前包卡'
+                  : mode === 'advance'
+                    ? '可任意选卡种，按全价收款，当前卡用完后生效'
+                    : undefined
             }
           />
           <View style={styles.card}>
@@ -417,7 +448,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
                 allowedCodes={allowedCodes}
                 selectedCode={selectedCode}
                 submitting={submitting}
-                showCustom={mode === 'purchase' || mode === 'upgrade'}
+                showCustom={mode === 'purchase' || mode === 'upgrade' || mode === 'advance'}
                 onSelect={(code) => {
                   setSelectedCode(code);
                   setCustomLabel('');
@@ -428,7 +459,7 @@ export function CardFlowModal(props: CardFlowModalProps) {
             )}
           </View>
 
-          {(mode === 'purchase' || mode === 'upgrade') && selectedCode === 'custom' ? (
+          {(mode === 'purchase' || mode === 'upgrade' || mode === 'advance') && selectedCode === 'custom' ? (
             <>
               <SectionLabel text="自定义套餐" hint="名称 · 份数 · 总价" />
               <View style={styles.card}>
@@ -574,14 +605,16 @@ function CardFlowSubmitBar({
         <View style={styles.submitSummaryRow}>
           {selectedSpec ? (
             <View style={styles.submitSummaryCol}>
-              {mode === 'purchase' ? (
+              {mode === 'purchase' || mode === 'advance' ? (
                 <>
                   <Text style={styles.summaryMain}>
                     应收{' '}
                     <Text style={styles.summaryAmount}>¥{selectedSpec.totalPrice}</Text>
                   </Text>
                   <Text style={styles.summarySub} numberOfLines={2}>
-                    {selectedSpec.name} · {selectedSpec.meals} 份 · {collectorName}
+                    {mode === 'advance'
+                      ? `${selectedSpec.name} · ${selectedSpec.meals} 份 · 当前卡用完后生效`
+                      : `${selectedSpec.name} · ${selectedSpec.meals} 份 · ${collectorName}`}
                   </Text>
                 </>
               ) : mode === 'upgrade' ? (

@@ -91,6 +91,7 @@ export function apiToMockMember(
     .map((c) => apiCardToMockCard(c, users, cardsById));
 
   const active = mockCards.find((c) => c.status === 'active') ?? null;
+  const queued = mockCards.find((c) => c.status === 'queued') ?? null;
   const hasStaffCard = active != null && isStaffMealsCardCode(active.card_code);
 
   let totalPurchased = 0;
@@ -116,6 +117,7 @@ export function apiToMockMember(
     is_staff: hasStaffCard || m.is_staff,
     is_walkin: m.is_walkin,
     active_card: active,
+    queued_card: queued,
     card_history: mockCards,
     stats: {
       total_purchased_meals: totalPurchased,

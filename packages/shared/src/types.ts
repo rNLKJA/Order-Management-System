@@ -36,10 +36,11 @@ export const MEAL_TYPE_LABEL: Record<MealType, string> = {
 
 // =========== 卡状态 ===========
 
-export type CardStatus = 'active' | 'upgraded' | 'exhausted' | 'refunded';
+export type CardStatus = 'active' | 'queued' | 'upgraded' | 'exhausted' | 'refunded';
 
 export const CARD_STATUS_LABEL: Record<CardStatus, string> = {
   active: '进行中',
+  queued: '待生效',
   upgraded: '已升级',
   exhausted: '已用完',
   refunded: '已退卡',

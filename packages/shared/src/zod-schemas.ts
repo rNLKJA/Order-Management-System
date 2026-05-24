@@ -122,6 +122,13 @@ export const cardRenewSchema = z.object({
 export type CardRenewInput = z.infer<typeof cardRenewSchema>;
 
 /**
+ * 提前包卡：当前 active 卡未用完时，按全价购买下一张卡并排入待生效队列。
+ * 当前卡耗尽后自动激活；不走升级补差、不结转剩餐。
+ */
+export const cardAdvanceSchema = cardUpgradeSchema;
+export type CardAdvanceInput = z.infer<typeof cardAdvanceSchema>;
+
+/**
  * 退卡：把 active 卡退钱并置 refunded，同时写一条支出 FinanceEntry 跟踪资金流。
  * 业务规则：
  *  - 仅 active 卡可退（upgraded / exhausted / refunded 都不行）

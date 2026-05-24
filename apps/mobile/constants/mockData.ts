@@ -23,7 +23,7 @@ export interface MockCard {
   remaining_meals: number;
   unit_price: number;
   paid_amount: number;
-  status: 'active' | 'upgraded' | 'exhausted' | 'refunded';
+  status: 'active' | 'queued' | 'upgraded' | 'exhausted' | 'refunded';
   purchased_at: string;
   /** 收款人姓名（来自 /api/users 的 full_name） */
   collector: string;
@@ -54,6 +54,8 @@ export interface MockMember {
   /** 散客标记：true 时在会员档案页应该过滤掉，只在散客目录可见 */
   is_walkin?: boolean;
   active_card: MockCard | null;
+  /** 提前包卡：当前卡用完后自动生效 */
+  queued_card: MockCard | null;
   card_history: MockCard[];
   stats: {
     total_purchased_meals: number;

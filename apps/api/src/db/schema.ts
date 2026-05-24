@@ -115,10 +115,14 @@ export const cards = sqliteTable(
     remaining_meals: integer('remaining_meals').notNull(),
     unit_price: real('unit_price').notNull(),
     paid_amount: real('paid_amount').notNull(),
-    status: text('status', { enum: ['active', 'upgraded', 'exhausted', 'refunded'] })
+    status: text('status', {
+      enum: ['active', 'queued', 'upgraded', 'exhausted', 'refunded'],
+    })
       .notNull()
       .default('active'),
     upgraded_from_id: integer('upgraded_from_id').references((): any => cards.id),
+    /** 提前包卡：等该 active 卡耗尽后自动激活；仅 status=queued 时有值 */
+    queued_after_card_id: integer('queued_after_card_id').references((): any => cards.id),
     collector_user_id: integer('collector_user_id')
       .notNull()
       .references(() => users.id),
@@ -148,6 +152,7 @@ export const cards = sqliteTable(
   (t) => ({
     memberIdx: index('cards_member_idx').on(t.member_id),
     statusIdx: index('cards_status_idx').on(t.status),
+    queuedAfterIdx: index('cards_queued_after_idx').on(t.queued_after_card_id),
   }),
 );
 

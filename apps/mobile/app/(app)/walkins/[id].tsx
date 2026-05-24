@@ -405,6 +405,7 @@ function toMockMemberLite(
     is_staff: member.is_staff ?? false,
     is_walkin: true,
     active_card: null,
+    queued_card: null,
     card_history: [],
     stats: {
       total_purchased_meals: 0,

@@ -4,6 +4,7 @@
  * - GET    /api/cards?member_id=&status=active|upgraded|exhausted|all
  * - POST   /api/cards                        新购（会员无 active 卡）
  * - POST   /api/cards/:id/upgrade            升级（禁降级，补差价）
+ * - POST   /api/cards/:id/advance            提前包卡（全价排队，当前卡用完后生效）
  *
  * 所有端点都需要登录（会员卡数据属 PII）。
  * 业务规则详见 plan §5 / §6 与 doc/PROCESS.md §4。
@@ -21,6 +22,7 @@ import {
   cardPurchaseSchema,
   cardRefundSchema,
   cardRenewSchema,
+  cardAdvanceSchema,
   cardUpgradeSchema,
   buildCustomCardSpec,
   getCardSpec,
@@ -31,6 +33,11 @@ import { requestDb } from '../db/request-db.js';
 import { requireAuth, requireDataOperator, type AuthVariables } from '../middleware/jwt.js';
 import { computeUpgrade, UpgradeError } from '../services/upgrade.js';
 import { computeRenew, computeRenewCustom, RenewError } from '../services/renew.js';
+import {
+  activateQueuedCardAfterExhaust,
+  findQueuedCardForMember,
+  findQueuedCardWaitingOn,
+} from '../services/card-queue.js';
 import { createAutoSubscriptionIncome } from '../services/finance.js';
 import { refundCard, CardRefundError } from '../services/refund.js';
 
@@ -46,7 +53,7 @@ const listQuerySchema = z.object({
     .string()
     .regex(/^\d+$/, 'member_id 必须是整数')
     .transform((v) => parseInt(v, 10)),
-  status: z.enum(['active', 'upgraded', 'exhausted', 'all']).optional().default('all'),
+  status: z.enum(['active', 'queued', 'upgraded', 'exhausted', 'all']).optional().default('all'),
 });
 
 cardsRouter.get('/', zValidator('query', listQuerySchema), async (c) => {
@@ -224,6 +231,8 @@ cardsRouter.post(
       });
     }
 
+    await assertNoQueuedCardBlocking(db, oldCard.member_id, oldCard.id);
+
     const isHospital = input.is_hospital ?? oldCard.is_hospital;
 
     let newSpec;
@@ -354,6 +363,8 @@ cardsRouter.post(
       throw new HTTPException(404, { message: '待续的卡不存在' });
     }
 
+    await assertNoQueuedCardBlocking(db, oldCard.member_id, oldCard.id);
+
     let computed;
     let renewLabel: string;
 
@@ -466,6 +477,134 @@ cardsRouter.post(
   },
 );
 
+// ================== POST /api/cards/:id/advance ==================
+
+/**
+ * 提前包卡：当前 active 卡未用完时，按全价购买下一张卡（可换卡种），
+ * 新卡 status=queued，当前卡耗尽后自动激活。不走升级补差、不结转剩餐。
+ */
+cardsRouter.post(
+  '/:id/advance',
+  zValidator('param', paramSchema),
+  zValidator('json', cardAdvanceSchema),
+  async (c) => {
+    const { id: activeCardId } = c.req.valid('param');
+    const input = c.req.valid('json');
+    const authUser = c.get('authUser');
+    const db = requestDb(c);
+
+    const activeRows = await db
+      .select()
+      .from(schema.cards)
+      .where(eq(schema.cards.id, activeCardId))
+      .limit(1);
+    const activeCard = activeRows[0];
+    if (!activeCard) {
+      throw new HTTPException(404, { message: '当前卡不存在' });
+    }
+    if (activeCard.status !== 'active') {
+      throw new HTTPException(422, {
+        message: `仅 active 状态的卡可提前包卡，当前状态：${activeCard.status}`,
+      });
+    }
+    if (activeCard.card_code === 'staff') {
+      throw new HTTPException(422, { message: '员工卡不支持提前包卡，请先换购付费卡' });
+    }
+
+    const existingQueued = await findQueuedCardForMember(db, activeCard.member_id);
+    if (existingQueued) {
+      throw new HTTPException(409, {
+        message: '该会员已有待生效的提前包卡，请先等当前卡用完或退掉待生效卡',
+      });
+    }
+
+    const isHospital = input.is_hospital ?? activeCard.is_hospital;
+    const collectorUserId = await resolveCollectorUserId(db, input.collector_user_id, authUser.id);
+    const createdByUserId = input.created_by_user_id ?? authUser.id;
+    const purchasedAt = new Date();
+
+    let insertRow: typeof schema.cards.$inferInsert;
+    let financeAmount: number;
+    let financeDesc: string;
+
+    if (input.card_code === 'custom') {
+      const unitPrice = round2(input.paid_amount / input.total_meals);
+      insertRow = {
+        member_id: activeCard.member_id,
+        card_code: 'custom',
+        is_hospital: isHospital,
+        total_meals: input.total_meals,
+        used_meals: 0,
+        remaining_meals: input.total_meals,
+        unit_price: unitPrice,
+        paid_amount: input.paid_amount,
+        status: 'queued',
+        queued_after_card_id: activeCard.id,
+        custom_label: input.custom_label,
+        custom_pack_meals: input.total_meals,
+        collector_user_id: collectorUserId,
+        created_by_user_id: createdByUserId,
+        purchased_at: purchasedAt,
+        notes: input.notes ?? '',
+      };
+      financeAmount = input.paid_amount;
+      financeDesc = `提前包卡：${input.custom_label}`;
+    } else {
+      const spec = getCardSpec(isHospital, input.card_code);
+      if (!spec) {
+        throw new HTTPException(400, {
+          message: `卡种 ${input.card_code} 不在${isHospital ? '院内' : '院外'}价目表中`,
+        });
+      }
+      insertRow = {
+        member_id: activeCard.member_id,
+        card_code: input.card_code,
+        is_hospital: isHospital,
+        total_meals: spec.meals,
+        used_meals: 0,
+        remaining_meals: spec.meals,
+        unit_price: spec.unitPrice,
+        paid_amount: spec.totalPrice,
+        status: 'queued',
+        queued_after_card_id: activeCard.id,
+        collector_user_id: collectorUserId,
+        created_by_user_id: createdByUserId,
+        purchased_at: purchasedAt,
+        notes: input.notes ?? '',
+      };
+      financeAmount = spec.totalPrice;
+      financeDesc = `提前包卡：${spec.name}`;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const cardRows = await tx.insert(schema.cards).values(insertRow).returning();
+      const queuedCard = cardRows[0]!;
+
+      const finance = await createAutoSubscriptionIncome(tx, {
+        amount: financeAmount,
+        is_hospital: isHospital,
+        ref_card_id: queuedCard.id,
+        collector_user_id: collectorUserId,
+        created_by_user_id: createdByUserId,
+        purchased_at: purchasedAt,
+        description: financeDesc,
+      });
+
+      return { queuedCard, finance, activeCard };
+    });
+
+    return c.json(
+      {
+        active_card: result.activeCard,
+        queued_card: result.queuedCard,
+        financeEntry: result.finance,
+        paid_amount: financeAmount,
+      },
+      201,
+    );
+  },
+);
+
 // ================== POST /api/cards/:id/refund ==================
 
 /**
@@ -494,7 +633,14 @@ cardsRouter.post(
 
     try {
       const result = await db.transaction(async (tx) => {
-        return refundCard(tx, {
+        const cardRows = await tx
+          .select()
+          .from(schema.cards)
+          .where(eq(schema.cards.id, cardId))
+          .limit(1);
+        const before = cardRows[0] as typeof schema.cards.$inferSelect | undefined;
+
+        const refundResult = await refundCard(tx, {
           cardId,
           refundAmount: input.refund_amount,
           reason: input.reason ?? '',
@@ -502,6 +648,17 @@ cardsRouter.post(
           createdByUserId,
           refundedByUserId: authUser.id,
         });
+
+        let activatedQueued: typeof schema.cards.$inferSelect | null = null;
+        if (before?.status === 'active') {
+          activatedQueued = await activateQueuedCardAfterExhaust(
+            tx,
+            before.member_id,
+            before.id,
+          );
+        }
+
+        return { ...refundResult, activatedQueued, beforeStatus: before?.status ?? 'active' };
       });
 
       await db.insert(schema.audit_logs).values({
@@ -510,7 +667,7 @@ cardsRouter.post(
         entity: 'card',
         entity_id: cardId,
         diff_json: JSON.stringify({
-          status: ['active', 'refunded'],
+          status: [result.beforeStatus, 'refunded'],
           refund_amount: input.refund_amount,
           reason: input.reason ?? '',
         }),
@@ -521,6 +678,7 @@ cardsRouter.post(
           card: result.card,
           financeEntry: result.financeEntry,
           refund_amount: input.refund_amount,
+          ...(result.activatedQueued ? { activated_queued_card: result.activatedQueued } : {}),
         },
         201,
       );
@@ -649,6 +807,19 @@ cardsRouter.patch(
 );
 
 // ================== helpers ==================
+
+async function assertNoQueuedCardBlocking(
+  db: ReturnType<typeof requestDb>,
+  memberId: number,
+  activeCardId: number,
+): Promise<void> {
+  const queued = await findQueuedCardWaitingOn(db, memberId, activeCardId);
+  if (queued) {
+    throw new HTTPException(409, {
+      message: '该会员已有待生效的提前包卡，请先等当前卡用完或退掉待生效卡后再操作',
+    });
+  }
+}
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
